@@ -1,0 +1,21 @@
+# The customer's real data. config.example/ is the committed public stand-in.
+config/
+
+# Runtime state, caches, exports
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/cache/
+data/exports/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local dev
+.dev-dashboard.log
+.streamlit/secrets.toml

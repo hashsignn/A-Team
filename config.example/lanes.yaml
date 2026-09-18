@@ -1,0 +1,357 @@
+# Lane definitions — SYNTHETIC
+#
+# A lane is a route template. A shipment instantiates a lane with real dates,
+# a carrier, a value and a customer commitment.
+#
+# NOTE ON SCHEMA (deviation from BRIEF §3.3, deliberate):
+# The brief's shipment schema carries only shipment-level `etd`/`eta`. The
+# temporal gate (§5.1 condition 2) needs to know when the shipment is transiting
+# *each* node, so every leg carries its own planned window and its own buffer.
+# Without this the gate cannot be implemented as specified.
+#
+# transit_hours is the planned duration of the leg.
+# buffer_hours is schedule slack that absorbs delay on that leg before it
+# propagates (§5.2).
+
+lanes:
+  # =================================================================
+  # THE ANCHOR LANE — Rhine barge. BRIEF §2 requires this one.
+  # =================================================================
+  - id: LANE_RHINE_01
+    name: Düdingen → Basel → Rotterdam (Rhine barge)
+    focus: rhine
+    legs:
+      - from: SIKA_DUD
+        to: CHBSL
+        mode: road
+        transit_hours: 6
+        buffer_hours: 12
+      - from: CHBSL
+        to: GAUGE_KAUB
+        mode: barge
+        transit_hours: 54
+        buffer_hours: 24
+      - from: GAUGE_KAUB
+        to: NLRTM
+        mode: barge
+        transit_hours: 42
+        buffer_hours: 24
+
+  - id: LANE_RHINE_02
+    name: Basel → Duisburg (Rhine barge, rail onward to Hamburg)
+    focus: rhine
+    legs:
+      - from: CHBSL
+        to: GAUGE_KAUB
+        mode: barge
+        transit_hours: 54
+        buffer_hours: 24
+      - from: GAUGE_KAUB
+        to: DEDUI
+        mode: barge
+        transit_hours: 20
+        buffer_hours: 12
+      - from: DEDUI
+        to: DEHAM
+        mode: rail
+        transit_hours: 14
+        buffer_hours: 12
+
+  # =================================================================
+  # EU → ASIA
+  # =================================================================
+  - id: LANE_ASIA_01
+    name: Zürich → Genoa → Shanghai
+    focus: eu_asia
+    legs:
+      - from: SIKA_ZUR
+        to: ITGOA
+        mode: road
+        transit_hours: 11
+        buffer_hours: 12
+      - from: ITGOA
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 150
+        buffer_hours: 24
+      - from: CHOKE_SUEZ
+        to: CHOKE_BAB
+        mode: sea
+        transit_hours: 60
+        buffer_hours: 12
+      - from: CHOKE_BAB
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 220
+        buffer_hours: 36
+      - from: CHOKE_MALACCA
+        to: CNSHA
+        mode: sea
+        transit_hours: 130
+        buffer_hours: 48
+
+  - id: LANE_ASIA_02
+    name: Stuttgart → Hamburg → Shanghai
+    focus: eu_asia
+    legs:
+      - from: SIKA_STU
+        to: DEHAM
+        mode: rail
+        transit_hours: 16
+        buffer_hours: 18
+      - from: DEHAM
+        to: CHOKE_GIB
+        mode: sea
+        transit_hours: 130
+        buffer_hours: 24
+      - from: CHOKE_GIB
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 95
+        buffer_hours: 12
+      - from: CHOKE_SUEZ
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 270
+        buffer_hours: 36
+      - from: CHOKE_MALACCA
+        to: CNSHA
+        mode: sea
+        transit_hours: 130
+        buffer_hours: 48
+
+  - id: LANE_ASIA_03
+    name: Stuttgart → Antwerp → Ningbo
+    focus: eu_asia
+    legs:
+      - from: SIKA_STU
+        to: BEANR
+        mode: road
+        transit_hours: 9
+        buffer_hours: 12
+      - from: BEANR
+        to: CHOKE_GIB
+        mode: sea
+        transit_hours: 120
+        buffer_hours: 24
+      - from: CHOKE_GIB
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 95
+        buffer_hours: 12
+      - from: CHOKE_SUEZ
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 270
+        buffer_hours: 36
+      - from: CHOKE_MALACCA
+        to: CNNGB
+        mode: sea
+        transit_hours: 125
+        buffer_hours: 48
+
+  - id: LANE_ASIA_04
+    name: Alcobendas → Valencia → Singapore
+    focus: eu_asia
+    legs:
+      - from: SIKA_ALC
+        to: ESVLC
+        mode: road
+        transit_hours: 5
+        buffer_hours: 8
+      - from: ESVLC
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 115
+        buffer_hours: 24
+      - from: CHOKE_SUEZ
+        to: CHOKE_BAB
+        mode: sea
+        transit_hours: 60
+        buffer_hours: 12
+      - from: CHOKE_BAB
+        to: SGSIN
+        mode: sea
+        transit_hours: 230
+        buffer_hours: 48
+
+  - id: LANE_ASIA_05
+    name: Cerano → Genoa → Port Klang
+    focus: eu_asia
+    legs:
+      - from: SIKA_CER
+        to: ITGOA
+        mode: road
+        transit_hours: 3
+        buffer_hours: 8
+      - from: ITGOA
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 150
+        buffer_hours: 24
+      - from: CHOKE_SUEZ
+        to: CHOKE_BAB
+        mode: sea
+        transit_hours: 60
+        buffer_hours: 12
+      - from: CHOKE_BAB
+        to: MYPKG
+        mode: sea
+        transit_hours: 225
+        buffer_hours: 48
+
+  - id: LANE_ASIA_06
+    name: Zürich → Rotterdam → Jebel Ali
+    focus: eu_asia
+    legs:
+      - from: SIKA_ZUR
+        to: NLRTM
+        mode: rail
+        transit_hours: 20
+        buffer_hours: 18
+      - from: NLRTM
+        to: CHOKE_GIB
+        mode: sea
+        transit_hours: 110
+        buffer_hours: 24
+      - from: CHOKE_GIB
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 95
+        buffer_hours: 12
+      - from: CHOKE_SUEZ
+        to: AEJEA
+        mode: sea
+        transit_hours: 145
+        buffer_hours: 36
+
+  - id: LANE_ASIA_07
+    name: Cerano → Genoa → Jebel Ali
+    focus: eu_asia
+    legs:
+      - from: SIKA_CER
+        to: ITGOA
+        mode: road
+        transit_hours: 3
+        buffer_hours: 8
+      - from: ITGOA
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 150
+        buffer_hours: 24
+      - from: CHOKE_SUEZ
+        to: AEJEA
+        mode: sea
+        transit_hours: 145
+        buffer_hours: 36
+
+  # =================================================================
+  # EU → US
+  # =================================================================
+  - id: LANE_US_01
+    name: Düdingen → Antwerp → New York
+    focus: eu_us
+    legs:
+      - from: SIKA_DUD
+        to: BEANR
+        mode: road
+        transit_hours: 10
+        buffer_hours: 12
+      - from: BEANR
+        to: USNYC
+        mode: sea
+        transit_hours: 290
+        buffer_hours: 48
+
+  - id: LANE_US_02
+    name: Bad Urach → Rotterdam → Houston
+    focus: eu_us
+    legs:
+      - from: SIKA_BAD
+        to: NLRTM
+        mode: road
+        transit_hours: 9
+        buffer_hours: 12
+      - from: NLRTM
+        to: USHOU
+        mode: sea
+        transit_hours: 360
+        buffer_hours: 60
+
+  - id: LANE_US_03
+    name: Zürich → Le Havre → Los Angeles (via Panama)
+    focus: eu_us
+    legs:
+      - from: SIKA_ZUR
+        to: FRLEH
+        mode: rail
+        transit_hours: 18
+        buffer_hours: 18
+      - from: FRLEH
+        to: CHOKE_PANAMA
+        mode: sea
+        transit_hours: 290
+        buffer_hours: 36
+      - from: CHOKE_PANAMA
+        to: USLAX
+        mode: sea
+        transit_hours: 130
+        buffer_hours: 48
+
+  - id: LANE_US_04
+    name: Stuttgart → Rotterdam → Norfolk
+    focus: eu_us
+    legs:
+      - from: SIKA_STU
+        to: NLRTM
+        mode: rail
+        transit_hours: 15
+        buffer_hours: 18
+      - from: NLRTM
+        to: USORF
+        mode: sea
+        transit_hours: 285
+        buffer_hours: 48
+
+  # =================================================================
+  # INTRA-EU
+  # =================================================================
+  - id: LANE_EU_01
+    name: Stuttgart → Rotterdam (road)
+    focus: intra_eu
+    legs:
+      - from: SIKA_STU
+        to: NLRTM
+        mode: road
+        transit_hours: 9
+        buffer_hours: 12
+
+  - id: LANE_EU_02
+    name: Stuttgart → Felixstowe (road + ferry)
+    focus: intra_eu
+    legs:
+      - from: SIKA_STU
+        to: BEANR
+        mode: road
+        transit_hours: 9
+        buffer_hours: 12
+      - from: BEANR
+        to: GBFXT
+        mode: sea
+        transit_hours: 18
+        buffer_hours: 12
+
+  - id: LANE_EU_03
+    name: Alcobendas → Barcelona → Genoa
+    focus: intra_eu
+    legs:
+      - from: SIKA_ALC
+        to: ESBCN
+        mode: road
+        transit_hours: 7
+        buffer_hours: 10
+      - from: ESBCN
+        to: ITGOA
+        mode: sea
+        transit_hours: 26
+        buffer_hours: 12

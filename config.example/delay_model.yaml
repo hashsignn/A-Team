@@ -1,0 +1,131 @@
+# THE PARAMETER TABLE — three-point delay estimates.
+#
+# BRIEF §5.0: "~90 invented numbers instead of ~5,400, and all 90 are things a
+# planner already knows." That claim only holds if the count really is ~90, so
+# the triples are held at FAMILY × SEVERITY level:
+#
+#     10 families × 3 severities × 3 points = 90 numbers.
+#
+# Per-variable overrides exist only where a family default would be plainly
+# wrong. Every override is listed below the defaults and has to earn its place.
+#
+# Each triple is (optimistic, likely, pessimistic) in DAYS of delay added to a
+# leg, sampled as a triangular distribution (§5.2).
+#
+# HOW TO USE THIS FILE IN A WORKSHOP
+# Sit with the planning team and change the numbers. "A strike at Antwerp costs
+# us about three days" is a sentence they can say. Every number here is meant to
+# be replaced by one of theirs. The dashboard exposes these as live controls
+# (Assumptions drawer) precisely so that conversation can happen on the spot.
+#
+# PROVENANCE: every value below is an ASSUMED default set by the build team.
+# None is sourced from Sika operating history. The /inputs panel says so.
+
+severities: [minor, moderate, severe]
+
+defaults:
+  climate:
+    minor:    {optimistic: 0.0, likely: 0.2, pessimistic: 0.5}
+    moderate: {optimistic: 0.2, likely: 0.5, pessimistic: 1.5}
+    severe:   {optimistic: 0.5, likely: 1.5, pessimistic: 4.0}
+
+  waterway:
+    minor:    {optimistic: 0.2, likely: 0.5, pessimistic: 1.5}
+    moderate: {optimistic: 1.0, likely: 2.5, pessimistic: 6.0}
+    severe:   {optimistic: 3.0, likely: 7.0, pessimistic: 21.0}
+
+  port_ops:
+    minor:    {optimistic: 0.2, likely: 0.5, pessimistic: 1.0}
+    moderate: {optimistic: 0.5, likely: 1.5, pessimistic: 4.0}
+    severe:   {optimistic: 2.0, likely: 4.0, pessimistic: 10.0}
+
+  geopolitical:
+    minor:    {optimistic: 0.0, likely: 0.5, pessimistic: 2.0}
+    moderate: {optimistic: 1.0, likely: 3.0, pessimistic: 10.0}
+    severe:   {optimistic: 5.0, likely: 14.0, pessimistic: 45.0}
+
+  labour:
+    minor:    {optimistic: 0.5, likely: 1.0, pessimistic: 2.0}
+    moderate: {optimistic: 1.0, likely: 3.0, pessimistic: 7.0}
+    severe:   {optimistic: 3.0, likely: 8.0, pessimistic: 21.0}
+
+  infrastructure:
+    minor:    {optimistic: 0.1, likely: 0.3, pessimistic: 1.0}
+    moderate: {optimistic: 0.5, likely: 2.0, pessimistic: 5.0}
+    severe:   {optimistic: 2.0, likely: 6.0, pessimistic: 18.0}
+
+  force_majeure:
+    minor:    {optimistic: 0.5, likely: 1.0, pessimistic: 3.0}
+    moderate: {optimistic: 2.0, likely: 5.0, pessimistic: 14.0}
+    severe:   {optimistic: 7.0, likely: 21.0, pessimistic: 60.0}
+
+  mechanical:
+    minor:    {optimistic: 0.2, likely: 1.0, pessimistic: 3.0}
+    moderate: {optimistic: 1.0, likely: 3.0, pessimistic: 8.0}
+    severe:   {optimistic: 3.0, likely: 8.0, pessimistic: 25.0}
+
+  capacity:
+    minor:    {optimistic: 0.0, likely: 1.0, pessimistic: 3.0}
+    moderate: {optimistic: 3.0, likely: 7.0, pessimistic: 14.0}
+    severe:   {optimistic: 7.0, likely: 14.0, pessimistic: 35.0}
+
+  cyber:
+    minor:    {optimistic: 0.2, likely: 0.5, pessimistic: 1.5}
+    moderate: {optimistic: 1.0, likely: 2.5, pessimistic: 6.0}
+    severe:   {optimistic: 3.0, likely: 7.0, pessimistic: 18.0}
+
+# -------------------------------------------------------------------
+# OVERRIDES — only where the family default is plainly wrong.
+# -------------------------------------------------------------------
+overrides:
+  # Low water is a slow, long capacity derate, not a discrete outage. The
+  # waterway default under-states duration badly: the 2018 and 2022 Rhine
+  # episodes each ran for weeks. Delay accrues from re-sailing part loads.
+  WAT_LOW_WATER:
+    minor:    {optimistic: 0.2, likely: 0.5, pessimistic: 1.5}
+    moderate: {optimistic: 1.0, likely: 3.0, pessimistic: 8.0}
+    severe:   {optimistic: 4.0, likely: 10.0, pessimistic: 30.0}
+
+  # A ballot is not a stoppage. It contributes no delay of its own; its whole
+  # value is lead time on the stoppage that may follow. Zero triple, non-zero
+  # signal — the pipeline keeps it visible without letting it add days.
+  LAB_UNION_BALLOT:
+    minor:    {optimistic: 0.0, likely: 0.0, pessimistic: 0.0}
+    moderate: {optimistic: 0.0, likely: 0.0, pessimistic: 0.0}
+    severe:   {optimistic: 0.0, likely: 0.0, pessimistic: 0.0}
+
+  # A public holiday is fully known and bounded. No tail.
+  POR_HOLIDAY:
+    minor:    {optimistic: 0.0, likely: 0.5, pessimistic: 1.0}
+    moderate: {optimistic: 0.5, likely: 1.0, pessimistic: 2.0}
+    severe:   {optimistic: 1.0, likely: 2.0, pessimistic: 4.0}
+
+  # Blank sailing rolls cargo to the next weekly service. The distribution is
+  # not continuous — it is essentially one week, or two if the next is full.
+  CAP_BLANK_SAILING:
+    minor:    {optimistic: 5.0, likely: 7.0, pessimistic: 9.0}
+    moderate: {optimistic: 7.0, likely: 9.0, pessimistic: 14.0}
+    severe:   {optimistic: 9.0, likely: 16.0, pessimistic: 28.0}
+
+  # Rail engineering works are planned, published, and bounded.
+  INF_RAIL_WORKS:
+    minor:    {optimistic: 0.0, likely: 0.2, pessimistic: 0.5}
+    moderate: {optimistic: 0.2, likely: 1.0, pessimistic: 2.0}
+    severe:   {optimistic: 1.0, likely: 3.0, pessimistic: 7.0}
+
+  # A regulatory or tariff change does not delay a shipment in transit. It
+  # changes cost and future routing. Zero delay, handled on the cost side.
+  GEO_REGULATORY:
+    minor:    {optimistic: 0.0, likely: 0.0, pessimistic: 0.0}
+    moderate: {optimistic: 0.0, likely: 0.5, pessimistic: 2.0}
+    severe:   {optimistic: 1.0, likely: 3.0, pessimistic: 10.0}
+
+  GEO_TARIFF:
+    minor:    {optimistic: 0.0, likely: 0.0, pessimistic: 0.0}
+    moderate: {optimistic: 0.0, likely: 0.0, pessimistic: 1.0}
+    severe:   {optimistic: 0.0, likely: 1.0, pessimistic: 3.0}
+
+  CAP_RATE_SPIKE:
+    minor:    {optimistic: 0.0, likely: 0.0, pessimistic: 0.0}
+    moderate: {optimistic: 0.0, likely: 0.0, pessimistic: 1.0}
+    severe:   {optimistic: 0.0, likely: 1.0, pessimistic: 4.0}

@@ -1,0 +1,148 @@
+# Numeric-feed thresholds — the DETERMINISTIC LAYER (BRIEF §3.1).
+#
+# A gauge reading is a number, not prose. This file is the only place that
+# turns a number into an event. No model is involved and none should be.
+#
+# PROVENANCE DISCIPLINE (extends BRIEF §8.4 to numeric config):
+# every threshold carries `source`. A threshold with source: assumed is shown
+# in the /inputs panel as an assumption, not as a fact. The brief applies
+# provenance only to extracted text; a made-up wind threshold is exactly as
+# dangerous as a made-up quote.
+
+# ===================================================================
+# RHINE WATER LEVEL — THE ANCHOR
+# ===================================================================
+#
+# IMPORTANT DOMAIN POINT: low water on the Rhine is a PAYLOAD DERATE, not a
+# stoppage. Vessels continue to sail; they load to reduced draught. The same
+# tonnage then needs more sailings, and low-water surcharges apply. Modelling
+# low water as "barge blocked" is wrong and a Sika logistics colleague will
+# know it is wrong.
+#
+# The OTIF consequence runs through "in full", not only "on time": a derate
+# that splits one consignment across two sailings fails OTIF even when the
+# first part arrives early.
+#
+# HIGH water is different — that genuinely does stop navigation.
+
+water_gauges:
+  GAUGE_KAUB:
+    station: KAUB
+    river: Rhine
+    unit: cm
+    feed: pegelonline
+    # Falling levels: progressive loading restriction.
+    # Each band gives the assumed usable payload fraction and the severity
+    # the event is raised at.
+    #
+    # !! ALL BREAKPOINTS BELOW ARE ASSUMED !!
+    # They reproduce the published shape (progressive derate keyed to the Kaub
+    # reference gauge) but the exact centimetre values have NOT been sourced
+    # against official WSV/BfG loading tables. Do not present them as fact.
+    # TODO before any client demo: source and cite, or mark on screen.
+    low_water_bands:
+      - {below_cm: 150, payload_fraction: 0.85, severity: minor,    source: assumed}
+      - {below_cm: 110, payload_fraction: 0.65, severity: moderate, source: assumed}
+      - {below_cm: 80,  payload_fraction: 0.45, severity: moderate, source: assumed}
+      - {below_cm: 55,  payload_fraction: 0.30, severity: severe,   source: assumed}
+      - {below_cm: 35,  payload_fraction: 0.15, severity: severe,   source: assumed}
+    high_water_bands:
+      - {above_cm: 460, navigation: suspended, severity: moderate, source: assumed}
+      - {above_cm: 640, navigation: suspended, severity: severe,   source: assumed}
+    # Surcharge applied to freight cost during a derate, as a multiplier on
+    # the leg's base freight. Illustrative.
+    low_water_surcharge_multiplier:
+      minor: 1.10
+      moderate: 1.45
+      severe: 2.20
+
+# ===================================================================
+# WEATHER
+# ===================================================================
+weather:
+  # Wind speed above which ship-to-shore container crane operations are
+  # normally suspended. The SHAPE of this rule is standard practice; the exact
+  # figure varies by terminal and crane type and is NOT sourced here.
+  crane_suspension_wind_ms:
+    value: 20.0
+    severity: moderate
+    source: assumed
+    note: >
+      Terminal operating limits vary. Source per-terminal limits from the
+      operator before presenting this as a fact.
+
+  barge_wind_restriction_ms:
+    value: 15.0
+    severity: minor
+    source: assumed
+
+  significant_wave_height_m:
+    value: 4.5
+    severity: moderate
+    source: assumed
+
+  visibility_metres:
+    value: 500
+    severity: minor
+    source: assumed
+    note: Pilotage minima are port-specific.
+
+  # Chemical cargo temperature limits. Product-family specific in reality.
+  cargo_temp_high_c:
+    value: 35.0
+    severity: minor
+    source: assumed
+
+  cargo_temp_low_c:
+    value: -5.0
+    severity: minor
+    source: assumed
+
+# ===================================================================
+# PORT CONGESTION (IMF PortWatch)
+# ===================================================================
+port_congestion:
+  # PortWatch is coarse and weekly-ish. Do not oversell it (BRIEF §3.4).
+  # Raise an event when port call volume or dwell deviates from its own
+  # trailing baseline by more than this many standard deviations.
+  deviation_sigma:
+    value: 2.0
+    severity: minor
+    source: assumed
+  sustained_days:
+    value: 7
+    severity: moderate
+    source: assumed
+
+# ===================================================================
+# SOURCE RELIABILITY TIERS
+# ===================================================================
+# Answer to Sika Q5: official sources drive the advisory logic; social and
+# news signals are carried alongside as supporting context. A tier-3 signal
+# cannot on its own raise an event above `max_severity_unconfirmed`, and
+# cannot trip the convene rule.
+#
+# The VALUE of a tier-3 signal is lead time, not accuracy. It arrives while
+# options are still cheap. The decay curve is where that value is visible.
+source_tiers:
+  1:
+    label: Official
+    examples: [pegelonline, port_authority, customs_authority, national_met_service]
+    can_trip_convene: true
+    max_severity_unconfirmed: severe
+  2:
+    label: Established media / industry
+    examples: [reuters, lloyds_list, trade_press, carrier_advisory]
+    can_trip_convene: true
+    max_severity_unconfirmed: moderate
+  3:
+    label: Social / unverified
+    examples: [bluesky, reddit, telegram, x]
+    can_trip_convene: false
+    max_severity_unconfirmed: minor
+    # Promotion rule: a tier-3 signal is promoted to a full event only on
+    # corroboration. Until then it is visible but cannot drive a decision.
+    corroboration:
+      independent_accounts: 3
+      within_hours: 12
+      or_confirmed_by_tier: 2

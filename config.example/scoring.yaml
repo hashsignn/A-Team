@@ -1,0 +1,147 @@
+# Scoring, actionability, cost model and the convene rule.
+
+# -------------------------------------------------------------------
+# MONTE CARLO
+# -------------------------------------------------------------------
+simulation:
+  draws: 10000
+  seed: 20260918
+  # Event durations are drawn ONCE PER ITERATION into an (draws x events)
+  # matrix and that same draw is applied to every shipment the event gates.
+  # Drawing per shipment would model 40 independent strikes at one port and
+  # would destroy the tail — which is the quantity the convene decision
+  # depends on. See engine/simulate/draws.py.
+  portfolio_correlated: true
+
+# -------------------------------------------------------------------
+# COST MODEL
+# -------------------------------------------------------------------
+# DEVIATION from BRIEF §5.4, deliberate. The brief has
+#     E[loss|nothing] = penalty_per_day x E[delay] + P(late) x customer_cost
+# Two problems:
+#   1. E[delay] is delay against the PLANNED eta. Penalty accrues against the
+#      COMMITTED date. Those differ by the commitment slack, so the brief's
+#      formula charges penalty for lateness that never happened.
+#   2. max(0, .) is convex, so it must be evaluated inside the expectation,
+#      not applied to the mean. Both are fixed in engine/score/impact.py.
+#
+# Sika has not confirmed that per-day contractual penalties exist in their
+# customer contracts (open question). The model therefore has THREE additive
+# components so the number stays non-zero and defensible even when the
+# contractual penalty is zero.
+cost:
+  components:
+    contractual_penalty:
+      enabled: true
+      # CHF per day late, taken from the shipment record where present.
+      source: shipment.sla_penalty_per_day
+
+    expediting:
+      enabled: true
+      # What it costs to recover time once late: premium transport, overtime
+      # handling, partial airfreight of the critical subset.
+      # Applied once if the shipment is late at all, scaled by value band.
+      chf_per_event_by_value_band:
+        low: 800
+        mid: 2500
+        high: 7000
+
+    customer_impact:
+      enabled: true
+      # Categorical, set by the planner per customer, NOT derived.
+      # This is the term that survives when no contractual penalty exists.
+      chf_by_tier:
+        line_down: 45000      # customer production stops
+        stock_out: 12000      # customer runs out, no stoppage yet
+        inconvenience: 2000   # annoyance, no operational consequence
+      default_tier: stock_out
+
+  value_bands:
+    low: 20000       # < CHF 20k
+    mid: 100000      # CHF 20k - 100k
+    # above mid = high
+
+# -------------------------------------------------------------------
+# ACTIONABILITY — BRIEF §5.5
+# -------------------------------------------------------------------
+# Minimum hours needed to execute an action. Below this the option is gone.
+# These are the cliff edges of the option-decay curve.
+min_action_hours:
+  sea_reroute: 72
+  sea_rebook: 72
+  rail_rebook: 24
+  rail_reroute: 24
+  barge_to_rail_switch: 36
+  barge_part_load: 24
+  road_reroute: 4
+  add_buffer: 12
+  reserve_capacity: 48
+  expedite: 12
+  notify_customer: 1
+  escalate_carrier: 2
+
+# lead_time / action_duration ratio -> posture
+actionability_bands:
+  comfortable: 2.0    # lead > 2x duration
+  tightening: 1.0     # 1x - 2x
+  # below 1x: too late. Stop proposing reroutes, switch to notification.
+
+# -------------------------------------------------------------------
+# RISK MATRIX BANDS — BRIEF §5.7
+# -------------------------------------------------------------------
+matrix:
+  impact_bands:
+    - {id: A, label: ">100k", min_chf: 100000, action: "ESCALATE — reroute now"}
+    - {id: B, label: "10-100k", min_chf: 10000, action: "CONTINGENCY — reserve carrier"}
+    - {id: C, label: "1-10k", min_chf: 1000, action: "MITIGATE — buffer / minor"}
+    - {id: D, label: "<1k", min_chf: 0, action: "MONITOR"}
+  probability_bands:
+    - {id: P1, label: "0-0.25", max_p: 0.25}
+    - {id: P2, label: "0.25-0.5", max_p: 0.50}
+    - {id: P3, label: "0.5-0.75", max_p: 0.75}
+    - {id: P4, label: "0.75-1.0", max_p: 1.01}
+  # Events whose probability cannot be sourced are NOT placed on the
+  # probability axis. They go in a separate band drawn outside the grid.
+  # BRIEF §8.1: an absence must never become a value.
+  unsourced_band_label: "P unsourced"
+
+# -------------------------------------------------------------------
+# THE CONVENE RULE — answers Sika Q6
+# -------------------------------------------------------------------
+# Sika: "The real problem is that we declare a crisis too late and lose on
+# available options." Teams already hold full authority once convened; the
+# failure is the decision to convene.
+#
+# The tool does not argue for a crisis. It reports that a threshold the group
+# agreed IN ADVANCE, in calm conditions, has tripped. That moves the decision
+# from a judgement one person has to own to a rule the group already owns.
+#
+# These numbers are placeholders until the planning team sets them.
+convene_rule:
+  agreed_on: null            # date the team signed off; null = not yet agreed
+  agreed_by: null
+  meeting_cadence_days: 7    # weekly, per Sika Q6
+  escalated_cadence_days: 1  # daily once convened
+
+  thresholds:
+    # Trip if recoverable value at risk exceeds this.
+    recoverable_chf: 150000
+    # Trip if more than this many distinct customer contracts are exposed.
+    contracts_exposed: 4
+    # Trip if waiting one more meeting cycle would let this much
+    # mitigation value expire.
+    cost_of_waiting_chf: 75000
+
+  # Posture thresholds for the state strip, as a fraction of the trip level.
+  watch_fraction: 0.5
+
+# -------------------------------------------------------------------
+# PORTFOLIO DECAY CURVE
+# -------------------------------------------------------------------
+decay_curve:
+  horizon_days: 21
+  step_hours: 6
+  # The sum of per-shipment value-of-acting is a CEILING: it assumes every
+  # action could be taken at once, which ignores contention for the same
+  # alternate capacity. Cap the number of concurrent actions counted.
+  concurrent_action_cap: 12
