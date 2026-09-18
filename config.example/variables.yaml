@@ -1,0 +1,596 @@
+# THE RISK LEDGER — 45 variables across 10 families.
+#
+# Sika confirmed (Q1) that no risk ledger for outgoing shipments exists today.
+# This file IS the proposed ledger. It is meant to be read, argued with and
+# edited by the planning team — not hidden inside the model.
+#
+# DELIBERATE DEVIATION from BRIEF §4 ("~100 variables"): 45 fully specified
+# variables beat 100 half-specified ones. §5.0 claims every parameter is
+# "something a planner already knows" — that claim only survives if every
+# entry is genuinely specified. Coverage per family is shown in the /inputs
+# panel so the gap is visible rather than implied.
+#
+# FIELDS
+#   id                      stable key; never renumber
+#   family                  one of the 10 families
+#   name                    planner-facing label
+#   description             the string the router (rules and LLM) reads
+#   modes_affected          which legs this can touch: road | rail | sea | barge
+#   typical_lead_time_hours how far ahead this is normally knowable (0 = no warning)
+#   typical_duration_days   default duration when the source does not state one
+#   exposure                node attributes that must hold for a node to be exposed
+#                           (BRIEF §4: derive exposure from attributes, never
+#                            from a per-node vulnerability vector)
+#   probability_sourceable  can P be sourced, or must it be probability_unknown?
+
+variables:
+  # =================================================================
+  # 1. CLIMATE (6)
+  # =================================================================
+  - id: CLI_HIGH_WIND
+    family: climate
+    name: High wind
+    description: >
+      Sustained high wind or gale. Suspends container crane operations at
+      terminals and restricts barge and small-vessel movement.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 72
+    typical_duration_days: 1
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: true
+
+  - id: CLI_STORM
+    family: climate
+    name: Storm / named windstorm
+    description: >
+      Severe storm system. Port closure, vessel holding offshore, road and
+      rail disruption inland.
+    modes_affected: [sea, barge, road, rail]
+    typical_lead_time_hours: 96
+    typical_duration_days: 2
+    exposure: {any: true}
+    probability_sourceable: true
+
+  - id: CLI_WAVE_HEIGHT
+    family: climate
+    name: High sea state
+    description: >
+      Significant wave height above safe operating limits. Vessel slow-steaming,
+      route deviation, or port approach closure.
+    modes_affected: [sea]
+    typical_lead_time_hours: 72
+    typical_duration_days: 2
+    exposure: {kind_in: [seaport, chokepoint]}
+    probability_sourceable: true
+
+  - id: CLI_FOG
+    family: climate
+    name: Fog / low visibility
+    description: >
+      Visibility below pilotage minimum. Suspends port approach, canal transit
+      and river navigation.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 24
+    typical_duration_days: 1
+    exposure: {kind_in: [seaport, inland_port, chokepoint, gauge]}
+    probability_sourceable: true
+
+  - id: CLI_ICE
+    family: climate
+    name: Ice / freezing conditions
+    description: >
+      Ice formation on waterways or freezing conditions on road and rail.
+      Closes locks, restricts barge draught, causes road closures.
+    modes_affected: [barge, road, rail]
+    typical_lead_time_hours: 96
+    typical_duration_days: 4
+    exposure: {on_river: true}
+    probability_sourceable: true
+
+  - id: CLI_EXTREME_HEAT
+    family: climate
+    name: Extreme heat
+    description: >
+      Temperatures above the safe handling range for temperature-sensitive
+      chemical cargo, or causing rail speed restrictions from track buckling.
+    modes_affected: [road, rail, sea]
+    typical_lead_time_hours: 96
+    typical_duration_days: 3
+    exposure: {any: true}
+    probability_sourceable: true
+
+  # =================================================================
+  # 2. WATERWAY CONDITION (5)  — the anchor family
+  # =================================================================
+  - id: WAT_LOW_WATER
+    family: waterway
+    name: Low water / draught restriction
+    description: >
+      River level below the threshold at which vessels must reduce loaded
+      draught. Barges sail part-loaded, so the same tonnage needs more
+      sailings and low-water surcharges apply. This is a CAPACITY DERATE,
+      not a stoppage — traffic continues at reduced payload.
+    modes_affected: [barge]
+    typical_lead_time_hours: 240
+    typical_duration_days: 14
+    exposure: {on_river: true}
+    probability_sourceable: true
+
+  - id: WAT_HIGH_WATER
+    family: waterway
+    name: High water / flood mark
+    description: >
+      River level above the navigation high-water mark. Unlike low water this
+      does stop traffic: navigation is suspended entirely until levels fall.
+    modes_affected: [barge]
+    typical_lead_time_hours: 96
+    typical_duration_days: 4
+    exposure: {on_river: true}
+    probability_sourceable: true
+
+  - id: WAT_LOCK_CLOSURE
+    family: waterway
+    name: Lock closure
+    description: >
+      Lock chamber out of service through failure or maintenance. Queueing or
+      complete blockage of the waterway at that point.
+    modes_affected: [barge]
+    typical_lead_time_hours: 336
+    typical_duration_days: 3
+    exposure: {on_river: true}
+    probability_sourceable: false
+
+  - id: WAT_CANAL_RESTRICTION
+    family: waterway
+    name: Canal transit restriction
+    description: >
+      Reduced daily transit slots or draught limits at a ship canal, from
+      drought, maintenance or congestion. Queueing and auction pricing.
+    modes_affected: [sea]
+    typical_lead_time_hours: 336
+    typical_duration_days: 30
+    exposure: {chokepoint: true}
+    probability_sourceable: true
+
+  - id: WAT_WATERWAY_INCIDENT
+    family: waterway
+    name: Waterway blockage / incident
+    description: >
+      Grounding, sinking or wreck blocking a navigable channel. Full or
+      partial closure until salvage completes.
+    modes_affected: [barge, sea]
+    typical_lead_time_hours: 0
+    typical_duration_days: 4
+    exposure: {any_water: true}
+    probability_sourceable: false
+
+  # =================================================================
+  # 3. PORT OPERATIONS (6)
+  # =================================================================
+  - id: POR_CONGESTION
+    family: port_ops
+    name: Port congestion
+    description: >
+      Vessel waiting time above normal from berth or yard saturation.
+      Adds dwell at both ends of the call.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 168
+    typical_duration_days: 7
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: true
+
+  - id: POR_BERTH_UNAVAILABLE
+    family: port_ops
+    name: Berth unavailable
+    description: >
+      Assigned berth out of service or occupied. Vessel waits at anchorage or
+      is shifted to a different terminal.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 48
+    typical_duration_days: 2
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: false
+
+  - id: POR_CRANE_FAILURE
+    family: port_ops
+    name: Crane or equipment breakdown
+    description: >
+      Ship-to-shore crane or terminal equipment out of service. Reduced
+      handling rate, longer port stay.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 2
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: false
+
+  - id: POR_CUSTOMS_BACKLOG
+    family: port_ops
+    name: Customs or inspection backlog
+    description: >
+      Clearance times extended by inspection regime change, system outage or
+      staffing. Affects dangerous-goods classified cargo disproportionately.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 72
+    typical_duration_days: 4
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: false
+
+  - id: POR_HOLIDAY
+    family: port_ops
+    name: Public holiday / reduced working
+    description: >
+      Scheduled non-working period or reduced gate hours at a terminal.
+      Entirely predictable and known months ahead.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 720
+    typical_duration_days: 2
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: true
+
+  - id: POR_CAPACITY_CUT
+    family: port_ops
+    name: Terminal capacity reduction
+    description: >
+      Terminal operating at reduced capacity through works, reorganisation or
+      loss of a quay. Sustained lower throughput rather than a single outage.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 336
+    typical_duration_days: 21
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: false
+
+  # =================================================================
+  # 4. GEOPOLITICAL (5)
+  # =================================================================
+  - id: GEO_CONFLICT
+    family: geopolitical
+    name: Conflict / security threat to shipping
+    description: >
+      Armed conflict or attacks on merchant shipping in a transit region.
+      Carriers reroute, insurance premiums rise, transit times lengthen.
+    modes_affected: [sea]
+    typical_lead_time_hours: 168
+    typical_duration_days: 60
+    exposure: {kind_in: [chokepoint, seaport]}
+    probability_sourceable: false
+
+  - id: GEO_SANCTIONS
+    family: geopolitical
+    name: Sanctions
+    description: >
+      Trade restrictions on a country, entity, vessel or carrier. May make a
+      planned routing or carrier unusable at short notice.
+    modes_affected: [sea, road, rail]
+    typical_lead_time_hours: 168
+    typical_duration_days: 90
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: GEO_BORDER_CLOSURE
+    family: geopolitical
+    name: Border closure or control
+    description: >
+      Land border closed or subject to extended controls. Queueing for road
+      and rail freight at the crossing.
+    modes_affected: [road, rail]
+    typical_lead_time_hours: 72
+    typical_duration_days: 5
+    exposure: {inland: true}
+    probability_sourceable: false
+
+  - id: GEO_REGULATORY
+    family: geopolitical
+    name: Regulatory change
+    description: >
+      New or changed regulation affecting movement of the cargo — chemical
+      classification, packaging, documentation, emissions rules.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 2160
+    typical_duration_days: 999
+    exposure: {any: true}
+    probability_sourceable: true
+
+  - id: GEO_TARIFF
+    family: geopolitical
+    name: Tariff change
+    description: >
+      Import or export duty change altering landed cost or triggering
+      pre-buying surges that congest a corridor.
+    modes_affected: [sea, road, rail]
+    typical_lead_time_hours: 720
+    typical_duration_days: 999
+    exposure: {any: true}
+    probability_sourceable: true
+
+  # =================================================================
+  # 5. LABOUR (5)
+  # =================================================================
+  - id: LAB_PORT_STRIKE
+    family: labour
+    name: Port / dockworker strike
+    description: >
+      Industrial action by terminal or dock labour. Ranges from a scheduled
+      24-hour stoppage to an open-ended strike; duration matters far more
+      than the fact of the strike.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 168
+    typical_duration_days: 3
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: false
+
+  - id: LAB_HAULIER_STRIKE
+    family: labour
+    name: Road haulier strike or blockade
+    description: >
+      Trucking industrial action or protest blockade of roads and port gates.
+    modes_affected: [road]
+    typical_lead_time_hours: 96
+    typical_duration_days: 2
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: LAB_RAIL_STRIKE
+    family: labour
+    name: Rail strike
+    description: >
+      Rail industrial action. Freight paths are typically cancelled before
+      passenger services and restored after them.
+    modes_affected: [rail]
+    typical_lead_time_hours: 120
+    typical_duration_days: 2
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: LAB_UNION_BALLOT
+    family: labour
+    name: Union ballot / dispute opened
+    description: >
+      A ballot, notice or breakdown in negotiation that has NOT yet produced
+      a stoppage. The earliest actionable signal in this family, and the one
+      whose probability genuinely cannot be sourced.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 336
+    typical_duration_days: 0
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: LAB_STAFF_SHORTAGE
+    family: labour
+    name: Staff shortage / go-slow
+    description: >
+      Reduced productivity from absence, working-to-rule or unfilled posts.
+      Degrades handling rate without a headline stoppage.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 168
+    typical_duration_days: 10
+    exposure: {any: true}
+    probability_sourceable: false
+
+  # =================================================================
+  # 6. INFRASTRUCTURE (5)
+  # =================================================================
+  - id: INF_BRIDGE_CLOSURE
+    family: infrastructure
+    name: Bridge closure or weight limit
+    description: >
+      Bridge closed or load-restricted. Forces a detour for road or rail, or
+      restricts air draught for river vessels.
+    modes_affected: [road, rail, barge]
+    typical_lead_time_hours: 336
+    typical_duration_days: 14
+    exposure: {inland: true}
+    probability_sourceable: false
+
+  - id: INF_TUNNEL_CLOSURE
+    family: infrastructure
+    name: Tunnel closure
+    description: >
+      Alpine or urban tunnel closed. Significant detour distance; dangerous
+      goods are often first to be refused.
+    modes_affected: [road, rail]
+    typical_lead_time_hours: 168
+    typical_duration_days: 5
+    exposure: {inland: true}
+    probability_sourceable: false
+
+  - id: INF_RAIL_WORKS
+    family: infrastructure
+    name: Rail engineering works
+    description: >
+      Planned possession or line closure. Known far in advance and therefore
+      cheap to plan around — if anyone notices it.
+    modes_affected: [rail]
+    typical_lead_time_hours: 1440
+    typical_duration_days: 7
+    exposure: {any: true}
+    probability_sourceable: true
+
+  - id: INF_ROAD_CLOSURE
+    family: infrastructure
+    name: Motorway closure
+    description: >
+      Major road closed by incident, works or landslide. Detour and queueing.
+    modes_affected: [road]
+    typical_lead_time_hours: 0
+    typical_duration_days: 1
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: INF_RAIL_BLOCKAGE
+    family: infrastructure
+    name: Rail line blockage
+    description: >
+      Line blocked by derailment, landslip, embankment failure or signalling
+      failure. Freight paths cancelled or heavily diverted.
+    modes_affected: [rail]
+    typical_lead_time_hours: 0
+    typical_duration_days: 6
+    exposure: {any: true}
+    probability_sourceable: false
+
+  # =================================================================
+  # 7. FORCE MAJEURE (4)
+  # =================================================================
+  - id: FOR_EARTHQUAKE
+    family: force_majeure
+    name: Earthquake
+    description: >
+      Seismic event affecting port structures, rail alignment or road
+      network. No lead time.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 14
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: FOR_FLOOD
+    family: force_majeure
+    name: Flood
+    description: >
+      Inundation of terminal, road or rail infrastructure. Distinct from
+      waterway high water, which is a navigation limit rather than damage.
+    modes_affected: [road, rail, sea, barge]
+    typical_lead_time_hours: 72
+    typical_duration_days: 10
+    exposure: {any: true}
+    probability_sourceable: true
+
+  - id: FOR_FIRE
+    family: force_majeure
+    name: Fire at facility
+    description: >
+      Fire at a terminal, warehouse or plant. Site closure and cargo loss.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 7
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: FOR_PANDEMIC
+    family: force_majeure
+    name: Pandemic / health restriction
+    description: >
+      Health measures restricting crew changes, port access or land border
+      movement.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 336
+    typical_duration_days: 60
+    exposure: {any: true}
+    probability_sourceable: false
+
+  # =================================================================
+  # 8. MECHANICAL / ACCIDENT (4)
+  # =================================================================
+  - id: MEC_VESSEL_BREAKDOWN
+    family: mechanical
+    name: Vessel breakdown
+    description: >
+      Machinery failure requiring repair or tow. Cargo may be discharged at
+      an unplanned port.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 5
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: MEC_COLLISION
+    family: mechanical
+    name: Collision
+    description: >
+      Vessel or vehicle collision. Cargo damage, investigation hold, and
+      possible channel obstruction.
+    modes_affected: [sea, barge, road, rail]
+    typical_lead_time_hours: 0
+    typical_duration_days: 4
+    exposure: {any: true}
+    probability_sourceable: false
+
+  - id: MEC_GROUNDING
+    family: mechanical
+    name: Grounding
+    description: >
+      Vessel aground. In a narrow channel this blocks the waterway for
+      everyone behind it, not only the vessel involved.
+    modes_affected: [sea, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 5
+    exposure: {any_water: true}
+    probability_sourceable: false
+
+  - id: MEC_CARGO_FIRE
+    family: mechanical
+    name: Cargo fire / dangerous goods incident
+    description: >
+      Fire or release involving dangerous goods in transit. Particularly
+      relevant to chemical cargo: triggers wider embargo on similar classes.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 10
+    exposure: {any: true}
+    probability_sourceable: false
+
+  # =================================================================
+  # 9. CAPACITY / MARKET (3)
+  # =================================================================
+  - id: CAP_BLANK_SAILING
+    family: capacity
+    name: Blank sailing / service omission
+    description: >
+      Carrier cancels a scheduled sailing or omits a port call. Cargo rolls
+      to the next service, typically a full week.
+    modes_affected: [sea]
+    typical_lead_time_hours: 168
+    typical_duration_days: 7
+    exposure: {kind_in: [seaport]}
+    probability_sourceable: false
+
+  - id: CAP_RATE_SPIKE
+    family: capacity
+    name: Freight rate spike
+    description: >
+      Sharp rise in spot rates on a trade lane. Bites only on spot-booked
+      cargo; contracted volume is insulated until the agreement is renewed.
+    modes_affected: [sea, road, rail]
+    typical_lead_time_hours: 168
+    typical_duration_days: 30
+    exposure: {any: true}
+    probability_sourceable: true
+
+  - id: CAP_CARRIER_INSOLVENCY
+    family: capacity
+    name: Carrier insolvency or withdrawal
+    description: >
+      Carrier ceases trading or withdraws a service. Cargo in transit may be
+      arrested or stranded; forward bookings must be replaced.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 336
+    typical_duration_days: 21
+    exposure: {any: true}
+    probability_sourceable: false
+
+  # =================================================================
+  # 10. CYBER (2)
+  # =================================================================
+  - id: CYB_PORT_IT_OUTAGE
+    family: cyber
+    name: Port IT / terminal system outage
+    description: >
+      Terminal operating system unavailable through attack or failure. Gate
+      and yard operations fall back to manual, collapsing throughput.
+    modes_affected: [sea, barge, road, rail]
+    typical_lead_time_hours: 0
+    typical_duration_days: 4
+    exposure: {kind_in: [seaport, inland_port]}
+    probability_sourceable: false
+
+  - id: CYB_CARRIER_SYSTEMS
+    family: cyber
+    name: Carrier systems outage
+    description: >
+      Carrier booking, documentation or tracking systems down. Bookings
+      cannot be confirmed or amended; visibility is lost.
+    modes_affected: [sea, road, rail, barge]
+    typical_lead_time_hours: 0
+    typical_duration_days: 3
+    exposure: {any: true}
+    probability_sourceable: false

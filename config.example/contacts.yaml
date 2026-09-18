@@ -1,0 +1,141 @@
+# Contacts and escalation ladder — SYNTHETIC, STRUCTURALLY REAL
+#
+# Every name, address and number below is invented. The STRUCTURE is not:
+# roles, tiers, response SLAs and acknowledgement are how a real ladder works,
+# and swapping in Sika's own directory is a file edit, not a code change.
+#
+# The four internal functions below are the ones Sika named in answer to Q6:
+# "established teams that meet on a weekly schedule (e.g. Procurement,
+# Manufacturing, Supply Chain, Controlling) increase meeting frequency ...
+# They have full authority to decide on mitigation."
+#
+# That answer is why the ladder is short. The bottleneck is not authority.
+
+internal:
+  - id: FN_SUPPLY_CHAIN
+    function: Supply Chain
+    role: Lane owner — first responder
+    tier: 1
+    response_sla_hours: 2
+    convene_member: true
+    contact: "supply.chain.duty@example-synthetic.invalid"
+    phone: "+41 00 000 00 01"
+
+  - id: FN_PROCUREMENT
+    function: Procurement
+    role: Carrier relationship, rate and capacity authority
+    tier: 1
+    response_sla_hours: 4
+    convene_member: true
+    contact: "procurement.duty@example-synthetic.invalid"
+    phone: "+41 00 000 00 02"
+
+  - id: FN_MANUFACTURING
+    function: Manufacturing
+    role: Production re-sequencing, safety stock release
+    tier: 2
+    response_sla_hours: 8
+    convene_member: true
+    contact: "manufacturing.planning@example-synthetic.invalid"
+    phone: "+41 00 000 00 03"
+
+  - id: FN_CONTROLLING
+    function: Controlling
+    role: Cost approval above delegated limit
+    tier: 2
+    response_sla_hours: 8
+    convene_member: true
+    contact: "controlling.duty@example-synthetic.invalid"
+    phone: "+41 00 000 00 04"
+
+  - id: FN_CUSTOMER_SERVICE
+    function: Customer Service
+    role: Customer notification and commitment renegotiation
+    tier: 1
+    response_sla_hours: 2
+    convene_member: false
+    contact: "customer.service@example-synthetic.invalid"
+    phone: "+41 00 000 00 05"
+
+# Spend above which Controlling approval is required before acting.
+# OPEN QUESTION for Sika: what is the real delegated limit, and who holds it?
+# If the binding constraint turns out to be cost approval rather than
+# awareness, this number is the most important one in the file.
+approval:
+  delegated_limit_chf: 10000
+  approver: FN_CONTROLLING
+
+# -------------------------------------------------------------------
+# Carriers — synthetic
+# -------------------------------------------------------------------
+carriers:
+  - id: CARR_RHN
+    name: "Rhenus Barge (synthetic stand-in)"
+    modes: [barge]
+    contact: "ops@carrier-synthetic-a.invalid"
+    phone: "+49 00 000 10 01"
+    response_sla_hours: 4
+  - id: CARR_DSL
+    name: "Deep Sea Lines (synthetic stand-in)"
+    modes: [sea]
+    contact: "bookings@carrier-synthetic-b.invalid"
+    phone: "+45 00 000 10 02"
+    response_sla_hours: 12
+  - id: CARR_EUR
+    name: "EuroRail Cargo (synthetic stand-in)"
+    modes: [rail]
+    contact: "paths@carrier-synthetic-c.invalid"
+    phone: "+49 00 000 10 03"
+    response_sla_hours: 6
+  - id: CARR_ALP
+    name: "Alpine Haulage (synthetic stand-in)"
+    modes: [road]
+    contact: "dispatch@carrier-synthetic-d.invalid"
+    phone: "+41 00 000 10 04"
+    response_sla_hours: 2
+  - id: CARR_MED
+    name: "Med Container Service (synthetic stand-in)"
+    modes: [sea]
+    contact: "ops@carrier-synthetic-e.invalid"
+    phone: "+39 00 000 10 05"
+    response_sla_hours: 12
+
+# -------------------------------------------------------------------
+# Local vendors by node — the "who do I ring at that port" list
+# -------------------------------------------------------------------
+local_vendors:
+  NLRTM:
+    - {name: "Rotterdam Forwarding (synthetic)", service: customs_and_haulage, phone: "+31 00 000 20 01"}
+    - {name: "Maasvlakte Warehousing (synthetic)", service: storage, phone: "+31 00 000 20 02"}
+  BEANR:
+    - {name: "Antwerp Logistics Partners (synthetic)", service: customs_and_haulage, phone: "+32 00 000 20 03"}
+  DEHAM:
+    - {name: "Elbe Freight Services (synthetic)", service: customs_and_haulage, phone: "+49 00 000 20 04"}
+  CHBSL:
+    - {name: "Basel Rhine Terminal (synthetic)", service: barge_terminal, phone: "+41 00 000 20 05"}
+  DEDUI:
+    - {name: "Duisburg Intermodal (synthetic)", service: barge_rail_transfer, phone: "+49 00 000 20 06"}
+  ITGOA:
+    - {name: "Liguria Shipping Agency (synthetic)", service: agency, phone: "+39 00 000 20 07"}
+  ESVLC:
+    - {name: "Levante Cargo (synthetic)", service: agency, phone: "+34 00 000 20 08"}
+
+# -------------------------------------------------------------------
+# Escalation ladder
+# -------------------------------------------------------------------
+# Escalation is by UNRESOLVED CHF at risk, not by the size of the external
+# event. A large storm that threatens nothing does not escalate.
+escalation:
+  - level: 1
+    trigger_chf: 0
+    notify: [FN_SUPPLY_CHAIN]
+    acknowledge_within_hours: 4
+  - level: 2
+    trigger_chf: 25000
+    notify: [FN_SUPPLY_CHAIN, FN_PROCUREMENT, FN_CUSTOMER_SERVICE]
+    acknowledge_within_hours: 4
+  - level: 3
+    trigger_chf: 100000
+    notify: [FN_SUPPLY_CHAIN, FN_PROCUREMENT, FN_MANUFACTURING, FN_CONTROLLING]
+    acknowledge_within_hours: 2
+    note: "Convene rule normally trips at or before this level."

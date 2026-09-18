@@ -1,0 +1,16 @@
+[server]
+# Serves ./static/ at /app/static/. This is how the vendored topojson reaches
+# the browser without a CDN — see static/topojson/README.md.
+enableStaticServing = true
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#f9f9f7"
+secondaryBackgroundColor = "#fcfcfb"
+textColor = "#0b0b0b"
+font = "sans serif"

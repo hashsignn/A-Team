@@ -1,0 +1,464 @@
+# Network nodes — SYNTHETIC / PUBLIC REFERENCE DATA
+#
+# Coordinates are real (public geographic fact). Throughput shares are
+# illustrative and derived from the public Sika annual-report tonnage figures
+# quoted in the brief; they are NOT internal Sika data.
+#
+# `exposure` attributes replace per-node vulnerability vectors (BRIEF §4):
+# ~15 readable attributes beat 5,000 invented numbers. engine/variables/mask.py
+# derives which variable families can touch a node from these alone.
+
+nodes:
+  # ---------------------------------------------------------------
+  # Sika production / distribution sites (inland)
+  # ---------------------------------------------------------------
+  - id: SIKA_DUD
+    name: Düdingen
+    kind: plant
+    country: CH
+    lat: 46.850
+    lon: 7.190
+    modes: [road, rail, barge]
+    on_river: true
+    river: Rhine
+    inland: true
+    throughput_share: 0.33
+    alternatives: [SIKA_ZUR]
+
+  - id: SIKA_STU
+    name: Stuttgart
+    kind: plant
+    country: DE
+    lat: 48.783
+    lon: 9.183
+    modes: [road, rail]
+    on_river: false
+    inland: true
+    throughput_share: 0.25
+    alternatives: [SIKA_BAD]
+
+  - id: SIKA_ZUR
+    name: Zürich
+    kind: distribution
+    country: CH
+    lat: 47.377
+    lon: 8.540
+    modes: [road, rail]
+    on_river: false
+    inland: true
+    throughput_share: 0.29
+    alternatives: [SIKA_DUD]
+
+  - id: SIKA_BAD
+    name: Bad Urach
+    kind: plant
+    country: DE
+    lat: 48.492
+    lon: 9.398
+    modes: [road]
+    on_river: false
+    inland: true
+    throughput_share: 0.08
+    alternatives: [SIKA_STU]
+
+  - id: SIKA_CER
+    name: Cerano / Peschiera
+    kind: plant
+    country: IT
+    lat: 45.400
+    lon: 8.650
+    modes: [road, rail]
+    on_river: false
+    inland: true
+    throughput_share: 0.17
+    alternatives: []
+
+  - id: SIKA_ALC
+    name: Alcobendas
+    kind: distribution
+    country: ES
+    lat: 40.542
+    lon: -3.642
+    modes: [road, rail]
+    on_river: false
+    inland: true
+    throughput_share: 0.03
+    alternatives: []
+
+  # ---------------------------------------------------------------
+  # Rhine corridor — inland waterway
+  # ---------------------------------------------------------------
+  - id: CHBSL
+    name: Basel (Rhine port)
+    kind: inland_port
+    country: CH
+    lat: 47.564
+    lon: 7.596
+    modes: [barge, rail, road]
+    on_river: true
+    river: Rhine
+    inland: true
+    throughput_share: 0.12
+    alternatives: [DEDUI]
+
+  - id: GAUGE_KAUB
+    name: Kaub (Rhine gauge — governing shallow point)
+    kind: gauge
+    country: DE
+    lat: 50.085
+    lon: 7.765
+    modes: [barge]
+    on_river: true
+    river: Rhine
+    inland: true
+    throughput_share: 0.0
+    # Kaub is the reference gauge for Middle Rhine loading restrictions.
+    # It is a chokepoint, not an origin or destination.
+    chokepoint: true
+    alternatives: []
+
+  - id: DEDUI
+    name: Duisburg
+    kind: inland_port
+    country: DE
+    lat: 51.435
+    lon: 6.762
+    modes: [barge, rail, road]
+    on_river: true
+    river: Rhine
+    inland: true
+    throughput_share: 0.09
+    alternatives: [CHBSL]
+
+  # ---------------------------------------------------------------
+  # European seaports
+  # ---------------------------------------------------------------
+  - id: NLRTM
+    name: Rotterdam
+    kind: seaport
+    country: NL
+    lat: 51.950
+    lon: 4.140
+    modes: [sea, barge, rail, road]
+    on_river: true
+    river: Rhine
+    inland: false
+    throughput_share: 0.24
+    alternatives: [BEANR, DEHAM]
+
+  - id: BEANR
+    name: Antwerp
+    kind: seaport
+    country: BE
+    lat: 51.260
+    lon: 4.400
+    modes: [sea, barge, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.16
+    alternatives: [NLRTM, FRLEH]
+
+  - id: DEHAM
+    name: Hamburg
+    kind: seaport
+    country: DE
+    lat: 53.541
+    lon: 9.985
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.13
+    alternatives: [NLRTM, BEANR]
+
+  - id: FRLEH
+    name: Le Havre
+    kind: seaport
+    country: FR
+    lat: 49.484
+    lon: 0.110
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.05
+    alternatives: [BEANR]
+
+  - id: ESVLC
+    name: Valencia
+    kind: seaport
+    country: ES
+    lat: 39.443
+    lon: -0.327
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.04
+    alternatives: [ESBCN]
+
+  - id: ESBCN
+    name: Barcelona
+    kind: seaport
+    country: ES
+    lat: 41.350
+    lon: 2.160
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: [ESVLC]
+
+  - id: ITGOA
+    name: Genoa
+    kind: seaport
+    country: IT
+    lat: 44.402
+    lon: 8.920
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.06
+    alternatives: [ITSPE]
+
+  - id: ITSPE
+    name: La Spezia
+    kind: seaport
+    country: IT
+    lat: 44.100
+    lon: 9.830
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: [ITGOA]
+
+  - id: GBFXT
+    name: Felixstowe
+    kind: seaport
+    country: GB
+    lat: 51.950
+    lon: 1.320
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.03
+    alternatives: [GBSOU]
+
+  - id: GBSOU
+    name: Southampton
+    kind: seaport
+    country: GB
+    lat: 50.900
+    lon: -1.400
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.01
+    alternatives: [GBFXT]
+
+  # ---------------------------------------------------------------
+  # Asian / Middle East seaports
+  # ---------------------------------------------------------------
+  - id: CNSHA
+    name: Shanghai
+    kind: seaport
+    country: CN
+    lat: 31.360
+    lon: 121.620
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.21
+    alternatives: [CNNGB]
+
+  - id: CNNGB
+    name: Ningbo-Zhoushan
+    kind: seaport
+    country: CN
+    lat: 29.870
+    lon: 121.550
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.09
+    alternatives: [CNSHA]
+
+  - id: SGSIN
+    name: Singapore
+    kind: seaport
+    country: SG
+    lat: 1.264
+    lon: 103.822
+    modes: [sea, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.07
+    alternatives: [MYPKG]
+
+  - id: MYPKG
+    name: Port Klang
+    kind: seaport
+    country: MY
+    lat: 3.000
+    lon: 101.390
+    modes: [sea, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.05
+    alternatives: [SGSIN]
+
+  - id: AEJEA
+    name: Jebel Ali
+    kind: seaport
+    country: AE
+    lat: 25.010
+    lon: 55.060
+    modes: [sea, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.05
+    alternatives: []
+
+  # ---------------------------------------------------------------
+  # North American seaports
+  # ---------------------------------------------------------------
+  - id: USNYC
+    name: New York / New Jersey
+    kind: seaport
+    country: US
+    lat: 40.670
+    lon: -74.040
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.08
+    alternatives: [USORF]
+
+  - id: USORF
+    name: Norfolk
+    kind: seaport
+    country: US
+    lat: 36.920
+    lon: -76.330
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: [USNYC]
+
+  - id: USHOU
+    name: Houston
+    kind: seaport
+    country: US
+    lat: 29.730
+    lon: -95.270
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.04
+    alternatives: [USNYC]
+
+  - id: USLAX
+    name: Los Angeles / Long Beach
+    kind: seaport
+    country: US
+    lat: 33.730
+    lon: -118.260
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.06
+    alternatives: []
+
+  # ---------------------------------------------------------------
+  # Maritime chokepoints — graph nodes so the gate can intersect them.
+  # A chokepoint is never an origin or destination; it is transited.
+  # ---------------------------------------------------------------
+  - id: CHOKE_SUEZ
+    name: Suez Canal
+    kind: chokepoint
+    country: EG
+    lat: 30.000
+    lon: 32.550
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: [CHOKE_GOODHOPE]
+
+  - id: CHOKE_GOODHOPE
+    name: Cape of Good Hope
+    kind: chokepoint
+    country: ZA
+    lat: -34.360
+    lon: 18.470
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: []
+
+  - id: CHOKE_GIB
+    name: Strait of Gibraltar
+    kind: chokepoint
+    country: ES
+    lat: 35.950
+    lon: -5.600
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: []
+
+  - id: CHOKE_BAB
+    name: Bab el-Mandeb
+    kind: chokepoint
+    country: YE
+    lat: 12.580
+    lon: 43.330
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: [CHOKE_GOODHOPE]
+
+  - id: CHOKE_MALACCA
+    name: Strait of Malacca
+    kind: chokepoint
+    country: MY
+    lat: 2.500
+    lon: 101.000
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: [CHOKE_SUNDA]
+
+  - id: CHOKE_SUNDA
+    name: Sunda Strait
+    kind: chokepoint
+    country: ID
+    lat: -6.000
+    lon: 105.900
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: []
+
+  - id: CHOKE_PANAMA
+    name: Panama Canal
+    kind: chokepoint
+    country: PA
+    lat: 9.080
+    lon: -79.680
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: []

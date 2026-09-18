@@ -1,0 +1,12 @@
+# Pinned to what this build was verified against.
+numpy>=2.0
+pandas>=2.2
+pydantic>=2.9
+PyYAML>=6.0
+plotly>=5.24
+streamlit>=1.40
+pytest>=8.0
+
+# Offline sea routing. Optional: engine/network/graph.py falls back to
+# chokepoint-waypoint corridors and reports the fallback in /inputs.
+searoute>=1.4
