@@ -440,9 +440,11 @@ class ConveneVerdict(BaseModel):
     posture: Posture
     rule_agreed: bool
     triggers_fired: list[str]
-    recoverable_chf: float
+    # Every trigger is a quantity a planner can see and check. None depends on
+    # the summed value of acting, which rests on our invented action costs.
+    exposure_chf: float
     contracts_exposed: int
-    cost_of_waiting_chf: float
+    options_expiring: int
     next_meeting_at: datetime | None
     headline: str
 

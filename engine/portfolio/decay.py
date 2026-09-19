@@ -233,44 +233,51 @@ def evaluate(
     config: Config,
     clock: Clock,
 ) -> ConveneVerdict:
-    """Has the pre-agreed rule tripped?"""
+    """Has the pre-agreed rule tripped?
+
+    Every trigger is a quantity a planner can see on the board and check:
+    expected loss, a count of contracts, a count of options. Nothing here
+    depends on the summed value of acting, which is built on our invented
+    action costs and is not a number anyone can stand behind.
+    """
     rule = config.scoring["convene_rule"]
     thresholds = rule["thresholds"]
     agreed = rule.get("agreed_on") is not None
 
-    recoverable = curve[0].recoverable_chf if curve else 0.0
+    exposure = sum(a.total_value_at_risk_chf for a in assessments)
 
     contracts: set[str] = set()
     for assessment in assessments:
         for risk in assessment.shipment_risks:
-            if risk.value_of_acting_chf > 0:
+            if risk.do_nothing.expected_loss_chf > 0:
                 contracts.add(risk.customer)
 
     meeting = next_meeting(config, clock)
-    waiting_cost = cost_of_waiting(curve, clock, meeting) if meeting else 0.0
+    expiring = options_expiring_before(curve, meeting) if meeting else 0
 
     fired: list[str] = []
-    if recoverable >= thresholds["recoverable_chf"]:
+    if exposure >= thresholds["exposure_chf"]:
         fired.append(
-            f"recoverable value at risk CHF {recoverable:,.0f} "
-            f"≥ CHF {thresholds['recoverable_chf']:,.0f}"
+            f"CHF {exposure:,.0f} of expected loss across the book "
+            f"≥ CHF {thresholds['exposure_chf']:,.0f}"
         )
     if len(contracts) >= thresholds["contracts_exposed"]:
         fired.append(
             f"{len(contracts)} customer contracts exposed "
             f"≥ {thresholds['contracts_exposed']}"
         )
-    if waiting_cost >= thresholds["cost_of_waiting_chf"]:
+    if expiring >= thresholds["options_expiring_before_meeting"]:
         fired.append(
-            f"CHF {waiting_cost:,.0f} of options expire before the next meeting "
-            f"≥ CHF {thresholds['cost_of_waiting_chf']:,.0f}"
+            f"{expiring} mitigation options expire before the next meeting "
+            f"≥ {thresholds['options_expiring_before_meeting']}"
         )
 
     watch_fraction = float(rule.get("watch_fraction", 0.5))
     near = (
-        recoverable >= thresholds["recoverable_chf"] * watch_fraction
+        exposure >= thresholds["exposure_chf"] * watch_fraction
         or len(contracts) >= max(1, int(thresholds["contracts_exposed"] * watch_fraction))
-        or waiting_cost >= thresholds["cost_of_waiting_chf"] * watch_fraction
+        or expiring >= max(1, int(
+            thresholds["options_expiring_before_meeting"] * watch_fraction))
     )
 
     if fired:
@@ -280,25 +287,39 @@ def evaluate(
     else:
         posture = Posture.NORMAL
 
-    headline = _headline(posture, fired, recoverable, waiting_cost, meeting, agreed)
+    headline = _headline(posture, fired, exposure, expiring, meeting, agreed)
 
     return ConveneVerdict(
         posture=posture,
         rule_agreed=agreed,
         triggers_fired=fired,
-        recoverable_chf=round(recoverable, 2),
+        exposure_chf=round(exposure, 2),
         contracts_exposed=len(contracts),
-        cost_of_waiting_chf=round(waiting_cost, 2),
+        options_expiring=expiring,
         next_meeting_at=meeting,
         headline=headline,
     )
 
 
+def options_expiring_before(curve: list[DecayPoint], until: datetime) -> int:
+    """How many mitigation options lapse between now and *until*.
+
+    A count, not a price. Which options exist and when each expires comes
+    straight from the min_action_hours table; what one is worth does not.
+    """
+    if not curve:
+        return 0
+    now_open = curve[0].actions_still_open
+    later = [p for p in curve if p.at <= until]
+    still_open = later[-1].actions_still_open if later else curve[-1].actions_still_open
+    return max(0, now_open - still_open)
+
+
 def _headline(
     posture: Posture,
     fired: list[str],
-    recoverable: float,
-    waiting_cost: float,
+    exposure: float,
+    expiring: int,
     meeting: datetime | None,
     agreed: bool,
 ) -> str:
@@ -312,19 +333,17 @@ def _headline(
         )
         return (
             f"{prefix}: {fired[0]}. "
-            f"Waiting for {when} lets CHF {waiting_cost:,.0f} of mitigation "
-            f"options expire."
+            f"{expiring} mitigation option(s) lapse before {when}."
         )
 
     if posture is Posture.WATCH:
         return (
-            f"Watch. CHF {recoverable:,.0f} recoverable across the book; "
-            f"CHF {waiting_cost:,.0f} of it expires before {when}. "
+            f"Watch. CHF {exposure:,.0f} of expected loss across the book; "
+            f"{expiring} mitigation option(s) lapse before {when}. "
             "Below the convene threshold."
         )
 
     return (
         "Normal. Nothing on your lanes needs a decision today — "
-        f"CHF {recoverable:,.0f} of mitigation value remains open and none of "
-        f"it expires before {when}."
+        f"no mitigation option lapses before {when}."
     )

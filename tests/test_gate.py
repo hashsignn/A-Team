@@ -377,7 +377,7 @@ def test_synthetic_data_is_labelled_everywhere(context):
 def test_run_is_reproducible_at_a_pinned_as_of(config):
     a = run(clock=AS_OF, config=config, options=RunOptions(shipment_count=80, seed=42))
     b = run(clock=AS_OF, config=config, options=RunOptions(shipment_count=80, seed=42))
-    assert a.result.convene.recoverable_chf == b.result.convene.recoverable_chf
+    assert a.result.convene.exposure_chf == b.result.convene.exposure_chf
     assert [x.event.event_id for x in a.result.assessments] == [
         x.event.event_id for x in b.result.assessments
     ]

@@ -139,3 +139,88 @@ escalation:
     notify: [FN_SUPPLY_CHAIN, FN_PROCUREMENT, FN_MANUFACTURING, FN_CONTROLLING]
     acknowledge_within_hours: 2
     note: "Convene rule normally trips at or before this level."
+
+# ===================================================================
+# ROUTE OWNERSHIP — who runs this lane day to day
+# ===================================================================
+# Assigned by CORRIDOR, not per lane. Sixteen lanes would mean sixteen
+# invented people, and corridors are how the work actually splits: one person
+# owns the Rhine, another owns deep-sea to Asia. Swap in Sika's real owners
+# and the shape does not change.
+#
+# All names synthetic.
+route_owners:
+  rhine:
+    name: "M. Brunner (synthetic)"
+    role: "Rhine corridor manager"
+    email: "rhine.corridor@example-synthetic.invalid"
+    phone: "+41 00 000 30 01"
+    hours: "06:00–18:00 CET, on call during low-water season"
+  eu_asia:
+    name: "L. Fontana (synthetic)"
+    role: "Deep-sea lane manager, EU–Asia"
+    email: "deepsea.asia@example-synthetic.invalid"
+    phone: "+39 00 000 30 02"
+    hours: "07:00–19:00 CET"
+  eu_us:
+    name: "K. Sørensen (synthetic)"
+    role: "Deep-sea lane manager, EU–US"
+    email: "deepsea.us@example-synthetic.invalid"
+    phone: "+45 00 000 30 03"
+    hours: "08:00–20:00 CET"
+  intra_eu:
+    name: "P. Haas (synthetic)"
+    role: "Intra-EU road & rail manager"
+    email: "intraeu.surface@example-synthetic.invalid"
+    phone: "+49 00 000 30 04"
+    hours: "06:00–18:00 CET"
+  default:
+    name: "Duty planner (synthetic)"
+    role: "Supply Chain duty desk"
+    email: "duty.planner@example-synthetic.invalid"
+    phone: "+41 00 000 30 00"
+    hours: "24/7"
+
+# ===================================================================
+# SENIORS — escalation above the standing teams
+# ===================================================================
+# Keyed to the LADDER, not to a CHF figure, because the ladder is what the
+# planner is already looking at. `from_level` is the least urgent rung at
+# which this person is drawn in; anything more urgent includes them too.
+#
+# Sika's answer to Q6 says the standing teams already hold full authority
+# once convened, so this list is deliberately short. It exists for the two
+# cases authority does not cover: a decision above the delegated spend limit,
+# and telling a customer their commitment will be missed.
+seniors:
+  - id: SNR_SUPPLY_CHAIN
+    name: "A. Meier (synthetic)"
+    role: "Head of Supply Chain"
+    from_level: yellow
+    why: "Owns the standing Supply Chain team and can convene it out of cycle."
+    email: "head.supplychain@example-synthetic.invalid"
+    phone: "+41 00 000 40 01"
+  - id: SNR_PROCUREMENT
+    name: "R. Dupont (synthetic)"
+    role: "Head of Procurement"
+    from_level: yellow
+    why: "Releases spend above the delegated limit and opens spot capacity."
+    email: "head.procurement@example-synthetic.invalid"
+    phone: "+41 00 000 40 02"
+  - id: SNR_OPERATIONS
+    name: "S. Keller (synthetic)"
+    role: "Regional Operations Director"
+    from_level: red
+    why: "Decides between missing a customer commitment and paying to recover it."
+    email: "ops.director@example-synthetic.invalid"
+    phone: "+41 00 000 40 03"
+
+# Which standing teams a level draws in. Sika named these four as already
+# meeting weekly and going daily in a crisis, with full authority to decide
+# mitigation — so convening them IS the escalation, not a step before it.
+convene_by_level:
+  red:    [FN_SUPPLY_CHAIN, FN_PROCUREMENT, FN_MANUFACTURING, FN_CONTROLLING]
+  yellow: [FN_SUPPLY_CHAIN, FN_PROCUREMENT, FN_CUSTOMER_SERVICE]
+  blue:   [FN_SUPPLY_CHAIN, FN_PROCUREMENT]
+  white:  [FN_SUPPLY_CHAIN]
+  green:  []
