@@ -87,7 +87,7 @@ the model is unavailable on the day the board still fills.
 | Their words | Where |
 |---|---|
 | *"No filter for what is relevant on which freight lane"* | `engine/gate/` — spatial ∧ temporal ∧ modal, **zero parameters** |
-| *"Disruptions are taken serious when carriers call — response options have already narrowed"* | `engine/portfolio/decay.py` — the option-decay curve |
+| *"Disruptions are taken serious when carriers call — response options have already narrowed"* | `engine/score/severity.py` — every rung of the ladder is a deadline; `engine/portfolio/convene.py` — the pre-agreed convene rule |
 | *"Even when a crisis is identified, it is unclear what to do and who to involve"* | `engine/act/playbook.py` — options, owners, named contacts, deadline |
 
 ---
@@ -144,8 +144,8 @@ the demo: hand them the laptop and let them set *"Antwerp strike = 4 days, not
 **Q5 — factor in social media.** Tier-3 sources are carried but cannot trip the
 convene rule until corroborated. The point worth making out loud: social media
 is not a *better* signal, it is an *earlier* one. Its whole value is arriving
-while options are still cheap — a lead-time argument, so it belongs on the
-decay curve rather than in the accuracy story.
+while there is still time to act — a lead-time argument, so it belongs on the
+ladder rather than in the accuracy story.
 
 **Q6 — the answer that reframed the product.**
 
@@ -155,47 +155,72 @@ decay curve rather than in the accuracy story.
 > declare a crisis too late and lose on available options.**"*
 
 Authority is not the bottleneck. Analysis is not the bottleneck. **The decision
-to convene is.** So the board gained a portfolio state strip and an option-decay
-curve — see below.
+to convene is.** So the board gained a portfolio state strip and a convene rule
+the group owns — see below.
 
 ---
 
-## The option-decay curve
+## The convene rule
 
-This is not a new model. The brief already computes
-`decision_deadline = impact_time − action_duration`. That number exists only
-because options **expire** — so the real decision, even for one shipment, is
-never "act or don't" but **act now vs. wait**:
+Sika's answer to Q6 is the one that reframed the product:
 
-```
-Value(act now) = S − C
-Value(wait)    = P(still actionable at t+Δ) × E[S − C | info at t+Δ]
-```
+> *"In crisis, established teams that meet on a weekly schedule (e.g.
+> Procurement, Manufacturing, Supply Chain, Controlling) increase meeting
+> frequency e.g. from weekly to every day. They have full authority to decide
+> on mitigation. **The real problem is that we declare a crisis too late and
+> lose on available options.**"*
 
-Once `t` crosses the deadline, `Value(wait) = 0`. Plot it and you get a step
-function that drops each time an action class expires. The portfolio version is
-the sum:
+Authority is not the bottleneck. Analysis is not the bottleneck. **The decision
+to convene is.** So the portfolio layer answers exactly one question: has a
+threshold the group pre-agreed in calm conditions been crossed?
 
-```
-R(t) = Σ over at-risk shipments  max over still-feasible actions
-       Value_of_acting(shipment, action, t)
-```
+Three triggers, in `config.example/scoring.yaml`:
 
-**Zero new parameters.** The cliff edges are the `min_action_hours` table the
-brief already mandates.
+| Trigger | What it counts |
+|---|---|
+| `exposure_chf` | expected loss across the book, out of the Monte Carlo |
+| `contracts_exposed` | distinct customers with expected loss above zero |
+| `shipments_needing_decision` | shipments inside 48 h of their decision deadline |
+
+Every one is something a planner can check. Nothing rests on the summed value
+of acting, which is built on our invented action costs and is not a number
+anyone can stand behind.
+
+### What was removed, and why
+
+There was briefly a fourth quantity: the CHF value of mitigations lapsing
+before the next meeting, plotted as a decay curve, with the convene rule keyed
+to it. It is gone.
+
+The framing was borrowed from finance and does not belong in a freight
+planner's hands. A planner has a cutoff to get a container to the terminal, or
+a last train path to book — not an option with a strike price and a decay rate.
+Dressing a booking deadline up as optionality makes the tool sound like it is
+trading the freight rather than moving it.
+
+The timing dimension it was reaching for is already carried, properly, by the
+five-level ladder: **every rung IS a deadline**. Nothing was lost but the
+jargon. Removing it also took the last display of `recoverable_chf` off the
+board, which is the right outcome — it was the least defensible arithmetic in
+the system and it had been sitting in the convene headline.
 
 ### The part that changes behaviour is not technical
 
 Teams do not declare late because they lack a number. They declare late because
 declaring is socially expensive — somebody has to stick their neck out and risk
 crying wolf. So the tool does not argue for a crisis. It reports that a
-threshold **the group pre-agreed in calm conditions** has tripped:
+threshold **the group pre-agreed in calm conditions** has been crossed:
 
-> *"Convene rule (agreed 12 Mar): recoverable value at risk > CHF 150k, or >4
-> contracts exposed. Both tripped 06:14 today."*
+> *"Convene rule (agreed 12 Mar): expected loss above CHF 150k, and more than
+> four customer contracts exposed. Both crossed at 06:14 today."*
 
 That moves the decision from a judgement one person owns to a rule the group
 already owns. It costs about forty lines of YAML and it is the whole mechanism.
+
+Until the group has actually agreed it, the board says *"proposed convene rule
+would be crossed (not yet agreed with the team)"* — and the risk profile page
+refuses to record an agreement date that was left blank, because claiming an
+agreement it does not have is the one way to break the mechanism outright.
 
 **This does not violate BRIEF §12.** There is no global P×I matrix, and the
 per-event matrix stays hidden until a dot is clicked. A one-line portfolio
@@ -277,6 +302,44 @@ their chokepoints — with every line coloured by the five-level ladder.
 Clicking a line opens its radar on the right.
 
 **Section 2** ranks the *routes* by the severity of the effect on them.
+Selecting one opens the response workspace beside it: the actions still open
+with their deadlines, who to contact — route owner, standing teams, seniors,
+alternate vendors and carriers, all filtered to that route — the escalation
+step, and a one-click PDF convening pack plus a plain-text summary to paste
+into mail.
+
+### The risk profile
+
+`/profile`, reached from the topbar. Six tabs:
+
+| Tab | What it holds |
+|---|---|
+| **Desk** | corridors owned, modes carried, which config files are in force |
+| **Network** | every node and lane, their alternatives, how much freight touches each |
+| **Risk ledger** | all 45 variables by family, with their delay triples and which have no sourceable probability |
+| **Appetite** | the ladder cutoffs and the convene rule — **editable** |
+| **Response** | route owners, who is drawn in at each level, seniors, escalation, spend authority |
+| **Sources** | every feed as connected / example stand-in / absent |
+
+Three things make it more than a settings screen:
+
+* **It is not a second store.** The profile *is* the config, rendered readable
+  — which is what makes "onboarding a new customer is a profile swap" a true
+  statement rather than a claim. A test asserts the cutoffs shown are the ones
+  `classify()` actually reads, so an edit can never be decorative.
+* **Provenance is visible per field.** 6 h / 48 h / 7 days are the client's own
+  wording; the materiality floor and the convene thresholds are marked
+  *assumed by us*. Somebody being asked to agree a threshold can see which
+  numbers came from them.
+* **Saving writes `config/scoring.yaml`**, which is gitignored and overrides
+  the committed stand-in; Reset deletes it. The write is allow-listed, and a
+  ladder that would make a rung unreachable (Critical later than Alert) is
+  **refused** rather than saved — that failure is silent on screen, which is
+  exactly why it cannot be allowed through. Action durations are deliberately
+  read-only: changing one moves every deadline that depends on it.
+
+This is the surface Q3 asked for — *"will also be able to play with the
+assumptions"* — with the guard rails that answer implies.
 
 Two design rules the UI holds to:
 
@@ -298,8 +361,8 @@ Two design rules the UI holds to:
 **Nothing reads the wall clock.** Every stage takes an explicit `as_of`
 (`engine/clock.py`). Three things fall out: the demo is reproducible, the
 hindcast is nearly free (a past `as_of` plus archived feeds through the
-identical code path), and the decay curve is expressible at all. A test walks
-the AST of `engine/` to enforce it.
+identical code path), and every deadline on the board means something. A test
+walks the AST of `engine/` to enforce it.
 
 **An absence never becomes a value.** Unknown probability is `None` plus a
 reason. An unconfigured action time is `None`, never a zero that would make the
@@ -335,12 +398,12 @@ engine/            institution-agnostic core — knows nothing about Sika
   simulate/        portfolio draw matrix, buffer propagation
   score/           CHF, lead time, the five-level ladder
   act/             playbook, owners, contacts
-  portfolio/       option decay, convene rule
+  portfolio/       the convene rule
 config.example/    public, synthetic, committed
-  export/          board assembly for the UI
+  export/          board assembly, PDF pack, risk profile
 config/            gitignored — the customer's real data
 api/               thin FastAPI + the front end
-  static/          index.html, styles.css, app.js
+  static/          index.html, profile.html, styles.css, app.js, profile.js
   static/vendor/   globe.gl, topojson-client (npm, not CDN)
   static/geo/      country geometry (world-atlas)
 data/fixtures/     committed sample feeds, labelled

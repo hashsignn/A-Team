@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risk profile — Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:,">
+</head>
+<body class="profile-page">
+
+<!-- ============================================================
+     THE PLANNER'S RISK PROFILE
+
+     The sibling operational-risk radar has a profile describing an
+     institution, so it can judge "could this have happened here". Its tabs are
+     bank-shaped: identity, activities, technology, vendors, controls,
+     weaknesses, history.
+
+     A freight desk asks a different question — "does this touch my freight,
+     and how soon must I decide" — so the tabs describe lanes, the clock and
+     the people, not a control environment.
+
+     Nothing here is a second store. This page IS config/, rendered readable.
+     ============================================================ -->
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <h1>Risk profile</h1>
+      <p class="brand-sub" id="brand-sub">loading…</p>
+    </div>
+  </div>
+
+  <div class="prof-head-right">
+    <span class="overlay-flag" id="overlay-flag"></span>
+    <a class="ctl" href="/">&larr; Back to the radar</a>
+  </div>
+</header>
+
+<div class="prof-shell">
+
+  <!-- ---------- tab rail ---------- -->
+  <nav class="prof-rail" id="prof-rail" aria-label="Profile sections">
+    <button type="button" class="prail is-on" data-tab="desk">
+      <b>Desk</b><span>who this planner is</span>
+    </button>
+    <button type="button" class="prail" data-tab="network">
+      <b>Network</b><span>nodes and lanes in scope</span>
+    </button>
+    <button type="button" class="prail" data-tab="ledger">
+      <b>Risk ledger</b><span>the variables watched</span>
+    </button>
+    <button type="button" class="prail" data-tab="appetite">
+      <b>Appetite</b><span>cutoffs &amp; convene rule</span>
+    </button>
+    <button type="button" class="prail" data-tab="response">
+      <b>Response</b><span>who is drawn in, and when</span>
+    </button>
+    <button type="button" class="prail" data-tab="sources">
+      <b>Sources</b><span>what is actually connected</span>
+    </button>
+  </nav>
+
+  <!-- ---------- panels ---------- -->
+  <main class="prof-main">
+    <section class="ppanel is-on" id="tab-desk"></section>
+    <section class="ppanel" id="tab-network"></section>
+    <section class="ppanel" id="tab-ledger"></section>
+    <section class="ppanel" id="tab-appetite"></section>
+    <section class="ppanel" id="tab-response"></section>
+    <section class="ppanel" id="tab-sources"></section>
+  </main>
+</div>
+
+<!-- Save bar. Only the Appetite tab is editable, so the bar states that
+     rather than implying the whole page writes. -->
+<div class="savebar" id="savebar" hidden>
+  <p class="savebar-text" id="savebar-text"></p>
+  <div class="savebar-actions">
+    <button type="button" class="ctl" id="btn-reset-profile">Reset to stand-in</button>
+    <button type="button" class="ctl ctl--primary" id="btn-save">Save to config/</button>
+  </div>
+</div>
+
+<script src="/profile.js"></script>
+</body>
+</html>

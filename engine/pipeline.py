@@ -32,7 +32,7 @@ from engine.ingest.synthetic import generate_shipments, in_scope
 from engine.ingest.watergauge import assess_kaub
 from engine.network.geo import Point, in_bounding_box
 from engine.network.graph import Network
-from engine.portfolio import decay
+from engine.portfolio import convene
 from engine.schemas import (
     Event,
     EventAssessment,
@@ -143,8 +143,7 @@ def run(
     assessments.sort(key=lambda a: a.total_value_of_acting_chf, reverse=True)
 
     # ---- portfolio ------------------------------------------------------
-    curve = decay.build_curve(assessments, config, clock)
-    verdict = decay.evaluate(assessments, curve, config, clock)
+    verdict = convene.evaluate(assessments, config, clock)
 
     funnel = FunnelCounts(
         raw_observations=bundle.raw_count,
@@ -162,7 +161,6 @@ def run(
         shipments_total=len(shipments),
         events_total=len(live_events),
         assessments=assessments,
-        decay_curve=curve,
         convene=verdict,
         funnel=funnel,
         config_version=config.version,

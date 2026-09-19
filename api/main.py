@@ -9,16 +9,18 @@ server running.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from engine.clock import Clock
 from engine.config import load_config
+from engine.export import profile as profile_mod
 from engine.export import report as report_mod
 from engine.export.board import build_board
-from engine.pipeline import RunOptions, run
+from engine.pipeline import RunContext, RunOptions, run
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -28,26 +30,46 @@ DEFAULT_AS_OF = "2026-09-18T06:00:00+00:00"
 
 app = FastAPI(title="Supply Chain Risk Radar", docs_url="/api/docs")
 
-# A full pipeline run is a 10k-draw Monte Carlo over the whole book. The board
-# is a pure function of (as_of, shipment_count), so it is cached on that key —
-# without this, every page load re-runs the simulation.
-_CACHE: dict[tuple[str, int], dict] = {}
+# A full pipeline run is a 10k-draw Monte Carlo over the whole book. Both the
+# board and the profile are pure functions of (as_of, shipment_count, config),
+# so they are cached on that key — without this, every page load re-runs the
+# simulation. Editing the profile changes the config, so it clears both.
+_RUNS: dict[tuple[str, int], RunContext] = {}
+_BOARDS: dict[tuple[str, int], dict] = {}
 
 
-def _board(as_of: str, shipments: int) -> dict:
+def _context(as_of: str, shipments: int) -> RunContext:
     key = (as_of, shipments)
-    if key not in _CACHE:
+    if key not in _RUNS:
         try:
             clock = Clock.at(as_of)
         except ValueError as exc:
             raise HTTPException(400, f"bad as_of: {exc}") from exc
-        context = run(
+        _RUNS[key] = run(
             clock=clock,
             config=load_config(),
             options=RunOptions(shipment_count=shipments),
         )
-        _CACHE[key] = build_board(context)
-    return _CACHE[key]
+    return _RUNS[key]
+
+
+def _board(as_of: str, shipments: int) -> dict:
+    key = (as_of, shipments)
+    if key not in _BOARDS:
+        _BOARDS[key] = build_board(_context(as_of, shipments))
+    return _BOARDS[key]
+
+
+def _invalidate() -> None:
+    """Everything downstream of the config is now stale.
+
+    Called on every write to the profile. The alternative — recomputing only
+    what changed — would mean tracking which cached numbers depend on which
+    setting, and getting that wrong shows a planner a board that predates their
+    own edit.
+    """
+    _RUNS.clear()
+    _BOARDS.clear()
 
 
 @app.get("/api/board")
@@ -109,14 +131,60 @@ def report_summary(
     return Response(content=text, media_type="text/plain; charset=utf-8")
 
 
+# =====================================================================
+# The planner's risk profile
+# =====================================================================
+# Not a separate store: the profile IS the config, rendered readable. Saving
+# writes an overlay into config/ (gitignored); config.example/ stays pristine.
+
+
+@app.get("/api/profile")
+def profile(
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Desk, network, risk ledger, appetite, response and sources."""
+    return JSONResponse(profile_mod.build_profile(_context(as_of, shipments)))
+
+
+@app.post("/api/profile")
+def profile_save(edits: Annotated[dict, Body()]) -> JSONResponse:
+    """Apply allow-listed edits to the appetite settings.
+
+    Returns what was applied, what was rejected and why. A 422 means nothing
+    was written — the settings would have made a rung of the ladder
+    unreachable, and saving them silently is the failure mode worth avoiding.
+    """
+    outcome = profile_mod.apply_edits(load_config(), edits)
+    if outcome.get("problems"):
+        return JSONResponse(outcome, status_code=422)
+    if outcome["applied"]:
+        _invalidate()
+    return JSONResponse(outcome)
+
+
+@app.delete("/api/profile")
+def profile_reset() -> JSONResponse:
+    """Drop the customer overlay and fall back to the committed stand-in."""
+    outcome = profile_mod.clear_overlay()
+    if outcome["removed"]:
+        _invalidate()
+    return JSONResponse(outcome)
+
+
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "cached_runs": len(_CACHE)}
+    return {"status": "ok", "cached_runs": len(_BOARDS)}
 
 
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/profile")
+def profile_page() -> FileResponse:
+    return FileResponse(STATIC / "profile.html")
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")

@@ -34,6 +34,12 @@ def _lit_pixels(path: Path, threshold: int = 42) -> float:
 def main() -> int:
     errors: list[str] = []
 
+    # One check deliberately provokes a 422 — it asserts that a ladder with
+    # Critical later than Alert is REFUSED. The browser logs every non-2xx as
+    # a console error, so that expected refusal would fail the run it proves.
+    # Set while the refusal is being driven, and only then.
+    expecting_refusal = [False]
+
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path="/opt/pw-browsers/chromium")
         page = browser.new_page(viewport={"width": 1680, "height": 1050})
@@ -42,10 +48,15 @@ def main() -> int:
             "requestfailed",
             lambda r: errors.append(f"[net] {r.url} — {r.failure}"),
         )
-        page.on(
-            "console",
-            lambda m: errors.append(f"[console] {m.text}") if m.type == "error" else None,
-        )
+
+        def _console(message) -> None:
+            if message.type != "error":
+                return
+            if expecting_refusal[0] and "422" in message.text:
+                return
+            errors.append(f"[console] {message.text}")
+
+        page.on("console", _console)
 
         page.goto(f"http://localhost:{PORT}/", wait_until="load", timeout=90_000)
         # The globe needs a few frames to build geometry and settle.
@@ -211,6 +222,113 @@ def main() -> int:
 
         # --- full page, for a look at the whole thing ----------------
         page.screenshot(path=str(OUT / "full.png"), full_page=True)
+
+        # =============================================================
+        # RISK PROFILE
+        # =============================================================
+        # The one page in the app where a UI action writes into the engine's
+        # own configuration, so it is worth driving rather than eyeballing.
+        page.locator("#link-profile").click()
+        page.wait_for_url("**/profile*", timeout=30_000)
+        page.wait_for_timeout(2_500)
+
+        sub = page.locator("#brand-sub").inner_text().strip()
+        if "loading" in sub.lower() or "could not" in sub.lower():
+            errors.append(f"[profile] never loaded: {sub!r}")
+
+        tabs = ["desk", "network", "ledger", "appetite", "response", "sources"]
+        for name in tabs:
+            page.locator(f'.prail[data-tab="{name}"]').click()
+            page.wait_for_timeout(400)
+            text = page.locator(f"#tab-{name}").inner_text().strip()
+            if len(text) < 120:
+                errors.append(f"[profile] {name} tab rendered empty ({len(text)} chars)")
+            page.screenshot(path=str(OUT / f"profile-{name}.png"))
+
+        # Every one of the 45 variables has to be listed, not a sample.
+        page.locator('.prail[data-tab="ledger"]').click()
+        page.wait_for_timeout(300)
+        page.evaluate("document.querySelectorAll('.fam').forEach(d => d.open = true)")
+        page.wait_for_timeout(400)
+        listed = page.locator("#tab-ledger .rtable tbody tr").count()
+        if listed != 45:
+            errors.append(f"[profile] ledger lists {listed} variables, expected 45")
+        else:
+            print(f"  ledger: {listed} variables across "
+                  f"{page.locator('#tab-ledger .fam').count()} families")
+        page.screenshot(path=str(OUT / "profile-ledger.png"), full_page=True)
+
+        # --- the save bar only appears once something is dirty -------
+        page.locator('.prail[data-tab="appetite"]').click()
+        page.wait_for_timeout(400)
+        if page.locator("#savebar").is_visible():
+            errors.append("[profile] save bar showing before any edit")
+
+        red = page.locator('input[data-path="alert_levels.red_hours"]')
+        red.fill("4")
+        red.dispatch_event("input")
+        page.wait_for_timeout(300)
+        if not page.locator("#savebar").is_visible():
+            errors.append("[profile] save bar did not appear after an edit")
+        page.screenshot(path=str(OUT / "profile-appetite.png"))
+
+        # --- an ordering that breaks the ladder must be REFUSED ------
+        # Critical later than Alert makes the Alert rung unreachable. The
+        # failure this guards is silent, so the refusal has to be visible.
+        expecting_refusal[0] = True
+        red.fill("999")
+        red.dispatch_event("input")
+        page.wait_for_timeout(200)
+        page.locator("#btn-save").click()
+        page.wait_for_timeout(1_200)
+        expecting_refusal[0] = False
+        flash = page.locator("#savebar-text").inner_text()
+        if "Nothing saved" not in flash:
+            errors.append(f"[profile] a broken ladder was accepted: {flash[:120]!r}")
+        else:
+            print(f"  refused: {flash[:96]}")
+        page.screenshot(path=str(OUT / "profile-refused.png"))
+
+        # --- a valid save round-trips, and Reset puts it back --------
+        red.fill("4")
+        red.dispatch_event("input")
+        agreed = page.locator('input[data-path="convene_meta.agreed_by"]')
+        agreed.fill("S&OP meeting")
+        agreed.dispatch_event("input")
+        page.wait_for_timeout(200)
+        page.locator("#btn-save").click()
+        page.wait_for_timeout(2_500)
+        saved = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
+        if saved != "4":
+            errors.append(f"[profile] saved value did not come back: {saved!r}")
+        flag = page.locator("#overlay-flag").inner_text()
+        if "config/" not in flag:
+            errors.append(f"[profile] overlay not reported after save: {flag!r}")
+        else:
+            print(f"  saved: overlay now reads {flag.strip()!r}")
+        # Reset lives on the save bar. Hiding the bar once the edits are saved
+        # would leave no route back to the committed stand-in short of making a
+        # dummy edit first, so the bar must survive a successful save.
+        if not page.locator("#savebar").is_visible():
+            errors.append("[profile] save bar hidden while an overlay is in force")
+        if not page.locator("#btn-save").is_disabled():
+            errors.append("[profile] Save still enabled with nothing to save")
+        page.screenshot(path=str(OUT / "profile-saved.png"))
+
+        page.locator("#btn-reset-profile").click()
+        page.wait_for_timeout(2_500)
+        restored = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
+        if restored == "4":
+            errors.append("[profile] reset did not restore the committed stand-in")
+        else:
+            print(f"  reset: red_hours back to {restored!r}")
+        after = page.locator("#overlay-flag").inner_text()
+        if "stand-in" not in after:
+            errors.append(f"[profile] overlay still reported after reset: {after!r}")
+
+        health = page.request.get(f"http://localhost:{PORT}/api/health").json()
+        if health.get("status") != "ok":
+            errors.append(f"[profile] health after refused save: {health}")
 
         browser.close()
 

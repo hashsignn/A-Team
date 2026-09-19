@@ -52,6 +52,8 @@ def test_recoverable_is_not_presented_anywhere_in_the_payload(board):
     blob = json.dumps(board)
     assert '"recoverable_chf"' not in blob
     assert "cost_of_waiting_chf" not in blob
+    # the optionality framing went with it
+    assert "options_expiring" not in blob
 
 
 def test_route_reason_does_not_quote_a_recoverable_figure(board):
@@ -64,7 +66,7 @@ def test_convene_triggers_rest_on_checkable_quantities(board):
     nobody can stand behind is a broken rule, not a conservative one."""
     posture = board["posture"]
     assert "exposure_chf" in posture
-    assert "options_expiring" in posture
+    assert "shipments_needing_decision" in posture
     assert "recoverable_chf" not in posture
     for trigger in posture["triggers_fired"]:
         assert "recoverable" not in trigger.lower()
