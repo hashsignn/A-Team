@@ -119,6 +119,24 @@ def main() -> int:
         page.wait_for_timeout(1_500)
         page.screenshot(path=str(OUT / "stage-selected.png"))
 
+        # --- the as-of control re-runs the board ---------------------
+        before_sub = page.locator("#brand-sub").inner_text()
+        page.locator("#asof-input").fill("2026-09-19T12:00")
+        page.locator("#asof-apply").click()
+        page.wait_for_timeout(9_000)
+        after_sub = page.locator("#brand-sub").inner_text()
+        if "could not load" in after_sub:
+            errors.append(f"[as-of] reload failed: {after_sub}")
+        elif before_sub == after_sub:
+            errors.append("[as-of] applying a new instant did not change the board")
+        else:
+            print(f"  as-of: reloaded to '{after_sub[:34]}'")
+            if "as_of" not in page.url:
+                errors.append("[as-of] the URL was not updated, so it is not shareable")
+            reds = page.locator("#rtable-body tr .level-chip", has_text="Critical").count()
+            print(f"  as-of: {reds} Critical route(s) at the new instant")
+        page.screenshot(path=str(OUT / "asof-switched.png"))
+
         page.locator("#ranked").scroll_into_view_if_needed()
         page.wait_for_timeout(1_200)
         page.screenshot(path=str(OUT / "ranked.png"))

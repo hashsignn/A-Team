@@ -23,6 +23,18 @@
       </div>
     </div>
 
+    <!-- The as-of instant. Nothing in engine/ reads the wall clock, so this
+         is the only "now" there is: pin it and the whole board is
+         reproducible. A past instant is a hindcast through the identical
+         code path. -->
+    <form class="asof" id="asof-form">
+      <label for="asof-input">As of</label>
+      <input type="datetime-local" id="asof-input" step="3600" required>
+      <span class="asof-tz">UTC</span>
+      <button type="submit" class="ctl" id="asof-apply">Apply</button>
+      <button type="button" class="ctl ctl--ghost" id="asof-now">Default</button>
+    </form>
+
     <!-- The five-level ladder. Every rung is a DEADLINE, not a damage band,
          so the directive is shown beside the colour — a colour alone never
          carries the meaning. -->

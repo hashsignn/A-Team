@@ -76,30 +76,125 @@ function hours(h) {
 }
 
 // ===============================================================
+// The as-of instant
+// ===============================================================
+/* Nothing in engine/ reads the wall clock — every stage takes an explicit
+ * as-of. That makes this the only "now" there is, and it is why the URL can
+ * carry it: `?as_of=...` is a complete, shareable description of a board.
+ * A past instant is a hindcast through the identical code path.
+ */
+const DEFAULT_AS_OF = '2026-09-18T06:00:00+00:00';
+
+function readParams() {
+  const q = new URLSearchParams(location.search);
+  return {
+    as_of: q.get('as_of') || DEFAULT_AS_OF,
+    shipments: q.get('shipments') || '150',
+  };
+}
+
+function writeParams({ as_of, shipments }) {
+  const q = new URLSearchParams();
+  if (as_of !== DEFAULT_AS_OF) q.set('as_of', as_of);
+  if (shipments !== '150') q.set('shipments', shipments);
+  const url = q.toString() ? `${location.pathname}?${q}` : location.pathname;
+  history.replaceState(null, '', url);
+}
+
+/* <input type="datetime-local"> has no timezone, so its value is read and
+ * written as UTC directly rather than going through Date, which would apply
+ * the viewer's local offset and silently shift the board by hours. */
+function isoToInput(iso) {
+  return iso.slice(0, 16);
+}
+function inputToIso(value) {
+  return `${value.length === 16 ? value : value.slice(0, 16)}:00+00:00`;
+}
+
+async function fetchBoard({ as_of, shipments }) {
+  const q = new URLSearchParams({ as_of, shipments });
+  const res = await fetch(`/api/board?${q}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`board ${res.status}: ${detail.slice(0, 160)}`);
+  }
+  return res.json();
+}
+
+// ===============================================================
 // Boot
 // ===============================================================
 async function boot() {
+  const params = readParams();
+  $('asof-input').value = isoToInput(params.as_of);
+
   const [board, topo] = await Promise.all([
-    fetch('/api/board').then((r) => r.json()),
+    fetchBoard(params),
     fetch('/geo/countries-110m.json').then((r) => r.json()),
   ]);
-  state.board = board;
 
   const countries = topojson.feature(topo, topo.objects.countries);
 
+  state.board = board;
+  initGlobe(countries, board);
+  renderFilters();
+  applyBoard(board);
+
+  $('asof-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    reload(inputToIso($('asof-input').value));
+  });
+  $('asof-now').addEventListener('click', () => {
+    $('asof-input').value = isoToInput(DEFAULT_AS_OF);
+    reload(DEFAULT_AS_OF);
+  });
+}
+
+/* Re-run at a different instant WITHOUT rebuilding the globe.
+ * Tearing down and recreating the WebGL scene would drop the camera, restart
+ * the rotation and flash the pane — so only the data layers are replaced. */
+async function reload(asOf) {
+  const params = { ...readParams(), as_of: asOf };
+  const stage = document.querySelector('.stage');
+  stage.classList.add('is-loading');
+  $('asof-apply').disabled = true;
+  try {
+    const board = await fetchBoard(params);
+    state.board = board;
+    // The previous selection may not exist, or may no longer be visible, at
+    // the new instant. applyBoard falls back to the most severe route.
+    state.selected = null;
+    if (state.globe) state.globe.pointsData(board.nodes);
+    applyBoard(board);
+    writeParams(params);
+  } catch (err) {
+    console.error(err);
+    $('brand-sub').textContent = `could not load that instant — ${err.message}`;
+  } finally {
+    stage.classList.remove('is-loading');
+    $('asof-apply').disabled = false;
+  }
+}
+
+/* Everything that depends on the board, in one place, so boot and reload
+ * cannot drift apart. */
+function applyBoard(board) {
   $('brand-sub').textContent =
     `${board.as_of_label} · ${board.shipments_total} shipments (synthetic) · ` +
     `${board.variables_total} risk variables · ${board.routes.length} routes`;
 
   renderPosture(board.posture);
   renderLadder(board.levels);
-  initGlobe(countries, board);
+  refreshPaths();
   renderTable();
-  renderFilters();
 
-  // Open on the most severe route, so the panel is never dead on arrival.
   const first = visibleRoutes()[0];
-  if (first) select(first.route_id, { fly: true });
+  if (first) {
+    select(first.route_id, { fly: true });
+  } else {
+    $('panel-body').hidden = true;
+    $('panel-empty').hidden = false;
+  }
 }
 
 // ===============================================================
@@ -293,7 +388,9 @@ function renderPosture(p) {
 
 function renderLadder(levels) {
   $('ladder').innerHTML = levels.map((l) => `
-    <button type="button" class="rung" data-level="${l.level}" title="${esc(l.directive)}">
+    <button type="button" class="rung${state.hidden.has(l.level) ? ' is-off' : ''}"
+            data-level="${l.level}" title="${esc(l.directive)}"
+            aria-pressed="${!state.hidden.has(l.level)}">
       <span class="rung-dot" style="background:${LEVEL_COLOR[l.level]}"></span>
       <span>
         <span class="rung-name">${esc(l.label)}</span>
@@ -307,6 +404,7 @@ function renderLadder(levels) {
       const lvl = b.dataset.level;
       state.hidden.has(lvl) ? state.hidden.delete(lvl) : state.hidden.add(lvl);
       b.classList.toggle('is-off', state.hidden.has(lvl));
+      b.setAttribute('aria-pressed', String(!state.hidden.has(lvl)));
       refreshPaths();
       renderTable();
     });
