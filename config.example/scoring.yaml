@@ -138,11 +138,14 @@ convene_rule:
     # Trip if more than this many distinct customer contracts are exposed.
     contracts_exposed: 4
 
-    # CHANGED: this was `cost_of_waiting_chf`. Same problem — the CHF value of
-    # an expiring option is recoverable-derived. WHICH options expire and WHEN
-    # is directly observed from the min_action_hours table, so the trigger is
-    # now a count of options rather than a price on them.
-    options_expiring_before_meeting: 6
+    # How many shipments are inside the Alert window (48 h to the decision
+    # deadline). Plain supply chain: a cutoff to get a box to the terminal or
+    # book the last train path — not an option with a strike price. The
+    # earlier version of this trigger priced "expiring options", which
+    # borrowed a framing from finance that does not belong in a freight
+    # planner's hands; the timing it was reaching for is already carried by
+    # the five-level ladder, where every rung IS a deadline.
+    shipments_needing_decision: 8
 
   # Posture thresholds for the state strip, as a fraction of the trip level.
   watch_fraction: 0.5

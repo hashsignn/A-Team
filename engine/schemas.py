@@ -410,24 +410,6 @@ class EventAssessment(BaseModel):
 # =====================================================================
 
 
-class DecayPoint(BaseModel):
-    """One sample of the option-decay curve."""
-
-    at: datetime
-    hours_from_now: float
-    recoverable_chf: float
-    recoverable_p10_chf: float
-    recoverable_p90_chf: float
-    actions_still_open: int
-    shipments_still_actionable: int
-    expiring_next: list[str]
-
-    @field_validator("at")
-    @classmethod
-    def _utc(cls, v: datetime) -> datetime:
-        return ensure_utc(v)
-
-
 class ConveneVerdict(BaseModel):
     """Whether the pre-agreed rule has tripped.
 
@@ -444,7 +426,7 @@ class ConveneVerdict(BaseModel):
     # the summed value of acting, which rests on our invented action costs.
     exposure_chf: float
     contracts_exposed: int
-    options_expiring: int
+    shipments_needing_decision: int
     next_meeting_at: datetime | None
     headline: str
 
@@ -479,7 +461,6 @@ class PipelineResult(BaseModel):
     shipments_total: int
     events_total: int
     assessments: list[EventAssessment]
-    decay_curve: list[DecayPoint]
     convene: ConveneVerdict
     funnel: FunnelCounts
     config_version: str

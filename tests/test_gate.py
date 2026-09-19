@@ -340,13 +340,6 @@ def test_recoverable_value_never_counts_negative_options(context):
         assert assessment.total_value_of_acting_chf >= 0
 
 
-def test_decay_curve_is_monotonically_non_increasing(context):
-    """Options expire; they never reappear."""
-    values = [p.recoverable_chf for p in context.result.decay_curve]
-    for earlier, later in zip(values, values[1:], strict=False):
-        assert later <= earlier + 1e-6
-
-
 def test_funnel_counts_are_monotonically_non_increasing(context):
     f = context.result.funnel
     stages = [

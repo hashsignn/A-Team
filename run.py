@@ -70,8 +70,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
         print(
             f"    {event.severity.value} · {p} · "
             f"{assessment.shipments_affected} shipments · "
-            f"CHF {assessment.total_value_at_risk_chf:,.0f} at risk · "
-            f"CHF {assessment.total_value_of_acting_chf:,.0f} recoverable"
+            f"CHF {assessment.total_value_at_risk_chf:,.0f} at risk"
         )
         top = assessment.shipment_risks[0]
         # BRIEF §5.4: recommend the action when value of acting > 0. A negative
@@ -95,18 +94,6 @@ def cmd_demo(args: argparse.Namespace) -> int:
             print("    → too late to reroute — notify the customer and re-agree the date")
         else:
             print("    → monitor: no action currently saves more than it costs")
-        print()
-
-    if result.decay_curve:
-        print("  OPTION DECAY")
-        for point in result.decay_curve[:: max(1, len(result.decay_curve) // 6)]:
-            bar = "█" * int(
-                28 * point.recoverable_chf / max(1.0, result.decay_curve[0].recoverable_chf)
-            )
-            print(
-                f"    +{point.hours_from_now:>4.0f} h  "
-                f"CHF {point.recoverable_chf:>10,.0f}  {bar}"
-            )
         print()
 
     return 0

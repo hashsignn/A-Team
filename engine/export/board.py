@@ -435,7 +435,7 @@ def _posture(context: RunContext) -> dict:
         "triggers_fired": verdict.triggers_fired,
         "exposure_chf": verdict.exposure_chf,
         "contracts_exposed": verdict.contracts_exposed,
-        "options_expiring": verdict.options_expiring,
+        "shipments_needing_decision": verdict.shipments_needing_decision,
         "next_meeting_at": (
             verdict.next_meeting_at.isoformat() if verdict.next_meeting_at else None
         ),
