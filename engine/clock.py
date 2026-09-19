@@ -23,9 +23,9 @@ nobody notices until the numbers are wrong.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def ensure_utc(value: datetime) -> datetime:
@@ -65,13 +65,13 @@ class Clock:
         object.__setattr__(self, "as_of", ensure_utc(self.as_of))
 
     @classmethod
-    def at(cls, value: str | datetime) -> "Clock":
+    def at(cls, value: str | datetime) -> Clock:
         if isinstance(value, str):
             return cls(parse_instant(value))
         return cls(ensure_utc(value))
 
     @classmethod
-    def wall(cls) -> "Clock":
+    def wall(cls) -> Clock:
         """The real current time.
 
         The single sanctioned reading of the system clock. It lives here so
@@ -80,7 +80,7 @@ class Clock:
         """
         return cls(datetime.now(UTC))
 
-    def plus(self, *, hours: float = 0.0, days: float = 0.0) -> "Clock":
+    def plus(self, *, hours: float = 0.0, days: float = 0.0) -> Clock:
         return Clock(self.as_of + timedelta(hours=hours, days=days))
 
     def hours_until(self, moment: datetime) -> float:

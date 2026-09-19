@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<!-- ============================================================
+     SECTION 1 — full viewport: globe + detail panel
+     ============================================================ -->
+<section class="stage">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>Supply Chain Risk Radar</h1>
+        <p class="brand-sub" id="brand-sub">loading…</p>
+      </div>
+    </div>
+
+    <!-- The as-of instant. Nothing in engine/ reads the wall clock, so this
+         is the only "now" there is: pin it and the whole board is
+         reproducible. A past instant is a hindcast through the identical
+         code path. -->
+    <form class="asof" id="asof-form">
+      <label for="asof-input">As of</label>
+      <input type="datetime-local" id="asof-input" step="3600" required>
+      <span class="asof-tz">UTC</span>
+      <button type="submit" class="ctl" id="asof-apply">Apply</button>
+      <button type="button" class="ctl ctl--ghost" id="asof-now">Default</button>
+    </form>
+
+    <!-- The five-level ladder. Every rung is a DEADLINE, not a damage band,
+         so the directive is shown beside the colour — a colour alone never
+         carries the meaning. -->
+    <nav class="ladder" id="ladder" aria-label="Alert levels"></nav>
+  </header>
+
+  <div class="stage-body">
+
+    <!-- ---------- globe ---------- -->
+    <div class="globe-wrap">
+      <div id="globe" role="application" aria-label="Rotating globe of freight routes"></div>
+
+      <div class="globe-overlay globe-overlay--tl">
+        <div class="posture" id="posture"></div>
+      </div>
+
+      <div class="globe-overlay globe-overlay--bl">
+        <div class="globe-hint" id="globe-hint">Click a route to inspect it</div>
+      </div>
+
+      <div class="globe-controls">
+        <button type="button" id="btn-spin" class="ctl is-on" aria-pressed="true">
+          <span class="ctl-dot"></span> Rotating
+        </button>
+        <button type="button" id="btn-reset" class="ctl">Reset view</button>
+      </div>
+
+      <div class="globe-tooltip" id="globe-tooltip" hidden></div>
+    </div>
+
+    <!-- ---------- detail panel ---------- -->
+    <aside class="panel" id="panel" aria-live="polite">
+      <div class="panel-empty" id="panel-empty">
+        <p>Select a route on the globe.</p>
+        <p class="muted">Lines are coloured by how soon a decision is needed, not by how dramatic the event is.</p>
+      </div>
+
+      <div class="panel-body" id="panel-body" hidden>
+
+        <div class="panel-head">
+          <span class="level-chip" id="d-chip"></span>
+          <h2 id="d-name"></h2>
+          <p class="directive" id="d-directive"></p>
+          <p class="reason" id="d-reason"></p>
+        </div>
+
+        <div class="stat-row" id="d-stats"></div>
+
+        <!-- Radar: families as spokes, in DAYS OF DELAY.
+             Only families actually active on this route get a spoke — a
+             sleeping family on the chart would imply it was assessed and
+             found harmless, which is a different and false statement. -->
+        <section class="block">
+          <div class="block-head">
+            <h3>Risk in effect</h3>
+            <span class="block-note">days of delay contributed</span>
+          </div>
+          <div class="radar-wrap">
+            <svg id="radar" viewBox="0 0 340 300" role="img" aria-label="Active risk families"></svg>
+          </div>
+          <div class="radar-legend" id="radar-legend"></div>
+          <div class="subcats" id="subcats"></div>
+        </section>
+
+        <section class="block" id="block-events">
+          <div class="block-head"><h3>Events on this route</h3></div>
+          <div class="events" id="d-events"></div>
+        </section>
+
+        <section class="block" id="block-actions">
+          <div class="block-head">
+            <h3>What to do</h3>
+            <span class="block-note">only options worth more than they cost</span>
+          </div>
+          <div class="actions" id="d-actions"></div>
+        </section>
+
+        <p class="advisory">
+          Advisory. The tool proposes; the planner decides.
+        </p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="scroll-cue" aria-hidden="true">
+    <span>Affected routes, ranked</span>
+    <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SECTION 2 — ranked routes
+     ============================================================ -->
+<section class="ranked" id="ranked">
+  <div class="ranked-inner">
+    <div class="ranked-head">
+      <div>
+        <h2>Affected routes</h2>
+        <p class="muted">
+          Ranked by the severity of the effect on the line — level first, then
+          CHF exposure within the level.
+        </p>
+      </div>
+      <div class="ranked-filters" id="ranked-filters"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="rtable">
+        <thead>
+          <tr>
+            <th class="num">SEVERITY</th>
+            <th>LEVEL</th>
+            <th>ROUTE</th>
+            <th>ACTION BY</th>
+            <th class="num">SHIPMENTS</th>
+            <th class="num">EXPOSURE</th>
+            <th class="num">RECOVERABLE</th>
+            <th>DRIVER</th>
+          </tr>
+        </thead>
+        <tbody id="rtable-body"></tbody>
+      </table>
+    </div>
+    <p class="ranked-foot" id="ranked-foot"></p>
+  </div>
+</section>
+
+<script src="/vendor/globe.gl.min.js"></script>
+<script src="/vendor/topojson-client.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

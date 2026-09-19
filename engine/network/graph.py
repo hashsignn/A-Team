@@ -127,7 +127,7 @@ class Network:
             routed_by = "great_circle"
 
         distance = sum(
-            haversine_km(p, q) for p, q in zip(path, path[1:])
+            haversine_km(p, q) for p, q in zip(path, path[1:], strict=False)
         )
         return LegGeometry(
             from_node=from_node,
@@ -159,7 +159,7 @@ class Network:
 
         chain = [a, *pts, b]
         path: list[Point] = [chain[0]]
-        for start, end in zip(chain, chain[1:]):
+        for start, end in zip(chain, chain[1:], strict=False):
             path.extend(great_circle_points(start, end, segments=4)[1:])
         return path
 

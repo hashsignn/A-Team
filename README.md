@@ -8,12 +8,48 @@
 Built for the Sika Innovathon 2026 — *"How can supply chain planners identify
 and act on external risk before it hits their delivery reliability?"*
 
+### Run it on your laptop
+
 ```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python run.py demo         # the whole pipeline, in the terminal
-.venv/bin/python run.py inputs       # what is real / standing in / absent
-.venv/bin/python -m streamlit run dashboard/app.py    # the dashboard
-.venv/bin/python -m pytest -q        # 51 tests
+git clone https://github.com/hashsignn/A-Team.git
+cd A-Team
+
+python3 -m venv .venv                       # Python 3.11+
+.venv/bin/pip install -U pip
+.venv/bin/pip install -r requirements.txt   # ~6 packages, no toolchain
+
+.venv/bin/python run.py serve               # -> http://localhost:8000
+```
+
+Windows: use `.venv\Scripts\python` and `.venv\Scripts\pip` instead.
+
+### Run it on GitHub Codespaces
+
+The repo ships a devcontainer, so there is nothing to install by hand:
+
+1. **Code → Codespaces → Create codespace on this branch**
+2. Wait for the container to build (it creates `.venv` and installs for you)
+3. In the terminal: `.venv/bin/python run.py serve --host 0.0.0.0`
+4. Click the forwarded **port 8000** notification, or open the **Ports** tab
+
+`--host 0.0.0.0` matters in Codespaces — bound to `127.0.0.1` the port is not
+reachable from the forwarded URL.
+
+### Everything else
+
+```bash
+.venv/bin/python run.py demo          # the whole pipeline, in the terminal
+.venv/bin/python run.py inputs        # what is real / standing in / absent
+.venv/bin/python -m pytest -q         # 78 tests
+
+# any instant you like — the board is reproducible from it
+.venv/bin/python run.py demo --as-of 2026-09-19T12:00:00+00:00
+```
+
+The same instant works in the URL, and is where the Critical rung shows up:
+
+```
+http://localhost:8000/?as_of=2026-09-19T12:00:00%2B00:00
 ```
 
 Everything runs **offline**. No API key, no network, no model required.
@@ -53,6 +89,37 @@ the model is unavailable on the day the board still fills.
 | *"No filter for what is relevant on which freight lane"* | `engine/gate/` — spatial ∧ temporal ∧ modal, **zero parameters** |
 | *"Disruptions are taken serious when carriers call — response options have already narrowed"* | `engine/portfolio/decay.py` — the option-decay curve |
 | *"Even when a crisis is identified, it is unclear what to do and who to involve"* | `engine/act/playbook.py` — options, owners, named contacts, deadline |
+
+---
+
+## The five-level ladder
+
+The client's scale:
+
+| | Level | Meaning |
+|---|---|---|
+| 🟢 | **Normal** | No action required |
+| ⚪ | **Bias** | Monitor closely — watch for changes |
+| 🔵 | **Watch** | Determine action within 3–7 days |
+| 🟡 | **Alert** | Take action within 24–48 hours |
+| 🔴 | **Critical** | Take action within 6 hours |
+
+**Every rung is a deadline, not a damage band.** So the level is not "how bad
+is this" — it is "how soon must somebody decide", which is exactly
+`lead_time_hours`, already computed from
+`decision_deadline = impact_time − action_duration`. No new machinery: the
+ladder is a relabelling of a quantity that was already there.
+
+The hour cutoffs are the client's own numbers. Two judgement calls are ours
+and are marked `ASSUMED` in `config.example/scoring.yaml`: the CHF floor below
+which a touched route is Bias rather than Watch, and the ordering *within* a
+level. Ranking is lexicographic — level first, then exposure — so a Bias route
+can never outrank a Watch one however much money is on it. Blending the two
+into a weighted score would allow exactly that.
+
+The whole classification is one function, `engine/score/severity.py::classify`.
+**When the real severity formula arrives it replaces that function and nothing
+else moves.**
 
 ---
 
@@ -194,29 +261,35 @@ and it is why this lane is worth demonstrating.
 | ~100 risk variables | **45**, fully specified | Q1: no ledger exists, so this file *is* the proposal. 100 half-specified entries contradict §5.0's own claim |
 | OSMnx for road/rail routing | Buffered great-circle corridors | Overpass at runtime + geopandas/GEOS chain, for 10–15 named lanes. Ships as a visibly empty socket |
 | Shipment-level `etd`/`eta` | **Per-leg** planned windows | The temporal gate asks when the shipment transits *that node* — unanswerable without them |
-| Plain JS + SVG + FastAPI | Streamlit + Plotly | Python-built charts are testable; the assumption editor is ~10 lines instead of a day |
-| MapLibre vendored | Plotly `Scattergeo` + vendored topojson | folium/Leaflet needs a CDN. See below |
+| MapLibre vendored | globe.gl + vendored topojson | A rotating globe is the ask; globe.gl is vendored from npm, not a CDN |
 | No global view (§12) | One-line **state strip** | Q6. Not a matrix; the per-event matrix is untouched |
 
-### The map
+### The front end
 
-The starting prototype used folium. Rebuilding it surfaced a blocker that is
-not a style problem: **folium loads Leaflet from a CDN**, so under a locked-down
-network the map renders at *zero height* — not degraded, absent. It also broke
-the brief's own §8.7 rule (*no build step, no CDN*).
+FastAPI + vanilla JS + CSS. No build step, no framework, no CDN — `globe.gl`
+and `topojson-client` are vendored from npm under `api/static/vendor/`, the
+country geometry under `api/static/geo/`. The page renders with the network
+cable pulled out.
 
-Plotly's JS is served locally by Streamlit and `Scattergeo` ships land, ocean,
-country, coastline and river geometry — the same Natural Earth layers the
-prototype loaded five shapefiles to draw. Its topojson is
-[vendored](dashboard/static/topojson/README.md) rather than fetched, so the map
-renders with the network cable pulled out.
+**Section 1** is the full viewport: a rotating globe carrying the real route
+geometry — the Rhine legs follow the river, the deep-sea legs run through
+their chokepoints — with every line coloured by the five-level ladder.
+Clicking a line opens its radar on the right.
 
-Other fixes from the prototype: `returned_objects=[]` was discarding every
-click (which made click-a-dot-to-open-its-matrix structurally impossible);
-shapefiles were re-read on every rerun; ~200 DivIcon labels were decoration
-competing with a dozen nodes of information; `m.save()` wrote to disk on every
-interaction; and hardcoded vessels and a hardcoded Suez disruption were
-unconnected to any engine.
+**Section 2** ranks the *routes* by the severity of the effect on them.
+
+Two design rules the UI holds to:
+
+* **The level colours are reserved.** They mean one thing — how soon a
+  decision is needed — and never carry that meaning alone; the directive is
+  always beside them. But white on a dark globe is intrinsically the loudest
+  thing on screen while White means "Bias: monitor", so **stroke and opacity
+  carry the urgency ordering** and hue keeps its prescribed meaning. Red is
+  thick and solid; Green is a whisper.
+* **The radar's axes are every family the mask checked**, not only the ones
+  firing. A family at zero means "checked, contributes nothing", which is
+  true and useful. Families that cannot reach the route are excluded, because
+  drawing them would imply an assessment that never happened.
 
 ---
 
@@ -260,17 +333,21 @@ engine/            institution-agnostic core — knows nothing about Sika
   variables/       the mask; rules.py is the CHALLENGER, not a fallback
   gate/            spatial ∧ temporal ∧ modal
   simulate/        portfolio draw matrix, buffer propagation
-  score/           CHF, lead time, matrix bands
+  score/           CHF, lead time, the five-level ladder
   act/             playbook, owners, contacts
   portfolio/       option decay, convene rule
 config.example/    public, synthetic, committed
+  export/          board assembly for the UI
 config/            gitignored — the customer's real data
-dashboard/         Streamlit UI + vendored topojson
+api/               thin FastAPI + the front end
+  static/          index.html, styles.css, app.js
+  static/vendor/   globe.gl, topojson-client (npm, not CDN)
+  static/geo/      country geometry (world-atlas)
 data/fixtures/     committed sample feeds, labelled
 tests/             51 tests
 ```
 
-`engine/` never imports from `dashboard/` or reads `config/` directly.
+`engine/` never imports from `api/` or reads `config/` directly.
 Onboarding a new customer is a profile swap — that is true here, not a claim.
 
 ---

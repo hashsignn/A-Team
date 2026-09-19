@@ -25,7 +25,7 @@ import numpy as np
 from engine.act.playbook import best_option, options_for
 from engine.clock import Clock
 from engine.config import Config, load_config
-from engine.gate.intersect import exposure_ranking, gate
+from engine.gate.intersect import gate
 from engine.ingest.feeds import load_feed_items, social_promotion_status
 from engine.ingest.observations import FeedReport, FeedStatus, IngestBundle
 from engine.ingest.synthetic import generate_shipments, in_scope
@@ -38,7 +38,6 @@ from engine.schemas import (
     EventAssessment,
     FunnelCounts,
     GateHit,
-    Mode,
     PipelineResult,
     Provenance,
     Severity,

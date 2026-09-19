@@ -131,10 +131,10 @@ def _event(node_ids, starts, ends, variables, modes, lat=None, lon=None) -> Even
 
 
 def test_modal_condition_rejects_a_rail_strike_on_a_sea_leg(config, network, context):
-    sea = [s for s in context.shipments if any(l.mode is Mode.SEA for l in s.legs)]
+    sea = [s for s in context.shipments if any(leg.mode is Mode.SEA for leg in s.legs)]
     assert sea, "fixture book has no sea legs"
     shipment = sea[0]
-    leg = next(l for l in shipment.legs if l.mode is Mode.SEA)
+    leg = next(leg for leg in shipment.legs if leg.mode is Mode.SEA)
 
     event = _event(
         node_ids=[leg.to_node],
@@ -343,7 +343,7 @@ def test_recoverable_value_never_counts_negative_options(context):
 def test_decay_curve_is_monotonically_non_increasing(context):
     """Options expire; they never reappear."""
     values = [p.recoverable_chf for p in context.result.decay_curve]
-    for earlier, later in zip(values, values[1:]):
+    for earlier, later in zip(values, values[1:], strict=False):
         assert later <= earlier + 1e-6
 
 
@@ -353,7 +353,7 @@ def test_funnel_counts_are_monotonically_non_increasing(context):
         f.raw_observations, f.after_geographic, f.after_type,
         f.after_temporal, f.after_resolution,
     ]
-    for earlier, later in zip(stages, stages[1:]):
+    for earlier, later in zip(stages, stages[1:], strict=False):
         assert later <= earlier
 
 

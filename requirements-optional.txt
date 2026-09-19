@@ -1,0 +1,16 @@
+# Not needed to run anything today — installed only if you add a sea lane with
+# no declared waypoints in engine/network/graph.py::SEA_WAYPOINTS.
+#
+# Every sea leg in the current lane set routes through explicit chokepoints
+# (Suez, Gibraltar, Malacca, Panama), which is better than a routing library
+# for this job: those chokepoints then exist as graph nodes the gate can
+# intersect, which is what lets "Panama cuts transits" find the shipments it
+# actually touches. Without this package the engine falls back to
+# great-circle corridors and says so in `run.py inputs`.
+searoute>=1.4
+
+# Only for scripts/dev_check_ui.py, which drives the page in a headless
+# browser. Not needed to run the app.
+playwright>=1.47
+pillow>=10.0
+ruff>=0.6

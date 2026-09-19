@@ -1,12 +1,11 @@
-# Pinned to what this build was verified against.
+# Verified against a clean venv on Python 3.11.
+#
+# Deliberately small. The map, the charts and the globe are vendored under
+# api/static/vendor/, so there is no front-end toolchain and nothing is
+# fetched at runtime.
 numpy>=2.0
-pandas>=2.2
 pydantic>=2.9
 PyYAML>=6.0
-plotly>=5.24
-streamlit>=1.40
+fastapi>=0.115
+uvicorn>=0.32
 pytest>=8.0
-
-# Offline sea routing. Optional: engine/network/graph.py falls back to
-# chokepoint-waypoint corridors and reports the fallback in /inputs.
-searoute>=1.4
