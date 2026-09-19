@@ -8,12 +8,48 @@
 Built for the Sika Innovathon 2026 — *"How can supply chain planners identify
 and act on external risk before it hits their delivery reliability?"*
 
+### Run it on your laptop
+
 ```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python run.py demo         # the whole pipeline, in the terminal
-.venv/bin/python run.py inputs       # what is real / standing in / absent
-.venv/bin/python run.py serve        # API + dashboard on :8000
-.venv/bin/python -m pytest -q        # 51 tests
+git clone https://github.com/hashsignn/A-Team.git
+cd A-Team
+
+python3 -m venv .venv                       # Python 3.11+
+.venv/bin/pip install -U pip
+.venv/bin/pip install -r requirements.txt   # ~6 packages, no toolchain
+
+.venv/bin/python run.py serve               # -> http://localhost:8000
+```
+
+Windows: use `.venv\Scripts\python` and `.venv\Scripts\pip` instead.
+
+### Run it on GitHub Codespaces
+
+The repo ships a devcontainer, so there is nothing to install by hand:
+
+1. **Code → Codespaces → Create codespace on this branch**
+2. Wait for the container to build (it creates `.venv` and installs for you)
+3. In the terminal: `.venv/bin/python run.py serve --host 0.0.0.0`
+4. Click the forwarded **port 8000** notification, or open the **Ports** tab
+
+`--host 0.0.0.0` matters in Codespaces — bound to `127.0.0.1` the port is not
+reachable from the forwarded URL.
+
+### Everything else
+
+```bash
+.venv/bin/python run.py demo          # the whole pipeline, in the terminal
+.venv/bin/python run.py inputs        # what is real / standing in / absent
+.venv/bin/python -m pytest -q         # 78 tests
+
+# any instant you like — the board is reproducible from it
+.venv/bin/python run.py demo --as-of 2026-09-19T12:00:00+00:00
+```
+
+The same instant works in the URL, and is where the Critical rung shows up:
+
+```
+http://localhost:8000/?as_of=2026-09-19T12:00:00%2B00:00
 ```
 
 Everything runs **offline**. No API key, no network, no model required.
