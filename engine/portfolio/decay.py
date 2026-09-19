@@ -67,7 +67,6 @@ from engine.schemas import (
     DecayPoint,
     EventAssessment,
     Posture,
-    ShipmentRisk,
 )
 
 

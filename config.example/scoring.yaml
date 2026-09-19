@@ -145,3 +145,33 @@ decay_curve:
   # action could be taken at once, which ignores contention for the same
   # alternate capacity. Cap the number of concurrent actions counted.
   concurrent_action_cap: 12
+
+# -------------------------------------------------------------------
+# THE FIVE-LEVEL INDICATOR LADDER
+# -------------------------------------------------------------------
+# Every rung of the client's scale is phrased as a DEADLINE, not as a damage
+# band. So the level is a function of how soon somebody must decide — which is
+# lead_time_hours, already computed from
+#     decision_deadline = impact_time - action_duration
+#
+#   GREEN   Normal    no action is required
+#   WHITE   Bias      monitor closely, pay attention to changes
+#   BLUE    Watch     action determined within 3-7 days
+#   YELLOW  Alert     action taken within 24-48 hours
+#   RED     Critical  action taken within 6 hours
+#
+# The hour cutoffs are the client's own numbers. The two values marked ASSUMED
+# are ours and are the ones to replace when the real severity formula arrives.
+alert_levels:
+  red_hours: 6        # client's wording: "within 6 hours"
+  yellow_hours: 48    # client's wording: "within 24-48 hours"
+  blue_hours: 168     # client's wording: "within 3-7 days"
+
+  # ASSUMED — the floor below which a touched route is White (monitor) rather
+  # than Blue (decide). Without it every route with any event at all demands a
+  # decision, which is the crying-wolf failure the tool exists to prevent.
+  material_chf: 1000
+
+  # ASSUMED — ranking within a level is by CHF exposure. Lexicographic: the
+  # rung always wins, and money only breaks ties inside it.
+  rank_within_level_by: exposure_chf

@@ -26,7 +26,7 @@ from engine.config import Config
 from engine.network.geo import PORT_CATCHMENT_KM, Point
 from engine.network.graph import Network
 from engine.schemas import Event, GateHit, Mode, Shipment
-from engine.variables.mask import mode_applies, node_exposed
+from engine.variables.mask import mode_applies
 
 # How long a shipment is considered present at a transfer node. A strike at
 # Rotterdam hits you if you are calling there, not only during the instant of

@@ -3,7 +3,7 @@
     python run.py demo                      one run at the default as-of
     python run.py demo --as-of 2026-09-18   pinned, reproducible
     python run.py inputs                    what is connected / stand-in / absent
-    python run.py dashboard                 launch the Streamlit UI
+    python run.py serve                     start the API + dashboard
 """
 
 from __future__ import annotations
@@ -139,11 +139,16 @@ def cmd_inputs(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_dashboard(args: argparse.Namespace) -> int:
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Start the API and the dashboard it serves."""
     import subprocess
 
+    print(f"  http://localhost:{args.port}")
     return subprocess.call(
-        [sys.executable, "-m", "streamlit", "run", "dashboard/app.py"]
+        [
+            sys.executable, "-m", "uvicorn", "api.main:app",
+            "--host", args.host, "--port", str(args.port),
+        ]
     )
 
 
@@ -154,12 +159,14 @@ def main() -> int:
     for name, handler in (
         ("demo", cmd_demo),
         ("inputs", cmd_inputs),
-        ("dashboard", cmd_dashboard),
+        ("serve", cmd_serve),
     ):
         p = sub.add_parser(name)
         p.add_argument("--as-of", default=DEFAULT_AS_OF)
         p.add_argument("--shipments", type=int, default=150)
         p.add_argument("--seed", type=int, default=None)
+        p.add_argument("--host", default="127.0.0.1")
+        p.add_argument("--port", type=int, default=8000)
         p.set_defaults(handler=handler)
 
     args = parser.parse_args()

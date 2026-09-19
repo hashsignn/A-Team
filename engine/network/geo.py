@@ -164,7 +164,7 @@ def on_corridor(
         return (d <= width, d)
 
     best = float("inf")
-    for a, b in zip(path, path[1:]):
+    for a, b in zip(path, path[1:], strict=False):
         best = min(best, cross_track_distance_km(point, a, b))
     return (best <= width, best)
 

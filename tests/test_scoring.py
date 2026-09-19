@@ -9,12 +9,12 @@ the three arithmetic corrections this build makes to the brief stay corrected.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
 
-from engine.clock import UTC, Clock, ensure_utc, overlaps
+from engine.clock import Clock, ensure_utc, overlaps
 from engine.config import load_config
 from engine.schemas import (
     ContractType,
@@ -168,7 +168,8 @@ def test_max_zero_is_applied_per_draw_not_to_the_mean(config):
     lateness even though the MEAN delay is exactly on time. Applying the floor
     after averaging would report zero and hide the whole downside.
     """
-    shipment = _shipment(commitment_slack_hours=48.0, buffer_hours=0.0)
+    # No Shipment needed: the property under test is the convexity of
+    # max(0, ·) itself, so it is exercised on the raw draws.
     rng = np.random.default_rng(7)
 
     # Mean delay exactly 2.0 days == the slack. Half the draws are late.
@@ -323,7 +324,7 @@ def test_engine_never_reads_the_wall_clock():
 
 def test_temporal_gate_rejects_a_window_that_closed_before_arrival():
     """The condition everyone forgets. Half the false positives die here."""
-    base = datetime(2026, 9, 18, tzinfo=timezone.utc)
+    base = datetime(2026, 9, 18, tzinfo=UTC)
     strike = (base, base + timedelta(days=2))
     vessel = (base + timedelta(days=5), base + timedelta(days=6))
     assert not overlaps(*strike, *vessel)
