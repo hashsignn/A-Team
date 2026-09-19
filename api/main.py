@@ -11,11 +11,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from engine.clock import Clock
 from engine.config import load_config
+from engine.export import report as report_mod
 from engine.export.board import build_board
 from engine.pipeline import RunOptions, run
 
@@ -56,6 +57,56 @@ def board(
 ) -> JSONResponse:
     """Everything the UI draws: nodes, routes, radar data, ranking, posture."""
     return JSONResponse(_board(as_of, shipments))
+
+
+def _route(board: dict, route_id: str) -> dict:
+    for route in board["routes"]:
+        if route["route_id"] == route_id:
+            return route
+    raise HTTPException(404, f"unknown route {route_id!r}")
+
+
+@app.get("/api/report/{route_id}.pdf")
+def report_pdf(
+    route_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> Response:
+    """The convening pack for one route.
+
+    Not a customer handout: it is the evidence that justifies pulling the
+    standing teams out of their weekly cycle, so it leads with the deadline
+    and who is being asked to convene.
+    """
+    board = _board(as_of, shipments)
+    route = _route(board, route_id)
+    data = report_mod.build_pdf(route, board["as_of_label"], board["posture"])
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{report_mod.filename(route, as_of)}"'
+        },
+    )
+
+
+@app.get("/api/report/{route_id}.txt")
+def report_summary(
+    route_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> Response:
+    """Plain-text summary, for pasting into mail or chat.
+
+    The app composes; it does not send. Sending is an outward-facing action
+    and no mail path is wired, so the planner sends — see the socket note in
+    engine/export/report.py.
+    """
+    board = _board(as_of, shipments)
+    route = _route(board, route_id)
+    text = report_mod.build_summary(route, board["as_of_label"], board["posture"])
+    return Response(content=text, media_type="text/plain; charset=utf-8")
 
 
 @app.get("/api/health")

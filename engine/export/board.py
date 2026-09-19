@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from engine.act import contacts as contacts_mod
 from engine.pipeline import RunContext
 from engine.schemas import ShipmentRisk
 from engine.score.severity import (
@@ -133,7 +134,11 @@ def _build_route(
         "severity_score": severity_score(verdict, exposure_cap),
         "lead_time_hours": verdict.lead_time_hours,
         "exposure_chf": round(verdict.exposure_chf, 2),
-        "recoverable_chf": round(verdict.recoverable_chf, 2),
+        # NOT DISPLAYED. Kept because the convene rule is built on it, but it
+        # is the least defensible number in the system: it comes from our
+        # invented action costs and residual fractions, so presenting it as a
+        # CHF figure claims a precision we do not have.
+        "_recoverable_chf_internal": round(verdict.recoverable_chf, 2),
         "shipments": len(shipments),
         "shipments_at_risk": len({r.shipment_id for r in risks}),
         "value_chf": round(sum(s.value_chf for s in shipments), 2),
@@ -142,7 +147,32 @@ def _build_route(
         "events": _events(assessments, risks),
         "radar": _radar(assessments, lane, context),
         "actions": _actions(risks, context),
+        "response": _response(lane, verdict, risks, context),
     }
+
+
+def _response(lane: dict, verdict, risks: list[ShipmentRisk],
+              context: RunContext) -> dict:
+    """Who to call and what it needs approving, for this route at this level.
+
+    Everything is filtered by the route: the vendors are the ones at nodes this
+    lane passes through, the carriers run the modes it uses, the alternatives
+    are the ones declared on its own nodes. A planner looking at a Rhine barge
+    problem should not be handed the Singapore agency.
+    """
+    costs = [
+        r.best_action.cost_chf
+        for r in risks
+        if r.best_action is not None and r.value_of_acting_chf > 0
+    ]
+    return contacts_mod.build(
+        lane=lane,
+        level=verdict.level,
+        exposure_chf=verdict.exposure_chf,
+        best_cost_chf=max(costs) if costs else 0.0,
+        config=context.config,
+        network=context.network,
+    )
 
 
 def _legs(lane: dict, context: RunContext) -> list[dict]:
@@ -403,9 +433,9 @@ def _posture(context: RunContext) -> dict:
         "headline": verdict.headline,
         "rule_agreed": verdict.rule_agreed,
         "triggers_fired": verdict.triggers_fired,
-        "recoverable_chf": verdict.recoverable_chf,
+        "exposure_chf": verdict.exposure_chf,
         "contracts_exposed": verdict.contracts_exposed,
-        "cost_of_waiting_chf": verdict.cost_of_waiting_chf,
+        "options_expiring": verdict.options_expiring,
         "next_meeting_at": (
             verdict.next_meeting_at.isoformat() if verdict.next_meeting_at else None
         ),

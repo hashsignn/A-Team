@@ -189,9 +189,14 @@ def classify(
         if soonest < 48
         else f"{soonest / 24:.0f} days"
     )
+    # Deliberately does NOT quote a recoverable CHF figure. That number comes
+    # from our invented action costs and residual fractions — the least
+    # defensible arithmetic in the system — so stating it here would lend it
+    # the authority of the level itself. The deadline and the shipment count
+    # are both directly observed.
     reason = (
-        f"CHF {recoverable:,.0f} of mitigation is still open across "
-        f"{len(actionable)} shipment(s); the first option expires in {when}."
+        f"{len(actionable)} shipment(s) on this route still have an option "
+        f"open; the first expires in {when}."
     )
     if level is Level.WHITE:
         reason += " No decision needed yet."

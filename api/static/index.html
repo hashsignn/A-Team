@@ -127,39 +127,117 @@
 
 
 <!-- ============================================================
-     SECTION 2 — ranked routes
+     SECTION 2 — affected routes (left) + response workspace (right)
+
+     The split mirrors the stage above deliberately: diagnosis on the left,
+     response on the right. Section 1 answers "what is happening"; this one
+     answers "what do I do and who do I call", which is the third failure the
+     client named and the one they said is most often skipped.
      ============================================================ -->
 <section class="ranked" id="ranked">
-  <div class="ranked-inner">
-    <div class="ranked-head">
-      <div>
-        <h2>Affected routes</h2>
-        <p class="muted">
-          Ranked by the severity of the effect on the line — level first, then
-          CHF exposure within the level.
-        </p>
-      </div>
-      <div class="ranked-filters" id="ranked-filters"></div>
-    </div>
 
+  <div class="ranked-head">
+    <div>
+      <h2>Affected routes</h2>
+      <p class="muted">
+        Ranked by the severity of the effect on the line — level first, then
+        CHF exposure within the level. Select a route to open its response.
+      </p>
+    </div>
+    <div class="ranked-filters" id="ranked-filters"></div>
+  </div>
+
+  <div class="ranked-body">
+
+    <!-- ---------- left: the ranked table ---------- -->
     <div class="table-wrap">
       <table class="rtable">
         <thead>
           <tr>
-            <th class="num">SEVERITY</th>
+            <th class="num">SEV</th>
             <th>LEVEL</th>
             <th>ROUTE</th>
             <th>ACTION BY</th>
             <th class="num">SHIPMENTS</th>
             <th class="num">EXPOSURE</th>
-            <th class="num">RECOVERABLE</th>
             <th>DRIVER</th>
           </tr>
         </thead>
         <tbody id="rtable-body"></tbody>
       </table>
+      <p class="ranked-foot" id="ranked-foot"></p>
     </div>
-    <p class="ranked-foot" id="ranked-foot"></p>
+
+    <!-- ---------- right: the response workspace ---------- -->
+    <aside class="response" id="response" aria-live="polite">
+
+      <div class="response-head">
+        <span class="level-chip" id="r-chip"></span>
+        <h3 id="r-name">—</h3>
+        <p class="directive" id="r-directive"></p>
+      </div>
+
+      <nav class="rtabs" id="rtabs" role="tablist">
+        <button type="button" class="rtab is-on" data-tab="actions" role="tab">Actions</button>
+        <button type="button" class="rtab" data-tab="contacts" role="tab">Who to contact</button>
+        <button type="button" class="rtab" data-tab="escalate" role="tab">Escalate &amp; report</button>
+      </nav>
+
+      <div class="rtab-panels">
+
+        <!-- ACTIONS -->
+        <div class="rpanel is-on" data-panel="actions">
+          <p class="rpanel-note">Only options worth more than they cost.</p>
+          <div id="r-actions"></div>
+        </div>
+
+        <!-- CONTACTS -->
+        <div class="rpanel" data-panel="contacts">
+          <p class="rpanel-note">
+            Filtered to this route: the vendors are at nodes this lane passes
+            through, the carriers run the modes it uses.
+          </p>
+          <div id="r-contacts"></div>
+        </div>
+
+        <!-- ESCALATE & REPORT -->
+        <div class="rpanel" data-panel="escalate">
+          <div id="r-escalate"></div>
+
+          <div class="compose">
+            <h4>Send a summary</h4>
+            <label class="fld">
+              <span>To</span>
+              <input type="text" id="send-to" placeholder="name@example.com, …">
+            </label>
+            <label class="fld">
+              <span>Subject</span>
+              <input type="text" id="send-subject">
+            </label>
+            <label class="fld">
+              <span>Summary</span>
+              <textarea id="send-body" rows="12" spellcheck="false"></textarea>
+            </label>
+
+            <div class="compose-actions">
+              <a class="ctl ctl--primary" id="send-mail" href="#">Open in mail client</a>
+              <button type="button" class="ctl" id="send-copy">Copy</button>
+              <a class="ctl" id="send-pdf" href="#" download>Download PDF pack</a>
+            </div>
+
+            <!-- BRIEF §8.2: the surface is real and says plainly what is not
+                 connected, rather than faking a delivery that never happened. -->
+            <p class="socket">
+              <b>Not connected.</b> The app composes; it does not send. No mail
+              path is wired, so “Open in mail client” hands the draft to yours.
+              Wiring a mail relay or the Teams/Slack webhook would make this a
+              one-click send and record who was told, and when.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </aside>
   </div>
 </section>
 

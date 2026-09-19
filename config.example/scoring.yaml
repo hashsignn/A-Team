@@ -124,13 +124,25 @@ convene_rule:
   escalated_cadence_days: 1  # daily once convened
 
   thresholds:
-    # Trip if recoverable value at risk exceeds this.
-    recoverable_chf: 150000
+    # CHANGED: this was `recoverable_chf`, the summed value of acting across
+    # the book. That number comes from our invented action costs and residual
+    # fractions — the least defensible arithmetic in the system — and a crisis
+    # rule whose primary trigger is a number nobody can stand behind is a
+    # broken rule, not a conservative one.
+    #
+    # Exposure is expected loss straight out of the Monte Carlo. It is the
+    # figure already shown on the board, so the rule now trips on something a
+    # planner can see and check.
+    exposure_chf: 150000
+
     # Trip if more than this many distinct customer contracts are exposed.
     contracts_exposed: 4
-    # Trip if waiting one more meeting cycle would let this much
-    # mitigation value expire.
-    cost_of_waiting_chf: 75000
+
+    # CHANGED: this was `cost_of_waiting_chf`. Same problem — the CHF value of
+    # an expiring option is recoverable-derived. WHICH options expire and WHEN
+    # is directly observed from the min_action_hours table, so the trigger is
+    # now a count of options rather than a price on them.
+    options_expiring_before_meeting: 6
 
   # Posture thresholds for the state strip, as a fraction of the trip level.
   watch_fraction: 0.5

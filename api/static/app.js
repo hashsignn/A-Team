@@ -56,6 +56,10 @@ const state = {
   globe: null,
   spinning: true,
   resumeTimer: null,
+  // The instant the CURRENT board was built at. Renders read this, never the
+  // URL: reload() writes the URL after rendering, so a render that re-read it
+  // would describe the previous instant.
+  params: null,
 };
 
 // How long rotation pauses after a selection. The globe is meant to keep
@@ -126,6 +130,7 @@ async function fetchBoard({ as_of, shipments }) {
 // ===============================================================
 async function boot() {
   const params = readParams();
+  state.params = params;
   $('asof-input').value = isoToInput(params.as_of);
 
   const [board, topo] = await Promise.all([
@@ -138,6 +143,7 @@ async function boot() {
   state.board = board;
   initGlobe(countries, board);
   renderFilters();
+  initResponseTabs();
   applyBoard(board);
 
   $('asof-form').addEventListener('submit', (e) => {
@@ -161,12 +167,14 @@ async function reload(asOf) {
   try {
     const board = await fetchBoard(params);
     state.board = board;
+    // Before applyBoard, which renders — see the note on state.params.
+    state.params = params;
+    writeParams(params);
     // The previous selection may not exist, or may no longer be visible, at
     // the new instant. applyBoard falls back to the most severe route.
     state.selected = null;
     if (state.globe) state.globe.pointsData(board.nodes);
     applyBoard(board);
-    writeParams(params);
   } catch (err) {
     console.error(err);
     $('brand-sub').textContent = `could not load that instant — ${err.message}`;
@@ -425,6 +433,7 @@ function select(routeId, { fly } = {}) {
 
   refreshPaths();
   renderDetail(r);
+  renderResponse(r);
   markTableRow(routeId);
 
   if (fly && state.globe && r.legs.length) {
@@ -460,15 +469,14 @@ function renderDetail(r) {
       <div class="stat-sub">${r.shipments_at_risk} of ${r.shipments} shipments</div>
     </div>
     <div class="stat">
-      <div class="stat-k">Recoverable</div>
-      <div class="stat-v">${chf(r.recoverable_chf)}</div>
-      <div class="stat-sub">if acted on in time</div>
+      <div class="stat-k">Options open</div>
+      <div class="stat-v">${r.actions.length}</div>
+      <div class="stat-sub">worth more than they cost</div>
     </div>`;
 
   drawRadar(r.radar);
   renderSubcats(r.radar);
   renderEvents(r.events);
-  renderActions(r.actions);
   $('panel').scrollTop = 0;
 }
 
@@ -654,18 +662,184 @@ function renderEvents(events) {
   }).join('');
 }
 
-function renderActions(actions) {
-  $('block-actions').hidden = !actions.length;
-  if (!actions.length) return;
-  $('d-actions').innerHTML = actions.slice(0, 5).map((a) => `
+// ===============================================================
+// Response workspace
+// ===============================================================
+/* The third failure the client named, in their own words:
+ *   "Even when a crisis is identified, it is unclear what to do and who to
+ *    involve."
+ * The brief says it is the one most teams skip and worth the most, so it gets
+ * its own pane beside the ranked table rather than a footnote under the map.
+ */
+function renderResponse(r) {
+  const c = LEVEL_COLOR[r.level];
+  const chip = $('r-chip');
+  chip.textContent = r.level_label;
+  chip.style.color = c;
+  $('r-name').textContent = r.name;
+  $('r-directive').textContent = r.directive;
+
+  renderRActions(r);
+  renderRContacts(r);
+  renderREscalate(r);
+  primeCompose(r);
+}
+
+function renderRActions(r) {
+  const actions = r.actions || [];
+  if (!actions.length) {
+    $('r-actions').innerHTML = `
+      <div class="response-empty">
+        No option on this route currently saves more than it costs.
+        That is a real answer, not a gap — it is what lets you stop worrying
+        about this one.
+      </div>`;
+    return;
+  }
+  $('r-actions').innerHTML = actions.map((a) => `
     <div class="act">
       <div class="act-sentence">${esc(a.sentence)}</div>
       <div class="act-meta">
         ${esc(a.shipment_id)} · ${esc(a.customer)} · lead ${hours(a.lead_time_hours)} ·
         needs ${Math.round(a.min_hours)} h · lever held by <b>${esc(a.owner)}</b>
       </div>
-      ${a.contacts.length ? `<div class="act-who">${esc(a.contacts.slice(0, 2).join(' · '))}</div>` : ''}
     </div>`).join('');
+}
+
+function renderRContacts(r) {
+  const resp = r.response || {};
+  const out = [];
+
+  const card = (p) => `
+    <div class="contact">
+      <div class="contact-top"><span class="contact-name">${esc(p.name)}</span></div>
+      <div class="contact-role">${esc(p.role)}</div>
+      ${p.why ? `<div class="contact-why">${esc(p.why)}</div>` : ''}
+      <div class="contact-links">
+        ${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
+        ${p.phone ? `<span>${esc(p.phone)}</span>` : ''}
+        ${p.meta && p.meta.hours ? `<span>${esc(p.meta.hours)}</span>` : ''}
+      </div>
+    </div>`;
+
+  const group = (title, note, items) => {
+    if (!items || !items.length) return '';
+    return `<div class="cgroup">
+      <div class="cgroup-head"><span>${esc(title)}</span>
+        ${note ? `<span>${esc(note)}</span>` : ''}</div>
+      ${items.map(card).join('')}
+    </div>`;
+  };
+
+  if (resp.route_manager) {
+    out.push(group('Route manager', 'runs this corridor', [resp.route_manager]));
+  }
+  out.push(group('Convene', `${r.level_label} draws these in`, resp.standing_teams));
+  out.push(group('Seniors', 'above the standing teams', resp.seniors));
+  out.push(group('Alternate vendors on this route', 'at nodes this lane uses', resp.vendors));
+  out.push(group('Carriers', 'running this route\'s modes', resp.carriers));
+
+  // Declared alternatives. An empty list means "none configured" and is shown
+  // as exactly that — never a silent zero, and never a claim that no
+  // alternative exists in the world.
+  const routing = resp.alternate_routing || [];
+  out.push(`<div class="cgroup">
+    <div class="cgroup-head"><span>Alternate routing</span>
+      <span>declared on this route's nodes</span></div>
+    ${routing.length
+      ? routing.map((x) => `<div class="altroute">
+          <b>${esc(x.node_name)}</b> → ${x.alternatives.map((a) => esc(a.name)).join(', ')}
+        </div>`).join('')
+      : `<div class="altroute">No alternative route configured for the nodes on
+          this route. That is a gap in the profile, not a finding that none exists.</div>`}
+  </div>`);
+
+  $('r-contacts').innerHTML = out.join('');
+}
+
+function renderREscalate(r) {
+  const resp = r.response || {};
+  const esc_ = resp.escalation || {};
+  const c = LEVEL_COLOR[r.level];
+
+  let html = `
+    <div class="esc-card" style="border-left-color:${c}">
+      <div class="esc-level" style="color:${c}">
+        ${esc(r.level_label)} · escalation level ${esc(esc_.level ?? '—')}
+      </div>
+      <div class="esc-body">${esc(r.directive)} — ${esc(r.reason)}</div>
+      ${esc_.notify && esc_.notify.length ? `<div class="esc-list">
+        Notify: <b>${esc_.notify.map(esc).join(', ')}</b>
+        ${esc_.acknowledge_within_hours
+          ? ` · acknowledge within ${esc_.acknowledge_within_hours} h` : ''}
+      </div>` : ''}
+      ${esc_.note ? `<div class="contact-why">${esc(esc_.note)}</div>` : ''}
+    </div>`;
+
+  if (resp.approval) {
+    html += `<div class="esc-card" style="border-left-color:${LEVEL_COLOR.yellow}">
+      <div class="esc-level" style="color:${LEVEL_COLOR.yellow}">Spend approval</div>
+      <div class="esc-body">${esc(resp.approval.note)}</div>
+    </div>`;
+  }
+  $('r-escalate').innerHTML = html;
+}
+
+/* Compose. The app produces the draft and hands it over; it does not send.
+ * Sending is outward-facing and no mail path is wired, so faking it would be
+ * claiming a delivery that never happened. */
+async function primeCompose(r) {
+  const resp = r.response || {};
+  const recipients = []
+    .concat(resp.route_manager ? [resp.route_manager] : [])
+    .concat(resp.standing_teams || [])
+    .concat(resp.seniors || [])
+    .map((p) => p.email)
+    .filter(Boolean);
+
+  $('send-to').value = recipients.join(', ');
+  $('send-subject').value = `[${r.level_label}] ${r.name} — action by ${hours(r.lead_time_hours)}`;
+  $('send-body').value = 'loading summary…';
+
+  const params = new URLSearchParams(state.params || readParams());
+  const base = `/api/report/${encodeURIComponent(r.route_id)}`;
+  $('send-pdf').href = `${base}.pdf?${params}`;
+
+  try {
+    const text = await fetch(`${base}.txt?${params}`).then((res) => res.text());
+    $('send-body').value = text;
+    $('send-mail').href =
+      `mailto:${encodeURIComponent($('send-to').value)}` +
+      `?subject=${encodeURIComponent($('send-subject').value)}` +
+      `&body=${encodeURIComponent(text)}`;
+  } catch (err) {
+    $('send-body').value = `could not build the summary — ${err.message}`;
+  }
+}
+
+function initResponseTabs() {
+  document.querySelectorAll('.rtab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.rtab').forEach((t) => t.classList.remove('is-on'));
+      document.querySelectorAll('.rpanel').forEach((p) => p.classList.remove('is-on'));
+      tab.classList.add('is-on');
+      document.querySelector(`.rpanel[data-panel="${tab.dataset.tab}"]`)
+        .classList.add('is-on');
+    });
+  });
+
+  $('send-copy').addEventListener('click', async () => {
+    const btn = $('send-copy');
+    try {
+      await navigator.clipboard.writeText($('send-body').value);
+      btn.textContent = 'Copied';
+    } catch {
+      // Clipboard needs a secure context, which a plain-http demo box is not.
+      $('send-body').select();
+      btn.textContent = 'Selected — press Ctrl+C';
+    }
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2200);
+  });
 }
 
 // ===============================================================
@@ -695,15 +869,14 @@ function renderTable() {
       <td class="r-when" style="color:${LEVEL_COLOR[r.level]}">${hours(r.lead_time_hours)}</td>
       <td class="num">${r.shipments_at_risk}<span class="r-dash"> / ${r.shipments}</span></td>
       <td class="num">${r.exposure_chf > 0 ? chf(r.exposure_chf) : '<span class="r-dash">—</span>'}</td>
-      <td class="num">${r.recoverable_chf > 0 ? chf(r.recoverable_chf) : '<span class="r-dash">—</span>'}</td>
       <td class="r-driver">${esc(r.events[0] ? r.events[0].title : '—')}</td>
     </tr>`).join('');
 
   $('rtable-body').querySelectorAll('tr').forEach((tr) => {
-    tr.addEventListener('click', () => {
-      select(tr.dataset.route, { fly: true });
-      document.querySelector('.stage').scrollIntoView({ behavior: 'smooth' });
-    });
+    // Selecting from the table opens the response beside it. It deliberately
+    // does NOT scroll back to the globe: you came down here to act on a route,
+    // and yanking the page away from the response pane would undo that.
+    tr.addEventListener('click', () => select(tr.dataset.route, { fly: true }));
   });
 
   const f = state.board.funnel;
