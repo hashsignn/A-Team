@@ -531,6 +531,145 @@ board is complete either way.
 
 ---
 
+## The four-layer taxonomy, and the idea that makes it compose
+
+Layer 1 is the 45-variable ledger. Layers 2–4 describe **our** side of the
+encounter, and live in `config.example/taxonomy.yaml`:
+
+| Layer | What it is | What it contributes |
+|---|---|---|
+| **1 · Event** | the 45 variables | *pathway* — damage, delay, or both |
+| **2 · Asset** | 15 equipment types, 8 node kinds | a **gate**: can this event physically reach this equipment? |
+| **3 · Channel** | 5 delivery channels | a **consequence**: what lateness costs, and how much is free |
+| **4 · Cargo** | 11 vulnerability classes | a **gate**: does the damage pathway open? |
+
+### Pathway is the load-bearing idea
+
+The obvious scoring model is the one an architecture brief asks for:
+
+```
+Alert = f(severity) × overlap × vulnerability × criticality
+```
+
+It cannot answer the commonest question on a freight desk, which is what to
+do about a **severe event hitting invulnerable cargo**. Set vulnerability near
+zero and a four-day dock strike stops mattering. Set it near one and ambient
+dry mortar gets flagged for a freeze. No override rule fixes it, because the
+question was malformed. *"How vulnerable is this cargo"* is not one question.
+
+It is two:
+
+```
+DELAY    the freight moves late. Applies to everything on the corridor —
+         delay does not care what is in the box.
+DAMAGE   the goods are harmed. Only where Layer 4 opens the gate.
+```
+
+Split them and every clash in the brief resolves itself:
+
+| encounter | delay | damage | answer |
+|---|---|---|---|
+| dock strike + dry mortar | open | shut | *"no cargo risk, four days late"* |
+| freeze + dry mortar | — | shut | nothing, correctly |
+| freeze + water-based polymer | open | **open, irreversible** | scrap, not late |
+| freeze + polymer in a reefer | open | gated by genset autonomy | a countdown |
+
+None of those needed a rule. They fall out of asking the right question.
+
+`config.example/taxonomy.yaml` still declares seven `clash_rules`, but they
+are the genuinely contested cases — pot-life turning delay *into* damage, ADR
+blocking the standard expedite, overlapping events taking the max per pathway
+rather than the sum. The resolver records every clash it settled **including
+the ones it did not have to adjudicate**, because a severe event producing a
+calm answer looks like a missed alarm until you can see why it is calm.
+
+### Gates and consequences, never weights
+
+Everything in Layers 2 and 4 is a yes/no about physics or regulation.
+*"Freeze-critical cargo is 0.8 vulnerable to a freeze"* is a number nobody can
+source; *"the emulsion breaks below 0 °C"* is in the product data sheet. Layer
+4 carries **two** thresholds for exactly this reason — 5 °C is the
+precautionary margin and 0 °C is the physics, and the gap between them is the
+difference between *expedite it* and *write it off and remake*.
+
+Layer 3 is a consequence model rather than a criticality score, because
+*"criticality 4"* cannot express the distinction that decides what to do:
+
+```
+b2b_distributor     8 h of dock flexibility, then CHF 180/day   (linear)
+retail_diy          1 h, then a flat CHF 350 chargeback         (step)
+direct_to_jobsite   30 min, then a crew stands idle             (cliff)
+```
+
+Those are three different **shapes**. A retail penalty stops growing, so an
+expedite has to beat CHF 350 and no more; a jobsite penalty does not.
+
+## The 0–100 Alert Score
+
+A TMS wants a number — SAP TM and Blue Yonder both route on thresholds — so
+the board emits one. It is a **projection of the ladder, not a second model**:
+
+```
+score = 20 × rung_rank + 20 × consequence_fraction
+
+Normal 0–19 │ Bias 20–39 │ Watch 40–59 │ Alert 60–79 │ Critical 80–99
+```
+
+which lands the requested bands on the client's own rungs without either
+having to move:
+
+| band | rungs | meaning |
+|---|---|---|
+| **Green** 0–39 | Normal + Bias | informational; monitor |
+| **Amber** 40–69 | Watch + low Alert | evaluate a reroute |
+| **Red** 70–100 | high Alert + Critical | act now |
+
+The fraction is clamped inside its own decade, so a Bias shipment carrying
+the book's largest exposure can never outscore a Watch one. **Disagreement
+between the score and the ladder is structurally impossible**, and a
+parametrised test asserts it for all five rungs — two scales over one
+shipment will otherwise drift, and then the board says Yellow while the TMS
+says 38/Green.
+
+Irreversible cargo damage **escalates the rung**, because the ladder measures
+time-to-act and irreversible damage compresses it to nothing: once the
+emulsion has broken there is no later moment at which the same decision is
+still available. Reversible degradation does not escalate — it is a cost, and
+costs are already carried by the consequence term.
+
+### The three validation scenarios
+
+Executable, in `tests/test_taxonomy.py`:
+
+| | scenario | result |
+|---|---|---|
+| **A** | −7 °C freeze · water-based polymer · jobsite | both pathways, irreversible, **escalated** Blue → Alert |
+| **B** | dock strike · ambient dry mortar · distributor | **41, Amber.** No cargo risk; 88 chargeable hours priced |
+| **C** | weekend driving ban · ADR Class 3 · JIT plant | **76, Red.** Air freight suppressed, not ranked low |
+
+**B is the one that matters.** It is the clash the brief names, and the case
+where a multiplicative score must choose between a false Red and silently
+dropping a four-day delay. Here it produces a third, correct answer — and the
+test asserts *both* halves: no cargo risk, and a real delay.
+
+## Integration contracts
+
+- **`schemas/event_radar_taxonomy.json`** — generated by
+  `scripts/gen_schema.py` from the config, so the enums cannot drift from
+  what the engine loads. `--check` fails CI when stale. Every layer carries
+  an `unmapped` fallback with a required `reason`: a taxonomy that cannot say
+  *"we saw something we have no box for"* forces the caller into the nearest
+  wrong box, and a wrong box is indistinguishable from a right one downstream.
+- **`GET /api/v1/shipment-alerts`** — the exact payload this system would
+  POST to a TMS, exposed as a GET so an integrator can see the shape before
+  wiring anything. A worked RED example is in
+  `docs/examples/tms_red_alert.json`.
+- **`SECURITY.md`** — zero-cost offline operation, `.env` management, and the
+  secret-leakage audit that runs in the suite. That audit found a real gap the
+  first time it ran: `.env` was not in `.gitignore`.
+
+---
+
 ## Engineering rules that are load-bearing
 
 **Nothing reads the wall clock.** Every stage takes an explicit `as_of`
