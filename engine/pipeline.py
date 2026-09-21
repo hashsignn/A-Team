@@ -33,6 +33,7 @@ from engine.ingest.watergauge import assess_kaub
 from engine.network.geo import Point, in_bounding_box
 from engine.network.graph import Network
 from engine.portfolio import convene
+from engine.reason import llm as llm_mod
 from engine.schemas import (
     Event,
     EventAssessment,
@@ -490,6 +491,7 @@ def _assess_one(
             expected_lateness_days=act["expected_lateness_days"],
             expected_loss_chf=act["expected_loss_chf"],
             p90_loss_chf=act["p90_loss_chf"],
+            conditional_loss_chf=act["conditional_loss_chf"],
             driving_event_ids=act_draws.driving_event_ids,
         )
         if impact_at is not None:
@@ -503,7 +505,12 @@ def _assess_one(
     # P(late) on the matrix x-axis is None when the event's own probability is
     # unsourceable — it is not a computed 0.5 (BRIEF §8.1).
     p_for_axis = base["p_late"] if event.probability_known else None
-    impact_id, _, _ = matrix.impact_band(base["expected_loss_chf"], config)
+    # The impact axis is the CONDITIONAL loss, not the expected one. Expected
+    # loss already carries the probability (the Monte Carlo masks each event's
+    # delay by its occurrence draw), so pairing it with P(late) counted the
+    # same probability on both axes and pushed every unlikely shipment into the
+    # bottom-left corner twice over.
+    impact_id, _, _ = matrix.impact_band(base["conditional_loss_chf"], config)
     prob_id, _ = matrix.probability_band(p_for_axis, config)
 
     risk = ShipmentRisk(
@@ -518,6 +525,7 @@ def _assess_one(
             expected_lateness_days=base["expected_lateness_days"],
             expected_loss_chf=base["expected_loss_chf"],
             p90_loss_chf=base["p90_loss_chf"],
+            conditional_loss_chf=base["conditional_loss_chf"],
             driving_event_ids=base_draws.driving_event_ids,
         ),
         best_action=chosen,
@@ -593,7 +601,98 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
             "Earliest signal on strikes and incidents — typically hours before "
             "trade press, which is where the lead time comes from.",
         ),
+        # ---- the rest of the supply-chain API surface -------------------
+        # Named rather than described, because "we would connect a weather
+        # API" is a wish and "Copernicus Marine, product WAVE_GLO_PHY" is a
+        # scoping decision somebody can cost. Each one below is a real
+        # service with a real access model, and the access model is the
+        # reason it is not wired rather than an oversight.
+        (
+            "ais",
+            "AIS vessel tracking (Spire / MarineTraffic / AISHub)",
+            "commercial licence per vessel-track; AISHub is free but "
+            "coverage is contributor-dependent and coastal-biased",
+            "The single highest-value feed on this list: actual vessel "
+            "position against the schedule turns an inferred delay into an "
+            "observed one, and moves the ETA from planned to measured.",
+        ),
+        (
+            "notices_to_mariners",
+            "Port authority notices & Notices to Mariners",
+            "no common format — each authority publishes its own PDF or RSS "
+            "(Rotterdam, Antwerp, Hamburg and Singapore all differ)",
+            "Authoritative closures, draught restrictions and lock outages "
+            "at tier 1, which is the only tier allowed to move a date on its "
+            "own. Today those arrive via trade press at tier 2.",
+        ),
+        (
+            "copernicus_marine",
+            "Copernicus Marine / EMODnet — wave, current, sea ice",
+            "free with registration; this environment's egress proxy blocks "
+            "the host",
+            "Significant wave height and current on the deep-sea legs, which "
+            "is what actually decides a weather routing diversion — wind "
+            "speed alone does not.",
+        ),
+        (
+            "waterinfo_nl",
+            "Rijkswaterstaat Waterinfo — Dutch waterway levels & lock status",
+            "open API; blocked here alongside the German gauge",
+            "The lower Rhine and the Dutch canal network. Kaub sets the "
+            "loading limit, but a lock outage at Tiel strands the same barge.",
+        ),
+        (
+            "rail_im",
+            "Rail infrastructure managers (DB Netz, SBB, ProRail)",
+            "TAF/TSI feeds require an operator agreement; the public portals "
+            "are HTML",
+            "Planned possessions months ahead and live disruption on the "
+            "rail legs — the mode a barge derate reroutes ONTO, so its "
+            "capacity is what decides whether the reroute is real.",
+        ),
+        (
+            "sanctions",
+            "EU / SECO / OFAC consolidated sanctions lists",
+            "published as open data; not wired for v1",
+            "The geopolitical family's only fully checkable source. A "
+            "designated vessel or counterparty is a binary fact, not an "
+            "estimate, and it is the one risk here that can strand cargo "
+            "with no delay at all.",
+        ),
+        (
+            "customs_waits",
+            "Customs & border waiting times (EU TAXUD, Swiss BAZG)",
+            "partial and per-crossing; no consolidated API",
+            "Border dwell on the road legs. Swiss-EU crossings are the "
+            "single most repeated hop in this book, so a systematic bias "
+            "there biases everything.",
+        ),
+        (
+            "terminal_slots",
+            "Terminal slot / VBS booking systems",
+            "per-terminal, licensed, usually behind a forwarder",
+            "Whether a truck can actually get a slot, which is what turns "
+            "'reroute to road' from an option into a plan.",
+        ),
     ]
+    # The reasoning model is an input like any other, and it gets the same
+    # three states: connected / stand-in / absent. Reported here rather than
+    # in a panel of its own, because "is the model running" is exactly the
+    # same question as "is the gauge connected".
+    model = llm_mod.detect()
+    bundle.add(
+        FeedReport(
+            key="reasoning_model",
+            label=f"Reasoning model ({model.backend.value})",
+            status=(
+                FeedStatus.CONNECTED if model.available else FeedStatus.ABSENT
+            ),
+            detail=model.detail,
+            unlocks_if_connected=model.unlocks_if_connected,
+            retrieved_at=clock.as_of,
+        )
+    )
+
     for key, label, detail, unlocks in absent:
         bundle.add(
             FeedReport(

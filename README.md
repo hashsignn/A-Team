@@ -308,6 +308,95 @@ alternate vendors and carriers, all filtered to that route — the escalation
 step, and a one-click PDF convening pack plus a plain-text summary to paste
 into mail.
 
+### Themes
+
+Four, switched from the topbar and shared by both pages: **Light** (the
+default), **Blue**, **Sika** (the client's yellow and red on white) and
+**Dark**. The choice persists per browser.
+
+Two things had to change to make a light default honest rather than just
+inverted:
+
+* **The White rung cannot be white on a white page.** "Bias — monitor
+  closely" drawn in white on a white background is not a quiet level, it is no
+  level. On the three light themes it becomes a neutral slate, which keeps its
+  position in the ordering while the label beside it keeps carrying the
+  meaning. Green and Yellow are darkened to pass contrast.
+* **Route transparency has a floor.** The stroke/alpha weights encode the
+  *urgency ordering*, which is a property of the ladder and does not change
+  with the theme. What changes is how much transparency a background absorbs:
+  alpha 0.24 reads as a line against near-black and as nothing against white,
+  and a Normal route that renders invisible is indistinguishable from a route
+  the gate never found. Each weight is remapped into `[floor, 1]`, so the
+  ordering survives and the floor moves.
+
+> **The Sika yellow and red are approximated.** `sika.com` and the brand asset
+> hosts are blocked by this environment's egress proxy, so the two values in
+> `styles.css` are a visual match, not the brand. They are marked
+> `APPROXIMATED` in the file. Swap them for the official values before any
+> client-facing use — it is two hex codes in one block.
+
+Sika red is deliberately kept **off** the ladder and off the chrome, appearing
+only as the brand rule under the header: on a page whose most urgent rung is
+red, a red header would compete with the one colour that has to mean "six
+hours". For the same reason `--accent` exists at all — buttons, focus rings
+and active tabs used to borrow `--lvl-blue`, which quietly broke the rule that
+level colours are reserved. The headless checker now asserts, per theme, that
+the accent is not equal to any of the five rungs.
+
+### The per-event risk matrix
+
+A small translucent card, opened from the grid button on any event. There is
+deliberately **no dashboard-level P×I scatter** — aggregating every event into
+one grid throws away the only thing a planner needs from it, *which of my
+shipments*. The event is the question; the points are the answer, and each
+point is a shipment.
+
+```
+  x   P(this shipment is late)
+  y   the bill IF it is late     ← not the expected loss
+```
+
+**Those two axes have to be independent, and they were not.** The impact axis
+read `expected_loss_chf`, which already has the probability multiplied in —
+the Monte Carlo masks each event's delay by its occurrence draw. Plotting it
+against `P(late)` counted the same probability on both axes and pushed every
+unlikely shipment into the bottom-left corner twice over, for a reason the
+x-axis had already expressed.
+
+The engine now computes the **conditional** loss — the mean over the draws
+where the shipment actually went late — and the two axes multiply back:
+
+```
+p_late × E[loss | late]  ==  E[loss]
+```
+
+That identity is the proof the probability is counted once, and it is asserted
+in `tests/test_matrix.py` to floating-point precision. (It holds exactly when
+no always-on surcharge applies; a Rhine low-water surcharge is charged on every
+draw, late or not, and sits outside the lateness decomposition by
+construction — that case is tested separately.)
+
+Lead time is a **ring**, not a third axis: solid means options remain, hollow
+means they have run out. Four dimensions on a chart that stays readable.
+
+Unsourced-probability events are drawn in a **dashed gutter outside the grid**,
+never at a computed 0.5, with the card saying so in as many words.
+
+### The assistant
+
+A grounded chat panel, opened from the topbar for the whole board or from the
+speech-bubble on an event for that event. The context is assembled in
+`engine/reason/ask.py` from the board itself; the model gets no tools, no
+search and no internet, and the system prompt asks for *"The board does not
+carry that"* rather than a guess.
+
+**Every answer is visibly marked as generated.** The numbers on the page were
+computed by the engine and can be reproduced from the command line; an answer
+here was written by a model from a context built out of those numbers. Those
+are different kinds of claim, and a planner is entitled to tell them apart at
+a glance.
+
 ### The risk profile
 
 `/profile`, reached from the topbar. Six tabs:
@@ -353,6 +442,92 @@ Two design rules the UI holds to:
   firing. A family at zero means "checked, contributes nothing", which is
   true and useful. Families that cannot reach the route are excluded, because
   drawing them would imply an assessment that never happened.
+
+---
+
+## The reasoning layer, and the thing that keeps it honest
+
+The sibling operational-risk radar pairs an LLM with a deterministic
+challenger. This is the supply-chain version of that idea, and the challenger
+half already existed: `engine/variables/rules.py` is a keyword router that has
+always run alongside.
+
+### Which local model, and why
+
+**`qwen2.5:7b-instruct` via Ollama** — the default in `engine/reason/llm.py`,
+overridable with `RADAR_LOCAL_MODEL`.
+
+| | why it wins here |
+|---|---|
+| **Structured output** | Ollama's `format` parameter takes a JSON Schema, and Qwen 2.5 follows one without a grammar or a retry loop. The pipeline hands it `Extraction.model_json_schema()` and parses the reply straight into Pydantic. |
+| **Multilingual** | Rhine gauge notices are German, Rotterdam and Antwerp port notices are Dutch, and a model that only reads English silently drops the tier-1 sources — which are the only tier allowed to move a date on its own. |
+| **7B fits the laptop** | ~5 GB quantised. A planner runs this beside Excel and Teams, and a 14B that swaps is a 14B nobody keeps running. |
+| **Licence** | Apache 2.0. Nothing to clear with legal before a pilot. |
+
+```bash
+ollama pull qwen2.5:7b-instruct   # ~4.7 GB
+ollama serve                      # the radar auto-detects it
+```
+
+Worth trying if the machine has room: **`qwen2.5:14b-instruct`** (~9 GB) is
+better on the conditional readings — "unless talks resume" — and
+**`llama3.1:8b`** is a reasonable substitute where Qwen is unavailable, but it
+is weaker on German. **Do not use a 3B**: at that size the schema gets
+satisfied by invention, which is the one failure this whole design is built to
+avoid.
+
+**Why local first.** Freight data is commercially sensitive — the order book,
+the customers, the penalties are exactly what a company will not post to a
+third party to try a demo. It is also free, which matters because a hindcast
+over two years of archived feeds is thousands of calls. The API path
+(`ANTHROPIC_API_KEY`, `claude-opus-5`) exists because a frontier model is
+genuinely better on the hard judgement calls; it is opt-in and never required.
+`anthropic` is in `requirements-optional.txt` and imported lazily, so the base
+install stays at seven packages.
+
+**No model is a supported state, not a degraded one.** With nothing reachable
+the router runs alone and the board is complete. The assistant says what is
+missing and what connecting it would buy, in the same socket shape every other
+absent input uses.
+
+### The check mechanism
+
+`engine/reason/challenge.py`. The obvious way to check a model is to ask
+another model; it is also the worst way available here, because it costs a
+second call per event and fails in the same places as the first — two
+confident wrong answers look like corroboration.
+
+So every check is **deterministic**, and a person can audit the file in one
+sitting:
+
+| check | question | blocking |
+|---|---|---|
+| `grounded` | is the verbatim quote actually in the source? | yes |
+| `variables_known` | are the claimed variable ids in the 45-variable ledger? | yes |
+| `nodes_known` | are the resolved nodes real? | yes |
+| `probability_honest` | did it invent odds for something the ledger marks unsourceable? | yes |
+| `variables_justified` | does each activation carry the sentence that caused it? | flag |
+| `delay_plausible` | is the estimate anywhere near the family's own band? | flag |
+
+**`grounded` is the one that matters.** A fabricated quote is the most
+dangerous output this system can produce, because it is the thing a planner
+will trust without checking — it *looks* like evidence. It is also trivially
+detectable: the quote either appears in the source or it does not. Substring
+matching catches it every time, costs nothing, and cannot itself hallucinate.
+
+`delay_plausible` is deliberately wide, and compares against the family's
+worst case across **every** severity rather than the band a keyword heuristic
+guessed. Reading "until the weekend at the earliest" as nine days where the
+minor band says one and a half is the reasoning layer doing its job; checking
+it against the minor band would flag exactly the extractions worth having.
+
+A rejected extraction is not a gap — the router's answer is used, and the
+board is complete either way.
+
+> Agreement between router and model is reported but **is not validation**.
+> Both were written by the same people from the same variable list, so their
+> errors correlate. The honest headline metric is still the hindcast: did we
+> fire before the carrier called.
 
 ---
 

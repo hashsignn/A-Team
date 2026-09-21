@@ -1,17 +1,213 @@
-/* Supply Chain Risk Radar — dark operations surface.
+/* Supply Chain Risk Radar — themed operations surface.
  *
  * THE FIVE LEVEL COLOURS ARE RESERVED. They are the client's own scheme and
  * they mean one thing only: how soon a decision is needed. They are never
- * reused as a series colour, and they never carry meaning alone — every place
- * a level colour appears, its name or directive appears beside it.
+ * reused as a series colour or as UI chrome, and they never carry meaning
+ * alone — every place a level colour appears, its name or directive appears
+ * beside it.
  *
- * The radar's three severity bands are therefore NOT drawn in level colours.
+ * `--accent` exists for exactly that reason. Buttons, focus rings and active
+ * tabs used to borrow `--lvl-blue`, which quietly broke the rule above: a
+ * planner seeing blue on a button and blue on a route had no way to know only
+ * one of them meant "decide within 3–7 days".
+ *
+ * The radar's three severity bands are NOT drawn in level colours either.
  * They are an ordinal decomposition of one measure (days of delay), so they
- * use a single-hue violet ramp that appears nowhere else. On a dark surface
- * the ramp runs dim -> bright, because light advances and dark recedes.
+ * use a single-hue ramp that appears nowhere else.
+ *
+ * ── THEMES ────────────────────────────────────────────────────────────────
+ * Four, switched by `data-theme` on <html>. Light is the default, so it lives
+ * in :root and works even before the theme script runs.
+ *
+ *   light   white/grey, neutral. The default.
+ *   blue    white base, blue chrome. The same page in a cooler register.
+ *   sika    the client's own yellow and red on white.
+ *   dark    the original dark operations surface.
+ *
+ * WHAT CHANGES ON A LIGHT BACKGROUND, AND WHY
+ * -------------------------------------------
+ * The White rung ("Bias — monitor closely") cannot be drawn white on a white
+ * page: it would be invisible, and an invisible level reads as no level at
+ * all. On the three light themes it becomes a neutral slate, which keeps it
+ * the quietest visible rung — its position in the ordering — while the label
+ * beside it keeps carrying the actual meaning. Green and Yellow are darkened
+ * for the same reason: the dark-theme values fail contrast on white.
  */
 
-:root {
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --plane:        #f4f6fa;
+  --surface-1:    #ffffff;
+  --surface-2:    #f0f3f8;
+  --surface-3:    #e4e9f2;
+
+  --text-primary:   #101726;
+  --text-secondary: #46536b;
+  --muted:          #6d7a91;
+  --grid:           #e3e8f0;
+  --axis:           #c7d0df;
+  --border:         rgba(16, 23, 38, 0.13);
+  --border-strong:  rgba(16, 23, 38, 0.28);
+
+  --accent:         #0e7490;   /* teal — deliberately NOT the blue rung */
+  --accent-contrast:#ffffff;
+
+  /* ---- the ladder. reserved. tuned for contrast on white. ---- */
+  --lvl-green:  #15803d;
+  --lvl-white:  #64748b;   /* slate, not white — see the note above */
+  --lvl-blue:   #1d4ed8;
+  --lvl-yellow: #b45309;
+  --lvl-red:    #dc2626;
+
+  /* ---- radar bands: ordinal, one hue, light -> dark on a light page ---- */
+  --band-minor:    #c4b5fd;
+  --band-moderate: #8b5cf6;
+  --band-severe:   #5b21b6;
+
+  /* ---- globe ---- */
+  --globe-land:      #dfe6f2;
+  --globe-emissive:  #f2f5fa;
+  --globe-atmos:     #93b4f0;
+  --globe-cap:       rgba(203, 216, 236, 0.92);
+  --globe-side:      rgba(150, 170, 200, 0);
+  --globe-stroke:    rgba(120, 142, 178, 0.55);
+  --globe-port:      rgba(38, 54, 84, 0.90);
+  --globe-choke:     rgba(90, 106, 136, 0.80);
+  --globe-shine:     0.04;
+
+  --shadow-1: 0 1px 2px rgba(16, 23, 38, .06), 0 4px 16px rgba(16, 23, 38, .06);
+  --shadow-2: 0 8px 30px rgba(16, 23, 38, .14);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --path-alpha-floor: 0.42;
+  --stage-glow: #dce6f7;
+  --mark-1: #4b8bf0;
+  --mark-2: #1e4fa8;
+  --mark-3: #16305e;
+}
+
+/* ---- BLUE: same light base, cooler chrome ---- */
+:root[data-theme="blue"] {
+  color-scheme: light;
+
+  --plane:        #eef3fb;
+  --surface-1:    #ffffff;
+  --surface-2:    #e8f0fb;
+  --surface-3:    #dae6f8;
+
+  --text-primary:   #0b1b33;
+  --text-secondary: #37506f;
+  --muted:          #5f7595;
+  --grid:           #dbe6f5;
+  --axis:           #b9cbe6;
+  --border:         rgba(11, 27, 51, 0.14);
+  --border-strong:  rgba(11, 27, 51, 0.30);
+
+  --accent:         #1558d6;
+  --accent-contrast:#ffffff;
+
+  --lvl-green:  #15803d;
+  --lvl-white:  #5b7089;
+  --lvl-blue:   #5b21b6;   /* violet-ward, so it cannot be read as chrome */
+  --lvl-yellow: #b45309;
+  --lvl-red:    #d01f1f;
+
+  --band-minor:    #a8c4f5;
+  --band-moderate: #4f7fe0;
+  --band-severe:   #1e3a8a;
+
+  --globe-land:      #d6e4f8;
+  --globe-emissive:  #eef4fd;
+  --globe-atmos:     #7aa7ee;
+  --globe-cap:       rgba(190, 212, 244, 0.94);
+  --globe-side:      rgba(140, 170, 214, 0);
+  --globe-stroke:    rgba(100, 134, 190, 0.58);
+  --globe-port:      rgba(18, 44, 86, 0.92);
+  --globe-choke:     rgba(74, 102, 146, 0.82);
+  --globe-shine:     0.05;
+
+  --shadow-1: 0 1px 2px rgba(11, 27, 51, .07), 0 4px 16px rgba(11, 27, 51, .07);
+  --shadow-2: 0 8px 30px rgba(11, 27, 51, .16);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --path-alpha-floor: 0.42;
+  --stage-glow: #d3e3fa;
+  --mark-1: #2f7ae8;
+  --mark-2: #16409c;
+  --mark-3: #0c2452;
+}
+
+/* ---- SIKA: the client's own yellow and red on white ----
+ *
+ * The two brand values below are marked APPROXIMATED in
+ * config.example/branding.yaml and are the one thing on this page that is
+ * not derived from something checkable: the official values could not be
+ * read from sika.com in this environment. They are a visual match, not the
+ * brand. Swap them for the real ones before any client-facing use.
+ *
+ * Sika red is kept OFF the ladder and off the chrome: on a page whose most
+ * urgent rung is red, a red header would compete with the one colour that
+ * has to mean "six hours". It appears as the brand rule and nowhere else. */
+:root[data-theme="sika"] {
+  color-scheme: light;
+
+  --plane:        #f7f6f2;
+  --surface-1:    #ffffff;
+  --surface-2:    #f3f1ea;
+  --surface-3:    #e9e5d8;
+
+  --text-primary:   #1a1a17;
+  --text-secondary: #4a4a42;
+  --muted:          #75756a;
+  --grid:           #e6e3d8;
+  --axis:           #cbc7b6;
+  --border:         rgba(26, 26, 23, 0.14);
+  --border-strong:  rgba(26, 26, 23, 0.30);
+
+  --sika-yellow:  #ffc700;   /* APPROXIMATED */
+  --sika-red:     #d9042b;   /* APPROXIMATED */
+
+  --accent:         #1a1a17;
+  --accent-contrast:#ffc700;
+
+  --lvl-green:  #17703a;
+  --lvl-white:  #7a7a6e;
+  --lvl-blue:   #1d4ed8;
+  --lvl-yellow: #a8620a;
+  --lvl-red:    #c2001f;
+
+  --band-minor:    #ffe8a3;
+  --band-moderate: #e0a800;
+  --band-severe:   #8a5a00;
+
+  --globe-land:      #e8e3d4;
+  --globe-emissive:  #f6f4ec;
+  --globe-atmos:     #e6c766;
+  --globe-cap:       rgba(226, 219, 199, 0.94);
+  --globe-side:      rgba(180, 172, 148, 0);
+  --globe-stroke:    rgba(150, 142, 118, 0.58);
+  --globe-port:      rgba(40, 38, 30, 0.90);
+  --globe-choke:     rgba(110, 106, 92, 0.82);
+  --globe-shine:     0.04;
+
+  --shadow-1: 0 1px 2px rgba(26, 26, 23, .07), 0 4px 16px rgba(26, 26, 23, .07);
+  --shadow-2: 0 8px 30px rgba(26, 26, 23, .16);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --path-alpha-floor: 0.46;
+  --stage-glow: #f0e7c9;
+  --mark-1: #ffc700;
+  --mark-2: #d9042b;
+  --mark-3: #7a0018;
+}
+
+/* ---- DARK: the original operations surface ---- */
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   --plane:        #070b14;
@@ -27,20 +223,39 @@
   --border:         rgba(155, 189, 245, 0.14);
   --border-strong:  rgba(155, 189, 245, 0.28);
 
-  /* ---- the ladder. reserved. ---- */
+  --accent:         #22b8cf;   /* teal — deliberately NOT the blue rung */
+  --accent-contrast:#04202a;
+
   --lvl-green:  #21c45d;
   --lvl-white:  #e6ecf8;
   --lvl-blue:   #3d8bfd;
   --lvl-yellow: #f5b52b;
   --lvl-red:    #ef4444;
 
-  /* ---- radar bands: ordinal, one hue, dim -> bright on dark ---- */
   --band-minor:    #6d5bd0;
   --band-moderate: #9a86f0;
   --band-severe:   #c4b5fd;
 
+  --globe-land:      #0a1526;
+  --globe-emissive:  #050b16;
+  --globe-atmos:     #3d8bfd;
+  --globe-cap:       rgba(28, 46, 78, 0.78);
+  --globe-side:      rgba(10, 21, 38, 0);
+  --globe-stroke:    rgba(112, 148, 204, 0.42);
+  --globe-port:      rgba(224, 235, 255, 0.92);
+  --globe-choke:     rgba(169, 182, 206, 0.75);
+  --globe-shine:     0.12;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .35);
+  --shadow-2: 0 8px 30px rgba(0, 0, 0, .5);
+
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --path-alpha-floor: 0;
+  --stage-glow: #10203c;
+  --mark-1: #3d8bfd;
+  --mark-2: #123a78;
+  --mark-3: #081428;
 }
 
 * { box-sizing: border-box; }
@@ -75,7 +290,7 @@ p { margin: 0; }
   flex-direction: column;
   position: relative;
   background:
-    radial-gradient(1200px 700px at 22% 38%, #10203c 0%, transparent 62%),
+    radial-gradient(1200px 700px at 22% 38%, var(--stage-glow) 0%, transparent 62%),
     var(--plane);
 }
 
@@ -86,7 +301,7 @@ p { margin: 0; }
   gap: 24px;
   padding: 16px 26px;
   border-bottom: 1px solid var(--border);
-  background: rgba(7, 11, 20, 0.72);
+  background: color-mix(in srgb, var(--plane) 82%, transparent);
   backdrop-filter: blur(8px);
   flex-wrap: wrap;
 }
@@ -97,7 +312,8 @@ p { margin: 0; }
 
 .brand-mark {
   width: 30px; height: 30px; border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #3d8bfd 0%, #123a78 52%, #081428 100%);
+  background: radial-gradient(circle at 34% 30%,
+    var(--mark-1) 0%, var(--mark-2) 52%, var(--mark-3) 100%);
   box-shadow: 0 0 0 1px var(--border-strong), 0 0 22px rgba(61, 139, 253, 0.34);
   flex: none;
 }
@@ -114,7 +330,7 @@ p { margin: 0; }
   border: 1px solid var(--border); border-radius: 7px;
   padding: 5px 8px; color-scheme: dark;
 }
-.asof input:focus { outline: none; border-color: var(--lvl-blue); }
+.asof input:focus { outline: none; border-color: var(--accent); }
 .asof-tz { font-family: var(--mono); font-size: 10.5px; }
 .ctl--ghost { background: transparent; }
 .stage.is-loading .globe-wrap, .stage.is-loading .panel { opacity: .45; }
@@ -164,7 +380,7 @@ p { margin: 0; }
   border: 1px solid var(--border);
   border-left-width: 3px;
   border-radius: 9px;
-  background: rgba(13, 19, 32, 0.9);
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
   backdrop-filter: blur(6px);
 }
 .posture-label {
@@ -176,7 +392,7 @@ p { margin: 0; }
 .globe-hint {
   font-size: 11.5px; color: var(--muted);
   padding: 6px 11px; border-radius: 7px;
-  background: rgba(13, 19, 32, 0.8);
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
   border: 1px solid var(--border);
 }
 
@@ -188,7 +404,7 @@ p { margin: 0; }
   display: inline-flex; align-items: center; gap: 7px;
   font: inherit; font-size: 11.5px; color: var(--text-secondary);
   padding: 6px 11px; border-radius: 7px;
-  background: rgba(13, 19, 32, 0.86);
+  background: color-mix(in srgb, var(--surface-1) 90%, transparent);
   border: 1px solid var(--border);
   cursor: pointer; transition: border-color .14s, color .14s;
 }
@@ -199,10 +415,10 @@ p { margin: 0; }
 .globe-tooltip {
   position: absolute; z-index: 5; pointer-events: none;
   max-width: 280px; padding: 9px 12px; border-radius: 8px;
-  background: rgba(7, 11, 20, 0.96);
+  background: var(--surface-1);
   border: 1px solid var(--border-strong);
   font-size: 12px; line-height: 1.45;
-  box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  box-shadow: var(--shadow-2);
 }
 .globe-tooltip b { display: block; margin-bottom: 3px; }
 .globe-tooltip .tt-lvl { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
@@ -295,7 +511,7 @@ p { margin: 0; }
   padding: 12px 14px;
   background: var(--surface-2);
 }
-.act { border-left: 3px solid var(--lvl-blue); }
+.act { border-left: 3px solid var(--accent); }
 
 .ev-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
 .ev-title { font-size: 12.5px; font-weight: 500; line-height: 1.4; }
@@ -322,7 +538,7 @@ p { margin: 0; }
   display: flex; align-items: center; justify-content: center; gap: 9px;
   padding: 11px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
   color: var(--muted); border-top: 1px solid var(--border);
-  background: rgba(7,11,20,.6);
+  background: color-mix(in srgb, var(--plane) 70%, transparent);
 }
 
 /* ============================================================
@@ -402,7 +618,7 @@ p { margin: 0; }
   padding: 11px 8px; cursor: pointer; transition: color .14s, border-color .14s;
 }
 .rtab:hover { color: var(--text-secondary); }
-.rtab.is-on { color: var(--text-primary); border-bottom-color: var(--lvl-blue); }
+.rtab.is-on { color: var(--text-primary); border-bottom-color: var(--accent); }
 
 .rtab-panels { overflow-y: auto; flex: 1; min-height: 0; }
 .rpanel { display: none; padding: 16px 18px 22px; }
@@ -426,7 +642,7 @@ p { margin: 0; }
 .contact-why { font-size: 10.5px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
 .contact-links { display: flex; gap: 10px; margin-top: 7px; flex-wrap: wrap; }
 .contact-links a, .contact-links span {
-  font-size: 10.5px; font-family: var(--mono); color: var(--lvl-blue);
+  font-size: 10.5px; font-family: var(--mono); color: var(--accent);
   text-decoration: none;
 }
 .contact-links a:hover { text-decoration: underline; }
@@ -465,14 +681,14 @@ p { margin: 0; }
   border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px;
 }
 .fld textarea { font-family: var(--mono); font-size: 10.5px; line-height: 1.55; resize: vertical; }
-.fld input:focus, .fld textarea:focus { outline: none; border-color: var(--lvl-blue); }
+.fld input:focus, .fld textarea:focus { outline: none; border-color: var(--accent); }
 
 .compose-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
 .ctl--primary {
-  background: var(--lvl-blue); color: #fff; border-color: var(--lvl-blue);
+  background: var(--accent); color: var(--accent-contrast); border-color: var(--accent);
   text-decoration: none;
 }
-.ctl--primary:hover { color: #fff; filter: brightness(1.1); }
+.ctl--primary:hover { color: var(--accent-contrast); filter: brightness(1.1); }
 a.ctl { text-decoration: none; }
 
 .socket {
@@ -643,7 +859,7 @@ a.ctl { text-decoration: none; }
   color: var(--text-primary); background: var(--plane);
   border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px;
 }
-.pfield-in input:focus { outline: none; border-color: var(--lvl-blue); }
+.pfield-in input:focus { outline: none; border-color: var(--accent); }
 .pfield-in input.is-dirty { border-color: var(--lvl-yellow); color: var(--lvl-yellow); }
 .pfield-in em {
   font-style: normal; font-size: 10.5px; color: var(--muted);
@@ -664,7 +880,7 @@ a.ctl { text-decoration: none; }
 .feed-name { font-size: 12.5px; font-weight: 500; }
 .feed-top .muted { font-size: 10.5px; }
 .feed-detail { font-size: 11.5px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
-.feed-unlock { font-size: 11px; color: var(--lvl-blue); margin-top: 6px; line-height: 1.5; }
+.feed-unlock { font-size: 11px; color: var(--accent); margin-top: 6px; line-height: 1.5; }
 .feed-url { margin-top: 6px; }
 .feed-url code { font-family: var(--mono); font-size: 10px; color: var(--muted); }
 
@@ -673,7 +889,7 @@ a.ctl { text-decoration: none; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between;
   gap: 22px; padding: 14px 26px;
-  background: rgba(13, 19, 32, .96);
+  background: color-mix(in srgb, var(--surface-1) 96%, transparent);
   border-top: 1px solid var(--border-strong);
   backdrop-filter: blur(8px);
 }
@@ -710,4 +926,190 @@ a.ctl { text-decoration: none; }
   .ranked { padding: 32px 16px 60px; }
   .stat-row { grid-template-columns: 1fr 1fr; }
   .stat:nth-child(2) { border-right: 0; }
+}
+
+/* ============================================================
+   THEME PICKER
+   ============================================================ */
+.themes { display: flex; gap: 4px; align-items: center; }
+.theme-btn {
+  width: 26px; height: 26px; padding: 0; cursor: pointer;
+  border-radius: 7px; border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color .14s, transform .1s;
+}
+.theme-btn:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.theme-btn.is-on { border-color: var(--accent); border-width: 2px; }
+/* The swatch previews the theme it switches to, so the colours here are
+   deliberately literal rather than tokens — a token would render the swatch
+   in the CURRENT theme and every button would look the same. */
+.theme-swatch { width: 13px; height: 13px; border-radius: 50%; display: block; }
+.theme-swatch--light { background: linear-gradient(135deg, #ffffff 50%, #d8dee9 50%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+.theme-swatch--blue  { background: linear-gradient(135deg, #ffffff 50%, #1558d6 50%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+.theme-swatch--sika  { background: linear-gradient(135deg, #ffc700 50%, #d9042b 50%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+.theme-swatch--dark  { background: linear-gradient(135deg, #1b2740 50%, #070b14 50%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+
+/* The Sika brand rule. Deliberately the ONLY place Sika red appears: on a
+   page whose most urgent rung is red, a red header would compete with the one
+   colour that has to mean "six hours". */
+.topbar { position: relative; }
+:root[data-theme="sika"] .topbar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+  background: linear-gradient(90deg, var(--sika-yellow) 0 42%, var(--sika-red) 42% 100%);
+}
+
+/* ============================================================
+   EVENT CARD TOOLS  +  RISK MATRIX POPOVER
+   ============================================================ */
+.ev-tools { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.ev-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  color: var(--muted); background: transparent;
+  border: 1px solid var(--border); border-radius: 6px;
+  transition: color .14s, border-color .14s, background .14s;
+}
+.ev-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--surface-2); }
+.ev-btn.is-on { color: var(--accent); border-color: var(--accent); }
+
+/* The card is deliberately translucent: it floats over the route it describes,
+   and losing sight of that route while reading it defeats the point. */
+.mx-card {
+  position: fixed; z-index: 60; width: 372px; max-width: calc(100vw - 24px);
+  padding: 13px 15px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  animation: mx-in .12s ease-out;
+}
+@keyframes mx-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .mx-card { animation: none; } }
+
+.mx-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.mx-title { font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+.mx-sub { font-size: 10.5px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+.mx-close {
+  font: inherit; font-size: 17px; line-height: 1; cursor: pointer; flex: none;
+  width: 22px; height: 22px; border-radius: 6px;
+  color: var(--muted); background: transparent; border: 1px solid var(--border);
+}
+.mx-close:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+.mx-grid { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.mx-grid th {
+  font-size: 9px; font-weight: 600; letter-spacing: .05em;
+  color: var(--muted); padding: 3px 2px; font-family: var(--mono);
+}
+.mx-corner { text-align: left; }
+.mx-corner span { writing-mode: horizontal-tb; font-size: 8.5px; }
+.mx-row { text-align: right; padding-right: 6px !important; white-space: nowrap; }
+.mx-cell {
+  border: 1px solid var(--grid); height: 30px; min-width: 34px;
+  text-align: center; vertical-align: middle; padding: 2px;
+  background: var(--surface-2);
+}
+.mx-cell.has { background: var(--surface-3); }
+/* The unsourced column sits OUTSIDE the probability axis, and is drawn that
+   way: a dashed gutter, not another column of the grid. */
+.mx-unsourced, .mx-unsourced-h {
+  border-left: 1px dashed var(--axis) !important;
+  background: transparent;
+}
+.mx-unsourced-h { color: var(--lvl-yellow); }
+
+.mx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 1px; }
+.mx-dot--solid  { background: var(--accent); }
+.mx-dot--hollow { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.mx-more { font-size: 8.5px; color: var(--muted); font-family: var(--mono); margin-left: 2px; }
+
+.mx-xaxis {
+  font-size: 8.5px; color: var(--muted); font-family: var(--mono);
+  text-align: center; padding-top: 4px;
+}
+.mx-legend {
+  display: flex; gap: 14px; margin-top: 10px;
+  font-size: 10px; color: var(--muted);
+}
+.mx-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.mx-note {
+  font-size: 10px; color: var(--muted); line-height: 1.5; margin-top: 8px;
+}
+.mx-note b { color: var(--text-secondary); }
+
+/* ============================================================
+   THE ASSISTANT
+   ============================================================ */
+#btn-ask.is-on { color: var(--accent); border-color: var(--accent); }
+/* A dot only when a model is actually reachable. With none connected the
+   button still opens — the panel explains what is missing, which is more
+   useful than a disabled control that explains nothing. */
+#btn-ask.has-model::after {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--lvl-green); margin-left: 2px;
+}
+
+.ask-panel {
+  position: fixed; right: 18px; bottom: 18px; z-index: 70;
+  width: 380px; max-width: calc(100vw - 24px);
+  max-height: min(560px, calc(100vh - 36px));
+  display: flex; flex-direction: column;
+  border-radius: 13px; overflow: hidden;
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
+.ask-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; padding: 13px 15px 11px; border-bottom: 1px solid var(--border);
+}
+.ask-head h3 { font-size: 13px; }
+.ask-scope { font-size: 10.5px; color: var(--muted); font-family: var(--mono); margin-top: 3px; }
+
+.ask-log {
+  flex: 1; min-height: 90px; overflow-y: auto;
+  padding: 12px 15px; display: flex; flex-direction: column; gap: 9px;
+}
+.ask-msg {
+  font-size: 12px; line-height: 1.55; padding: 9px 11px; border-radius: 9px;
+  max-width: 92%;
+}
+.ask-msg--you {
+  align-self: flex-end; background: var(--accent); color: var(--accent-contrast);
+}
+.ask-msg--bot { align-self: flex-start; background: var(--surface-2); }
+
+/* Generated text is fenced off. A planner must be able to tell at a glance
+   which parts of the screen were computed and which were written. */
+.ask-msg.is-generated { border-left: 3px solid var(--accent); }
+.ask-gen {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin-bottom: 6px; font-family: var(--mono);
+}
+.ask-msg.is-empty { border-left: 3px dashed var(--axis); }
+.ask-none { font-size: 11.5px; }
+.ask-none b { color: var(--lvl-yellow); }
+.ask-unlock { font-size: 10.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.ask-wait { color: var(--muted); font-style: italic; }
+
+.ask-compose {
+  display: flex; gap: 7px; padding: 11px 15px; border-top: 1px solid var(--border);
+}
+.ask-compose textarea {
+  flex: 1; font: inherit; font-size: 12px; resize: none;
+  color: var(--text-primary); background: var(--plane);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px;
+}
+.ask-compose textarea:focus { outline: none; border-color: var(--accent); }
+.ask-compose .ctl { align-self: flex-end; }
+.ask-foot {
+  font-size: 10px; color: var(--muted); line-height: 1.45;
+  padding: 0 15px 12px;
+}
+@media (max-width: 720px) {
+  .ask-panel { right: 8px; left: 8px; width: auto; }
 }

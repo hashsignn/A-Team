@@ -10,19 +10,28 @@
 // Level colours. RESERVED — they mean "how soon must someone decide",
 // and nothing else. Read from CSS so the palette lives in one file.
 // ---------------------------------------------------------------
-const css = getComputedStyle(document.documentElement);
-const LEVEL_COLOR = {
-  green:  css.getPropertyValue('--lvl-green').trim(),
-  white:  css.getPropertyValue('--lvl-white').trim(),
-  blue:   css.getPropertyValue('--lvl-blue').trim(),
-  yellow: css.getPropertyValue('--lvl-yellow').trim(),
-  red:    css.getPropertyValue('--lvl-red').trim(),
-};
-const BAND_COLOR = {
-  minor:    css.getPropertyValue('--band-minor').trim(),
-  moderate: css.getPropertyValue('--band-moderate').trim(),
-  severe:   css.getPropertyValue('--band-severe').trim(),
-};
+/* Read live, never cached at module load.
+ *
+ * Four themes share this script, and the White rung is a different colour in
+ * each of them: white on the dark surface, slate on the three light ones,
+ * because a white dot on a white page is not a quiet level, it is no level.
+ * A palette snapshotted at startup would survive a theme switch and repaint
+ * the globe in the previous theme's colours. */
+const token = (name) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+const LEVEL_COLOR = {};
+const BAND_COLOR = {};
+
+function readPalette() {
+  for (const level of ['green', 'white', 'blue', 'yellow', 'red']) {
+    LEVEL_COLOR[level] = token(`--lvl-${level}`);
+  }
+  for (const band of ['minor', 'moderate', 'severe']) {
+    BAND_COLOR[band] = token(`--band-${band}`);
+  }
+}
+readPalette();
 const LEVEL_ORDER = ['red', 'yellow', 'blue', 'white', 'green'];
 
 /* Visual weight follows URGENCY, not luminance.
@@ -144,6 +153,7 @@ async function boot() {
   initGlobe(countries, board);
   renderFilters();
   initResponseTabs();
+  initAsk();
   applyBoard(board);
 
   $('asof-form').addEventListener('submit', (e) => {
@@ -208,29 +218,58 @@ function applyBoard(board) {
 // ===============================================================
 // Globe
 // ===============================================================
+/* Everything on the globe that comes from a CSS token.
+ *
+ * Split out of initGlobe because a theme switch has to repaint a globe that
+ * already exists — rebuilding it would drop the camera position and the
+ * selection, and the point of switching themes is to look at the same board
+ * in a different skin. */
+function paintGlobe(globe) {
+  globe
+    .atmosphereColor(token('--globe-atmos'))
+    .polygonCapColor(() => token('--globe-cap'))
+    .polygonSideColor(() => token('--globe-side'))
+    .polygonStrokeColor(() => token('--globe-stroke'));
+
+  const material = globe.globeMaterial();
+  material.color.set(token('--globe-land'));
+  material.emissive.set(token('--globe-emissive'));
+  material.shininess = parseFloat(token('--globe-shine')) || 0.1;
+  material.needsUpdate = true;
+}
+
+document.addEventListener('themechange', () => {
+  readPalette();
+  if (!state.globe || !state.board) return;
+  paintGlobe(state.globe);
+  // Route and node colours are level colours, so they move with the palette.
+  state.globe.pointsData(state.board.nodes);
+  refreshPaths();
+  renderLadder(state.board.levels);
+  renderTable();
+  // Re-select rather than re-render: the detail panel draws an SVG radar in
+  // band colours, and the cheapest correct way to repaint it is the path that
+  // already knows how to build it. `fly: false` keeps the camera where it is.
+  if (state.selected) select(state.selected, { fly: false });
+});
+
 function initGlobe(countries, board) {
   const el = $('globe');
 
   const globe = Globe()(el)
     .backgroundColor('rgba(0,0,0,0)')
     .showAtmosphere(true)
-    .atmosphereColor('#3d8bfd')
     .atmosphereAltitude(0.17)
     .showGraticules(true);
 
   // No texture image: a vector globe stays sharp at any zoom, needs no
   // multi-megabyte binary, and keeps the routes as the brightest thing on
   // screen — which is the point of the pane.
-  globe.globeMaterial().color.set('#0a1526');
-  globe.globeMaterial().emissive.set('#050b16');
-  globe.globeMaterial().shininess = 0.12;
-
   globe
     .polygonsData(countries.features)
-    .polygonCapColor(() => 'rgba(28, 46, 78, 0.78)')
-    .polygonSideColor(() => 'rgba(10, 21, 38, 0)')
-    .polygonStrokeColor(() => 'rgba(112, 148, 204, 0.42)')
     .polygonAltitude(0.004);
+
+  paintGlobe(globe);
 
   // --- ports & nodes -------------------------------------------------
   globe
@@ -238,7 +277,7 @@ function initGlobe(countries, board) {
     .pointLat('lat').pointLng('lon')
     .pointAltitude(0.005)
     .pointRadius((n) => n.chokepoint ? 0.16 : 0.22)
-    .pointColor((n) => n.chokepoint ? 'rgba(169,182,206,0.75)' : 'rgba(224,235,255,0.92)')
+    .pointColor((n) => n.chokepoint ? token('--globe-choke') : token('--globe-port'))
     .pointsMerge(false)
     .onPointHover((n) => n ? showTip(nodeTip(n)) : hideTip());
 
@@ -326,10 +365,27 @@ function pathData() {
       exposure_chf: r.exposure_chf,
       shipments_at_risk: r.shipments_at_risk,
       pts,
-      color: withAlpha(LEVEL_COLOR[r.level], selected ? 1 : dim ? w.alpha * 0.4 : w.alpha),
+      color: withAlpha(LEVEL_COLOR[r.level],
+        selected ? 1 : lift(dim ? w.alpha * 0.4 : w.alpha)),
       stroke: selected ? w.stroke + 1.4 : w.stroke,
     };
   });
+}
+
+/* Raise a transparency floor on the light themes.
+ *
+ * WEIGHT encodes the URGENCY ORDERING, which is a property of the ladder and
+ * does not change with the theme — Red stays loudest, Green stays a whisper.
+ * What does change is how much transparency a background can absorb. Against
+ * near-black, alpha 0.24 still reads as a line. Against white it reads as
+ * nothing, and a Normal route that renders invisible is indistinguishable
+ * from a route the gate never found.
+ *
+ * So the floor moves, the ordering does not: each weight is remapped into
+ * [floor, 1] instead of [0, 1]. */
+function lift(alpha) {
+  const floor = parseFloat(token('--path-alpha-floor')) || 0;
+  return floor + alpha * (1 - floor);
 }
 
 function withAlpha(hex, a) {
@@ -646,9 +702,32 @@ function renderEvents(events) {
       ? '<span class="pill pill--unsourced">P unsourced</span>'
       : `<span class="pill">P ${Math.round(e.probability * 100)}%</span>`;
     return `
-      <div class="ev">
+      <div class="ev" data-event="${esc(e.event_id)}">
         <div class="ev-top">
-          <span class="ev-title">${esc(e.title)}</span>${p}
+          <span class="ev-title">${esc(e.title)}</span>
+          <span class="ev-tools">
+            ${p}
+            <button type="button" class="ev-btn" data-matrix="${esc(e.event_id)}"
+                    title="Risk matrix for this event"
+                    aria-label="Risk matrix for ${esc(e.title)}">
+              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                <rect x="1.5" y="1.5" width="13" height="13" rx="1.5"
+                      fill="none" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M6 1.5v13M10.5 1.5v13M1.5 6h13M1.5 10.5h13"
+                      stroke="currentColor" stroke-width="1"/>
+                <rect x="2" y="11" width="3.5" height="3" fill="currentColor" opacity=".55"/>
+              </svg>
+            </button>
+            <button type="button" class="ev-btn" data-ask="${esc(e.event_id)}"
+                    title="Ask about this event"
+                    aria-label="Ask about ${esc(e.title)}">
+              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                <path d="M14 9.5a2 2 0 0 1-2 2H6l-3.5 2.6V11.5h-.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+                      transform="translate(1 0)" fill="none" stroke="currentColor"
+                      stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </span>
         </div>
         <div class="ev-meta">
           ${esc(e.severity)} · ${esc(e.event_class.replace(/_/g, ' '))} ·
@@ -898,3 +977,328 @@ boot().catch((err) => {
   console.error(err);
   $('brand-sub').textContent = 'failed to load — ' + err.message;
 });
+
+// ===============================================================
+// Per-event risk matrix
+// ===============================================================
+/* A small translucent card, opened from the grid button on an event.
+ *
+ * WHY PER EVENT, AND WHY HIDDEN UNTIL ASKED
+ * -----------------------------------------
+ * There is deliberately no dashboard-level P×I scatter. Aggregating every
+ * event into one grid throws away the only thing a planner needs from it —
+ * *which of my shipments*. The event is the question; the points are the
+ * answer, and each point is a shipment.
+ *
+ * WHAT THE AXES MEAN
+ * ------------------
+ *   x  P(this shipment is late)
+ *   y  the bill IF it is late   (NOT the expected loss)
+ *
+ * Those are two different questions, which is the entire diagnostic value of
+ * a matrix. The expected loss already has the probability multiplied in, so
+ * plotting it against P would count the same probability on both axes and
+ * collapse every unlikely shipment into one corner. The engine computes the
+ * conditional loss instead, and the two axes multiply back to the expected
+ * loss — see engine/score/impact.py.
+ *
+ * Lead time is a RING, not a third axis: solid means options remain, hollow
+ * means they have run out. A third spatial axis would destroy legibility.
+ */
+const MATRIX = { open: null };
+
+function impactRows(grid) {
+  // Declared most severe first; the grid draws worst at the top.
+  return grid.impact_bands;
+}
+
+function openMatrix(eventId, anchorEl) {
+  const board = state.board;
+  if (!board) return;
+  let event = null;
+  for (const route of board.routes) {
+    const found = (route.events || []).find((e) => e.event_id === eventId);
+    if (found) { event = found; break; }
+  }
+  if (!event) return;
+
+  const grid = board.matrix_grid;
+  const m = event.matrix;
+  const rows = impactRows(grid);
+  const cols = grid.probability_bands;
+
+  // Count shipments per cell. A cell is a COUNT, not a heat value: colouring
+  // by density would invent a severity ordering the bands already state.
+  const cells = new Map();
+  const solid = new Map();
+  for (const pt of m.points) {
+    const key = `${pt.impact_band}|${pt.probability_band}`;
+    cells.set(key, (cells.get(key) || 0) + 1);
+    if (pt.ring === 'solid') solid.set(key, (solid.get(key) || 0) + 1);
+  }
+
+  const unsourced = m.points.filter((p) => p.p_late === null);
+
+  const head = `
+    <div class="mx-head">
+      <div>
+        <div class="mx-title">${esc(event.title)}</div>
+        <div class="mx-sub">${m.shipments} shipment(s) · ${m.still_actionable} still actionable</div>
+      </div>
+      <button type="button" class="mx-close" id="mx-close" aria-label="Close">×</button>
+    </div>`;
+
+  const body = `
+    <table class="mx-grid">
+      <thead>
+        <tr>
+          <th class="mx-corner"><span>impact if late</span></th>
+          ${cols.map((c) => `<th>${esc(c.label)}</th>`).join('')}
+          ${unsourced.length ? `<th class="mx-unsourced-h">${esc(grid.unsourced_band.label)}</th>` : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r) => `
+          <tr>
+            <th class="mx-row" title="${esc(r.action)}">${esc(r.label)}</th>
+            ${cols.map((c) => {
+              const key = `${r.id}|${c.id}`;
+              const n = cells.get(key) || 0;
+              const s = solid.get(key) || 0;
+              return `<td class="mx-cell${n ? ' has' : ''}"
+                          title="${n ? `${n} shipment(s) — ${esc(r.action)}` : 'empty'}">
+                ${n ? dots(n, s) : ''}
+              </td>`;
+            }).join('')}
+            ${unsourced.length ? (() => {
+              const n = unsourced.filter((p) => p.impact_band === r.id).length;
+              const s = unsourced.filter((p) => p.impact_band === r.id && p.ring === 'solid').length;
+              return `<td class="mx-cell mx-unsourced${n ? ' has' : ''}">${n ? dots(n, s) : ''}</td>`;
+            })() : ''}
+          </tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td></td>
+          <td colspan="${cols.length + (unsourced.length ? 1 : 0)}" class="mx-xaxis">
+            P(this shipment is late) →
+          </td>
+        </tr>
+      </tfoot>
+    </table>`;
+
+  const note = unsourced.length
+    ? `<p class="mx-note"><b>${unsourced.length}</b> shipment(s) sit in the
+       <b>${esc(grid.unsourced_band.label)}</b> band, outside the axis: this event's
+       probability could not be sourced, so there is no x for them. They are not
+       placed at 0.5 — a made-up number looks exactly like evidence.</p>`
+    : '';
+
+  const legend = `
+    <div class="mx-legend">
+      <span><i class="mx-dot mx-dot--solid"></i> options still open</span>
+      <span><i class="mx-dot mx-dot--hollow"></i> too late to act</span>
+    </div>
+    <p class="mx-note">Vertical axis is the bill <b>if</b> the shipment is late,
+      not the probability-weighted loss — otherwise the odds would be counted on
+      both axes.</p>`;
+
+  const card = document.createElement('div');
+  card.className = 'mx-card';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', `Risk matrix for ${event.title}`);
+  card.innerHTML = head + body + legend + note;
+  document.body.appendChild(card);
+  positionMatrix(card, anchorEl);
+
+  MATRIX.open = { card, eventId };
+  card.querySelector('#mx-close').addEventListener('click', closeMatrix);
+}
+
+function dots(n, solidCount) {
+  // Capped: past a handful the count is the information, not the arrangement.
+  const shown = Math.min(n, 6);
+  let out = '';
+  for (let i = 0; i < shown; i += 1) {
+    out += `<i class="mx-dot mx-dot--${i < solidCount ? 'solid' : 'hollow'}"></i>`;
+  }
+  if (n > shown) out += `<span class="mx-more">+${n - shown}</span>`;
+  return out;
+}
+
+function positionMatrix(card, anchorEl) {
+  const pad = 10;
+  const box = anchorEl ? anchorEl.getBoundingClientRect() : null;
+  const size = card.getBoundingClientRect();
+  let left = box ? box.left - size.width - pad : window.innerWidth - size.width - 24;
+  let top = box ? box.top - 8 : 80;
+  if (left < pad) left = box ? Math.min(box.right + pad, window.innerWidth - size.width - pad) : pad;
+  top = Math.max(pad, Math.min(top, window.innerHeight - size.height - pad));
+  card.style.left = `${Math.max(pad, left)}px`;
+  card.style.top = `${top}px`;
+}
+
+function closeMatrix() {
+  if (!MATRIX.open) return;
+  MATRIX.open.card.remove();
+  MATRIX.open = null;
+}
+
+// Close on Escape, on a click outside, and on anything that changes the board
+// underneath it — a matrix describing a route you have navigated away from is
+// worse than no matrix.
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMatrix(); });
+document.addEventListener('click', (e) => {
+  if (!MATRIX.open) return;
+  if (e.target.closest('.mx-card') || e.target.closest('[data-matrix]')) return;
+  closeMatrix();
+});
+
+// Delegated so it survives every re-render of the event list.
+document.addEventListener('click', (e) => {
+  const mx = e.target.closest('[data-matrix]');
+  if (mx) {
+    e.stopPropagation();
+    const id = mx.dataset.matrix;
+    const already = MATRIX.open && MATRIX.open.eventId === id;
+    closeMatrix();
+    if (!already) openMatrix(id, mx);
+  }
+});
+
+// ===============================================================
+// The assistant
+// ===============================================================
+/* One panel, two entry points: the topbar button asks about the board, the
+ * speech-bubble on an event asks about that event.
+ *
+ * EVERY ANSWER IS MARKED. The numbers on this page were computed by the
+ * engine and can be reproduced from the command line; an answer here was
+ * written by a language model from a context assembled out of those numbers.
+ * Those are different kinds of claim and the planner is entitled to tell them
+ * apart at a glance, so generated text gets a visible rule and a label rather
+ * than being dropped into the page looking like everything else.
+ */
+const ASK = { scope: null, busy: false };
+
+function askPanel() { return $('ask-panel'); }
+
+function openAsk(scope) {
+  ASK.scope = scope || { kind: 'board' };
+  const panel = askPanel();
+  panel.hidden = false;
+  $('ask-scope').textContent = ASK.scope.kind === 'event'
+    ? `about: ${ASK.scope.title}`
+    : 'about the whole board';
+  $('btn-ask').classList.add('is-on');
+  $('ask-input').focus();
+  if (ASK.scope.kind === 'event') {
+    $('ask-input').value = '';
+    $('ask-input').placeholder = 'e.g. how bad is this if it happens?';
+  } else {
+    $('ask-input').placeholder = 'e.g. which route needs a decision first, and why?';
+  }
+}
+
+function closeAsk() {
+  askPanel().hidden = true;
+  $('btn-ask').classList.remove('is-on');
+}
+
+function askBubble(who, html, cls) {
+  const log = $('ask-log');
+  const el = document.createElement('div');
+  el.className = `ask-msg ask-msg--${who}${cls ? ' ' + cls : ''}`;
+  el.innerHTML = html;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+async function sendAsk() {
+  if (ASK.busy) return;
+  const input = $('ask-input');
+  const question = input.value.trim();
+  if (!question) return;
+
+  askBubble('you', esc(question));
+  input.value = '';
+  ASK.busy = true;
+  const pending = askBubble('bot', '<span class="ask-wait">thinking…</span>');
+
+  const body = { question };
+  if (ASK.scope.kind === 'event') body.event_id = ASK.scope.event_id;
+  if (state.selected) body.route_id = state.selected;
+
+  const p = state.params || {};
+  const qs = new URLSearchParams({
+    as_of: p.as_of || DEFAULT_AS_OF,
+    shipments: String(p.shipments || 150),
+  });
+
+  try {
+    const res = await fetch(`/api/ask?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json();
+    pending.remove();
+    if (out.answered) {
+      askBubble('bot',
+        `<div class="ask-gen">generated by ${esc(out.model || out.backend)}</div>`
+        + esc(out.answer).replace(/\n/g, '<br>'),
+        'is-generated');
+    } else {
+      // Not an error. The board is computed without a model and is unaffected
+      // by its absence, so the panel says what is missing and what it buys.
+      askBubble('bot',
+        `<div class="ask-none"><b>No model is connected.</b> ${esc(out.reason || '')}</div>`
+        + (out.unlocks_if_connected
+            ? `<div class="ask-unlock">Connecting one would add: ${esc(out.unlocks_if_connected)}</div>`
+            : '')
+        + '<div class="ask-unlock">Every number on this page was computed without '
+        + 'one and is unaffected.</div>',
+        'is-empty');
+    }
+  } catch (err) {
+    pending.remove();
+    askBubble('bot', `<div class="ask-none">Could not reach the assistant: ${esc(err.message)}</div>`, 'is-empty');
+  } finally {
+    ASK.busy = false;
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const askBtn = e.target.closest('[data-ask]');
+  if (askBtn) {
+    e.stopPropagation();
+    const id = askBtn.dataset.ask;
+    let title = 'this event';
+    for (const route of (state.board ? state.board.routes : [])) {
+      const found = (route.events || []).find((x) => x.event_id === id);
+      if (found) { title = found.title; break; }
+    }
+    openAsk({ kind: 'event', event_id: id, title });
+  }
+});
+
+function initAsk() {
+  $('btn-ask').addEventListener('click', () => {
+    askPanel().hidden ? openAsk({ kind: 'board' }) : closeAsk();
+  });
+  $('ask-close').addEventListener('click', closeAsk);
+  $('ask-send').addEventListener('click', sendAsk);
+  $('ask-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAsk(); }
+  });
+
+  // Say up front whether anything is running, so nobody types a question into
+  // a box that was never going to answer.
+  fetch('/api/model').then((r) => r.json()).then((m) => {
+    $('btn-ask').title = m.status === 'connected'
+      ? `Assistant — ${m.model}`
+      : 'Assistant — no model connected';
+    $('btn-ask').classList.toggle('has-model', m.status === 'connected');
+  }).catch(() => {});
+}

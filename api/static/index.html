@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Supply Chain Risk Radar</title>
 <link rel="stylesheet" href="/styles.css">
 <link rel="icon" href="data:,">
+<!-- Not deferred: it sets data-theme before the first paint, so the page
+     never flashes the previous theme, and before app.js reads any colour. -->
+<script src="/theme.js"></script>
 </head>
 <body>
 
@@ -44,7 +47,17 @@
          owns, which 45 variables it watches, where the ladder cutoffs sit and
          who gets drawn in. The cutoffs are editable, which is the surface Q3
          asked for — "will also be able to play with the assumptions". -->
+    <button type="button" class="ctl" id="btn-ask" aria-label="Assistant">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+        <path d="M15 9.5a2 2 0 0 1-2 2H7l-3.5 2.6V11.5H3a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+              fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+      Ask
+    </button>
     <a class="ctl" id="link-profile" href="/profile">Risk profile</a>
+
+    <!-- Four themes. The swatches preview the theme they switch to. -->
+    <nav class="themes" id="themes" aria-label="Colour theme"></nav>
   </header>
 
   <div class="stage-body">
@@ -249,6 +262,31 @@
 
 <script src="/vendor/globe.gl.min.js"></script>
 <script src="/vendor/topojson-client.min.js"></script>
+<!-- ============================================================
+     THE ASSISTANT
+
+     Answers are grounded in the board and nothing else. Every answer is
+     visibly marked as generated: the numbers on this page were computed by
+     the engine and can be reproduced from the command line, an answer here
+     was written by a model. Those are different kinds of claim.
+     ============================================================ -->
+<aside class="ask-panel" id="ask-panel" hidden aria-label="Assistant">
+  <div class="ask-head">
+    <div>
+      <h3>Ask</h3>
+      <p class="ask-scope" id="ask-scope"></p>
+    </div>
+    <button type="button" class="mx-close" id="ask-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="ask-log" id="ask-log" aria-live="polite"></div>
+  <div class="ask-compose">
+    <textarea id="ask-input" rows="2" placeholder="Ask about the board…"></textarea>
+    <button type="button" class="ctl ctl--primary" id="ask-send">Send</button>
+  </div>
+  <p class="ask-foot">Grounded in the current board. It will say so rather than
+    guess when the board does not carry the answer.</p>
+</aside>
+
 <script src="/app.js"></script>
 </body>
 </html>
