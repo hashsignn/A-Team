@@ -1,0 +1,701 @@
+# =====================================================================
+# THE FOUR-LAYER OUTBOUND TAXONOMY
+# =====================================================================
+# Layer 1 (external disruption events) lives in variables.yaml — 45 of them,
+# already specified. This file adds the three layers that describe OUR side of
+# the encounter, and the one concept that makes them compose:
+#
+#     PATHWAY.  An event threatens freight in one of two ways.
+#
+#       delay   the freight cannot move, or moves late. Nothing happens to
+#               the goods; the clock is the damage.
+#       damage  the goods themselves are harmed, whether or not they are late.
+#               A freeze-critical polymer sitting in a -7 °C yard is ruined
+#               on schedule.
+#
+#     Some events carry both: a tunnel closure delays everyone, and strands a
+#     reefer whose genset has twelve hours of fuel.
+#
+# WHY PATHWAY IS THE LOAD-BEARING IDEA
+# ------------------------------------
+# Without it, "cargo vulnerability" has to be a multiplier, and a multiplier
+# forces a choice between two wrong answers when a severe event meets
+# invulnerable cargo:
+#
+#     multiplier ≈ 0  →  the dock strike stops mattering, although the
+#                        shipment is still four days late
+#     multiplier ≈ 1  →  ambient dry mortar is flagged for a freeze
+#
+# Neither is right, and no override rule fixes it, because the question was
+# malformed. With pathways the question splits and both halves have clean
+# answers: the strike's DELAY pathway applies (it always does — delay does not
+# care what is in the box), its DAMAGE pathway does not (mortar does not care
+# about a strike). The clash dissolves instead of being adjudicated.
+#
+# Everything below is therefore a GATE or a CONSEQUENCE, never a weight:
+#
+#   Layer 2  asset  → can this event reach this equipment at all?     gate
+#   Layer 4  cargo  → does the damage pathway open?                   gate
+#   Layer 3  channel→ what does lateness cost, and how much is free?  consequence
+#
+# PROVENANCE
+# ----------
+# Every number here is ASSUMED BY US unless marked otherwise. They are the
+# numbers a planner is meant to argue with, which is why they are in config
+# and not in code. `source: assumed` is on the ones most likely to be wrong.
+
+version: 1
+
+# =====================================================================
+# LAYER 2 — TRANSPORT MODE & FLEET ASSET CONFIGURATION
+# =====================================================================
+# An asset is the equipment actually under the freight. It decides which
+# events can physically reach it: a driving ban reaches anything on a road, a
+# crane outage reaches nothing that never enters a terminal, and a genset
+# failure reaches only equipment that has a genset.
+
+layer2_assets:
+
+  # ---- ROAD ----
+  road_ftl:
+    label: Full truckload (FTL)
+    mode: road
+    family: road
+    description: >
+      One consignment, one vehicle, origin to destination. No cross-dock, so
+      terminal events do not reach it; the corridor is the whole exposure.
+    touches_terminals: false
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [road_ltl, rail_combined]
+
+  road_ltl:
+    label: Less-than-truckload (LTL)
+    mode: road
+    family: road
+    description: >
+      Consolidated freight moving through one or more cross-docks. Terminal
+      gridlock reaches it; an FTL on the same corridor is untouched. This is
+      the single most common reason two shipments on one lane get different
+      answers.
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [road_ftl, parcel]
+
+  parcel:
+    label: Parcel / groupage
+    mode: road
+    family: road
+    description: Small consignments through a hub-and-spoke parcel network.
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [road_ltl]
+
+  flatbed:
+    label: Flatbed
+    mode: road
+    family: road
+    description: >
+      Open deck. Wind-exposed while loaded and while travelling, and
+      weather-exposed in a way a box trailer is not — sheeting is not a roof.
+    open_deck: true
+    wind_sensitive: true
+    touches_terminals: false
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [curtain_sider]
+
+  curtain_sider:
+    label: Curtain-sider
+    mode: road
+    family: road
+    description: >
+      Side-loading tautliner. High-sided and light, so it is the first
+      equipment banned or blown over in a gale — a curtain is a sail.
+    open_deck: false
+    wind_sensitive: true
+    touches_terminals: false
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [dry_van, flatbed]
+
+  dry_van:
+    label: Ambient dry van
+    mode: road
+    family: road
+    description: Enclosed, unheated, unrefrigerated box trailer.
+    open_deck: false
+    wind_sensitive: false
+    touches_terminals: false
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [curtain_sider, road_ltl]
+
+  reefer:
+    label: Temperature-controlled (reefer / heated)
+    mode: road
+    family: road
+    description: >
+      Actively conditioned by a genset. Protects the cargo WHILE RUNNING and
+      only while running: a reefer stuck at a blocked border with a finite
+      fuel autonomy is a countdown, not a guarantee.
+    open_deck: false
+    powered_conditioning: true
+    conditioning_autonomy_hours: 30     # source: assumed — typical genset tank
+    touches_terminals: false
+    driver_hours_bound: true
+    substitutable_by: [dry_van]
+
+  adr_tanker:
+    label: ADR chemical tanker (liquid bulk)
+    mode: road
+    family: road
+    description: >
+      Liquid bulk under ADR. Tunnel-restricted by hazard class, banned from
+      many low-emission and curfew zones, and not substitutable at short
+      notice — the fleet is small and the driver needs an ADR certificate.
+    adr: true
+    tunnel_restricted: true
+    open_deck: false
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: []                # deliberately empty: there is no swap
+
+  silo_tanker:
+    label: Dry bulk silo tanker
+    mode: road
+    family: road
+    description: >
+      Pneumatic discharge of dry powder. Moisture ingress during transfer
+      ruins a load, so rain at the delivery window is a real constraint that
+      no box trailer has.
+    moisture_exposed_on_transfer: true
+    open_deck: false
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: []
+
+  moffett:
+    label: Truck-mounted forklift (Moffett) / crane truck
+    mode: road
+    family: road
+    description: >
+      Self-unloading vehicle for sites with no dock or handling equipment.
+      Where the receiving site cannot unload without it, there is no
+      substitute vehicle — the constraint is at the kerb, not on the road.
+    self_unloading: true
+    open_deck: true
+    wind_sensitive: true
+    touches_terminals: false
+    driver_hours_bound: true
+    substitutable_by: []
+
+  # ---- INTERMODAL & OTHER ----
+  rail_combined:
+    label: Combined road–rail
+    mode: rail
+    family: intermodal
+    description: >
+      Road legs at each end, rail in the middle. Inherits BOTH exposures,
+      which is why it is modelled as its own asset rather than as rail.
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: true
+    substitutable_by: [road_ftl]
+
+  barge:
+    label: Inland barge
+    mode: barge
+    family: water
+    description: >
+      River and canal. Uniquely exposed to draft: a low-water derate is a
+      capacity cut, not a stoppage, and that distinction is the whole Rhine
+      case.
+    draft_dependent: true
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: false
+    substitutable_by: [rail_combined, road_ftl]
+
+  short_sea:
+    label: Short-sea container
+    mode: sea
+    family: water
+    description: Coastal and feeder container services.
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: false
+    substitutable_by: [rail_combined]
+
+  deep_sea:
+    label: Deep-sea container
+    mode: sea
+    family: water
+    description: >
+      Intercontinental. Long transit means large absolute delays, and a
+      missed sailing rolls a full service interval — typically a week.
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: false
+    substitutable_by: [air_cargo]
+
+  air_cargo:
+    label: Air cargo
+    mode: sea            # no separate air mode in the network model yet
+    family: air
+    description: >
+      The expedite of last resort. ADR classes are heavily restricted or
+      forbidden, so it is NOT a universal substitute — see the clash rules.
+      Modelled under the sea mode until the network gains an air mode; the
+      gate reads the asset, not the mode, so nothing downstream is wrong.
+    touches_terminals: true
+    powered_conditioning: false
+    driver_hours_bound: false
+    adr_restricted: true
+    substitutable_by: []
+
+# ---- nodes & corridors -------------------------------------------------
+layer2_nodes:
+  plant:            {label: Origin manufacturing plant, buffers: true}
+  regional_dc:      {label: Regional distribution centre, buffers: true}
+  sea_port:         {label: Sea port, buffers: false}
+  rail_hub:         {label: Rail hub, buffers: false}
+  cross_dock:       {label: Cross-dock terminal, buffers: false}
+  ten_t_corridor:   {label: TEN-T corridor segment, buffers: false}
+  border_crossing:  {label: Border crossing, buffers: false}
+  jobsite_staging:  {label: Jobsite staging area, buffers: false}
+
+# =====================================================================
+# LAYER 3 — DELIVERY CHANNEL & RECEIVING CRITICALITY
+# =====================================================================
+# A CONSEQUENCE model, not a multiplier.
+#
+# `free_hours` is the tolerance: lateness inside it costs nothing, which is
+# the distinction a single "criticality 1-5" score cannot express. A
+# distributor with four hours of dock flexibility and a jobsite with a booked
+# crane slot are not 3 and 5 on the same scale — one has a buffer and the
+# other has none, and that is a different KIND of fact.
+#
+# `penalty_shape` says how cost accrues once the tolerance is gone:
+#   step       a fixed charge the moment you are late (retail chargeback)
+#   linear     per hour or per day (most contracts)
+#   cliff      a large fixed cost at a hard boundary (line stoppage, crane slot)
+
+layer3_channels:
+
+  direct_to_jobsite:
+    label: Direct-to-jobsite
+    description: >
+      Active construction site. Crane slot booked, no storage, and a crew
+      standing idle the moment the truck is late. The receiving constraint is
+      a booked window measured in minutes, not a warehouse.
+    free_hours: 0.5
+    penalty_shape: cliff
+    cliff_chf: 4200                     # source: assumed — crew + crane idle day
+    per_day_chf: 2500                   # source: assumed
+    reroute_flexible: false
+    can_receive_out_of_hours: false
+    notes: >
+      A failed delivery here is usually a wasted day for a whole crew, not a
+      late pallet. It is the channel where acting early is worth the most.
+
+  jit_jis:
+    label: Just-in-time / just-in-sequence (OEM)
+    description: >
+      Automotive assembly. Sequenced to the line, no inbound buffer by design,
+      and a contractual line-stoppage rate that dwarfs the freight value.
+    free_hours: 0.25
+    penalty_shape: cliff
+    cliff_chf: 15000                    # source: assumed — one stoppage hour
+    per_day_chf: 15000                  # source: assumed
+    reroute_flexible: false
+    can_receive_out_of_hours: true
+    notes: >
+      The highest consequence in the book and the lowest tolerance. Also the
+      channel most worth an expedite: almost any air freight bill is cheaper
+      than one stopped hour.
+
+  retail_diy:
+    label: Retail / DIY mega-store
+    description: >
+      Timed booking slot with an automatic chargeback for a missed window.
+      The penalty is administrative and immediate rather than operational.
+    free_hours: 1.0
+    penalty_shape: step
+    step_chf: 350                       # source: assumed — typical OTIF charge
+    per_day_chf: 350
+    reroute_flexible: false
+    can_receive_out_of_hours: false
+    notes: >
+      A step, not a cliff: being six hours late and six days late cost
+      roughly the same, which changes what mitigation is worth buying.
+
+  b2b_distributor:
+    label: B2B wholesaler / distributor DC
+    description: >
+      Central warehouse holding buffer stock, with flexible multi-hour dock
+      appointments. Most tolerant channel in the book.
+    free_hours: 8.0
+    penalty_shape: linear
+    per_day_chf: 180                    # source: assumed
+    reroute_flexible: true
+    can_receive_out_of_hours: true
+    notes: >
+      This is the channel that makes a severe event produce a calm answer,
+      and the tool must be willing to say so. See scenario B.
+
+  internal_replenishment:
+    label: Inter-company / internal warehouse replenishment
+    description: >
+      Our own network. No external penalty, fully reroutable, and the first
+      thing to sacrifice when capacity is short.
+    free_hours: 24.0
+    penalty_shape: linear
+    per_day_chf: 40                     # source: assumed — carrying cost only
+    reroute_flexible: true
+    can_receive_out_of_hours: true
+    notes: >
+      Deliberately cheap. A tool that alerts on internal replenishment at the
+      same volume as jobsite deliveries trains people to ignore it.
+
+# =====================================================================
+# LAYER 4 — CARGO VULNERABILITY & PHYSICAL HANDLING CONSTRAINTS
+# =====================================================================
+# A GATE on the damage pathway. Each class declares the conditions under which
+# the goods themselves are harmed. Where no condition matches, the damage
+# pathway stays shut and only delay applies — which is the correct answer for
+# ambient dry goods in a strike, and the answer a multiplier cannot give.
+#
+# `irreversible` marks damage that cannot be undone by arriving somewhere
+# warm. Coagulated polymer is scrap; a chilled-but-not-frozen adhesive is not.
+# That flag is what separates "expedite it" from "write it off and remake".
+
+layer4_cargo:
+
+  freeze_critical:
+    label: Freeze-critical (water-based)
+    description: >
+      Water-based dispersions, polymer emulsions, admixtures. Below the
+      threshold the emulsion breaks — irreversible coagulation — and the
+      product is scrap, not late.
+    damage_conditions:
+      - condition: ambient_below_c
+        threshold_c: 5.0                # source: assumed — conservative margin
+        hard_threshold_c: 0.0
+        irreversible: true
+        note: >
+          5 °C is the precaution and 0 °C is the physics. Between them the
+          product is at risk but recoverable; below 0 °C it is scrap.
+    protected_by_assets: [reefer]
+    scrap_fraction_if_damaged: 1.0
+    families_at_risk: [climate]
+
+  heat_critical:
+    label: Heat-critical
+    description: >
+      Reactive resins and solvent blends that lose viscosity, skin over, or
+      approach flashpoint in a hot trailer. A closed dark trailer in summer
+      runs well above ambient.
+    damage_conditions:
+      - condition: ambient_above_c
+        threshold_c: 35.0               # source: assumed
+        hard_threshold_c: 45.0
+        irreversible: true
+        note: Trailer interior runs 10-15 °C above ambient in direct sun.
+    protected_by_assets: [reefer]
+    scrap_fraction_if_damaged: 1.0
+    families_at_risk: [climate]
+
+  controlled_ambient:
+    label: Controlled ambient
+    description: >
+      Wide but not unlimited tolerance. Degrades at extremes, slowly, and
+      mostly recoverably.
+    damage_conditions:
+      - condition: ambient_below_c
+        threshold_c: -15.0
+        hard_threshold_c: -25.0
+        irreversible: false
+      - condition: ambient_above_c
+        threshold_c: 50.0
+        hard_threshold_c: 60.0
+        irreversible: false
+    protected_by_assets: [reefer]
+    scrap_fraction_if_damaged: 0.3
+    families_at_risk: [climate]
+
+  short_pot_life:
+    label: Short pot-life / curing-limited
+    description: >
+      Ready-mix, activated resins, anything with a clock running from the
+      moment it was made. The ONLY class where delay is itself damage: past
+      the pot life the product is scrap however carefully it was carried.
+    damage_conditions:
+      - condition: elapsed_hours_above
+        threshold_hours: 8.0            # source: assumed — typical ready-mix
+        hard_threshold_hours: 12.0
+        irreversible: true
+        note: >
+          This is the one case where the delay pathway feeds the damage
+          pathway. Handled explicitly in the resolver rather than by making
+          every delay a damage risk.
+    protected_by_assets: []
+    scrap_fraction_if_damaged: 1.0
+    families_at_risk: [climate, labour, infrastructure, port_ops, waterway,
+                       geopolitical, capacity, mechanical, force_majeure]
+
+  moisture_sensitive:
+    label: Moisture-sensitive packaging
+    description: >
+      Dry powders in paper sacks — cement, mortar, tile adhesive. Rain during
+      an open-deck leg or a pneumatic transfer ruins the sack and sometimes
+      the product. Sheeting reduces this; it does not remove it.
+    damage_conditions:
+      - condition: precipitation_on_open_handling
+        irreversible: true
+        note: Only fires on open-deck or transfer-exposed assets.
+    protected_by_assets: [dry_van, reefer, road_ftl, road_ltl, parcel]
+    scrap_fraction_if_damaged: 0.6
+    families_at_risk: [climate]
+
+  adr_class_3:
+    label: ADR Class 3 — flammable liquid
+    description: Solvent-borne products. Tunnel category restrictions bite hardest here.
+    adr_class: "3"
+    damage_conditions: []               # not damaged by weather; RESTRICTED by regulation
+    restricts_routing: true
+    forbidden_assets: [air_cargo]
+    protected_by_assets: []
+    scrap_fraction_if_damaged: 0.0
+    families_at_risk: []
+
+  adr_class_8:
+    label: ADR Class 8 — corrosive
+    description: Acids and caustics. Segregation rules limit consolidation options.
+    adr_class: "8"
+    damage_conditions: []
+    restricts_routing: true
+    forbidden_assets: [air_cargo, parcel]
+    protected_by_assets: []
+    scrap_fraction_if_damaged: 0.0
+    families_at_risk: []
+
+  adr_class_9:
+    label: ADR Class 9 — environmentally hazardous
+    description: >
+      Marine pollutants. The regulatory exposure is on the WATER legs, and a
+      spill is a reportable event rather than a delay.
+    adr_class: "9"
+    damage_conditions: []
+    restricts_routing: true
+    forbidden_assets: []
+    protected_by_assets: []
+    scrap_fraction_if_damaged: 0.0
+    families_at_risk: []
+
+  high_theft_risk:
+    label: High theft risk
+    description: >
+      High-value, easily resold. The risk is not the weather but the
+      UNPLANNED STOP: a blocked motorway that parks a trailer in an unsecured
+      layby overnight is the exposure.
+    damage_conditions:
+      - condition: unsecured_stop_hours_above
+        threshold_hours: 6.0            # source: assumed
+        hard_threshold_hours: 12.0
+        irreversible: true
+    protected_by_assets: []
+    scrap_fraction_if_damaged: 1.0
+    families_at_risk: [labour, infrastructure, geopolitical]
+
+  tilt_shock_sensitive:
+    label: Tilt / shock sensitive
+    description: >
+      IBCs, palletised liquids, anything that fails if it is handled twice
+      more than planned. Every extra cross-dock is an extra chance.
+    damage_conditions:
+      - condition: extra_handling_events_above
+        threshold_count: 2
+        irreversible: false
+    protected_by_assets: [road_ftl]
+    scrap_fraction_if_damaged: 0.25
+    families_at_risk: [port_ops, infrastructure, capacity]
+
+  none:
+    label: No special vulnerability
+    description: >
+      Palletised ambient dry goods. Nothing here is harmed by an external
+      event; it can only be made late. The damage pathway never opens, and
+      the tool says so plainly rather than hedging.
+    damage_conditions: []
+    protected_by_assets: []
+    scrap_fraction_if_damaged: 0.0
+    families_at_risk: []
+
+# =====================================================================
+# LAYER 1 — PATHWAYS
+# =====================================================================
+# Which way each event class threatens freight. The 45 variables themselves
+# stay in variables.yaml; this is the one extra fact each needs.
+#
+#   delay   the freight moves late. Applies to every shipment on the corridor
+#           regardless of what is in the box.
+#   damage  the goods are harmed. Applies ONLY where Layer 4 opens the gate.
+#   both    carries both pathways independently.
+#
+# Defaults are per family; overrides are per variable, and there are only
+# nine of them — the families are nearly right on their own, which is a sign
+# the family split is carrying real structure.
+
+layer1_pathways:
+
+  defaults:
+    climate:        both     # a gale delays; a freeze ruins
+    waterway:       delay    # low water is a CAPACITY DERATE, not a stoppage
+    port_ops:       delay
+    labour:         delay
+    infrastructure: delay
+    geopolitical:   delay
+    capacity:       delay
+    cyber:          delay
+    mechanical:     delay
+    force_majeure:  both
+
+  overrides:
+
+    # --- climate that cannot damage anything ---
+    CLI_FOG:
+      pathway: delay
+      why: >
+        Visibility stops movement and touches nothing in the trailer. Tagging
+        fog as a damage risk would put every freeze-critical shipment on the
+        board every autumn morning, which is how a radar gets switched off.
+
+    CLI_WAVE_HEIGHT:
+      pathway: delay
+      why: Weather routing and port closure. The box is sealed and dry.
+
+    CLI_HIGH_WIND:
+      pathway: both
+      why: >
+        Delay for everyone, but genuinely a damage pathway for open-deck and
+        high-sided equipment — a curtain-sider is a sail, and load shift on a
+        flatbed is a real loss, not a late arrival.
+      damage_requires_asset_flag: wind_sensitive
+
+    # --- the temperature pair, which is the whole Layer 4 point ---
+    CLI_ICE:
+      pathway: both
+      why: >
+        Black ice closes roads AND the ambient temperature that produced it
+        is what breaks a water-based emulsion. Two independent harms from one
+        observation.
+
+    CLI_EXTREME_HEAT:
+      pathway: both
+      why: Track buckling delays rail; trailer interior temperature harms resins.
+
+    # --- mechanical: one of the four is a damage event ---
+    MEC_CARGO_FIRE:
+      pathway: both
+      why: >
+        The only mechanical variable that reaches the goods. The others —
+        breakdown, collision, grounding — strand the freight without harming
+        what is inside it.
+
+    # --- force majeure that is delay-only ---
+    FOR_PANDEMIC:
+      pathway: delay
+      why: Labour and border effects. Nothing physical happens to the cargo.
+
+    FOR_EARTHQUAKE:
+      pathway: both
+      why: Structural damage reaches stored and in-transit freight alike.
+
+    # --- infrastructure: the theft pathway ---
+    INF_ROAD_CLOSURE:
+      pathway: both
+      why: >
+        The damage pathway here is NOT the closure, it is the unplanned
+        overnight stop it forces. Only opens for high-theft-risk cargo, via
+        the unsecured_stop condition in Layer 4.
+      damage_requires_cargo_condition: unsecured_stop_hours_above
+
+# =====================================================================
+# CLASH RESOLUTION
+# =====================================================================
+# Most clashes dissolve under the pathway split and need no rule at all. The
+# ones below are genuine: cases where two facts are both true and point in
+# different directions, so the system has to state which wins and why.
+#
+# Every rule names its clash, its resolution, and the reason — because a rule
+# a planner cannot argue with is a rule they will not trust.
+
+clash_rules:
+
+  - id: severe_event_invulnerable_cargo
+    when: "damage pathway shut, delay pathway open, event severity high"
+    resolve: delay_only
+    why: >
+      The canonical clash. A dock strike is severe and palletised dry mortar
+      is invulnerable; the shipment is still days late. Scoring it on the
+      damage pathway would be a false Red, and scoring it at zero would miss
+      a real delay. It is scored on delay alone, at the channel's own
+      tolerance, and the board says "no cargo risk, four days late" — which
+      is the true sentence.
+
+  - id: critical_channel_zero_vulnerability
+    when: "channel is jit_jis or direct_to_jobsite, damage pathway shut"
+    resolve: delay_only_but_consequence_stands
+    why: >
+      Channel criticality is a CONSEQUENCE, not a probability. It cannot
+      manufacture a cargo risk that physics says is absent, and it does not
+      shrink because the cargo is robust: a line stoppage costs the same
+      whether the pallet that failed to arrive was fragile or not.
+
+  - id: conditioned_asset_protects_vulnerable_cargo
+    when: "cargo has a damage condition AND asset appears in protected_by_assets"
+    resolve: damage_gated_by_conditioning_autonomy
+    why: >
+      A reefer protects the load while it runs. It is not immunity: the
+      protection has a fuel autonomy, and a delay longer than the autonomy
+      re-opens the damage pathway. This is the only place a delay converts
+      into a damage risk by way of equipment.
+
+  - id: pot_life_makes_delay_into_damage
+    when: "cargo is short_pot_life AND expected delay exceeds the pot life"
+    resolve: escalate_to_damage
+    why: >
+      The one class where the clock IS the harm. Modelled explicitly here
+      rather than by treating every delay as a damage risk, which would
+      flag the entire book.
+
+  - id: adr_blocks_the_obvious_mitigation
+    when: "cargo carries an ADR class AND the proposed alternative is a forbidden asset"
+    resolve: suppress_action
+    why: >
+      Air freight is the standard expedite and is closed to Class 3 solvent.
+      Recommending an action that cannot legally be taken is worse than
+      recommending nothing: it looks like a plan and costs a planner the
+      hours they had left.
+
+  - id: overlapping_events_same_corridor
+    when: "two or more events gate the same leg in overlapping windows"
+    resolve: max_per_pathway_not_sum
+    why: >
+      A strike and a blizzard on one corridor do not queue end to end — the
+      trucks are stopped once. Delay is the worst of the concurrent events,
+      per pathway, which is what the Monte Carlo already does. Damage does
+      NOT combine this way: a freeze and a theft risk are independent harms
+      and both are reported.
+
+  - id: unsourceable_probability_with_high_consequence
+    when: "event probability cannot be sourced AND channel consequence is high"
+    resolve: report_both_never_impute
+    why: >
+      A union ballot has no base rate. The temptation is to assume 0.5
+      because the consequence is frightening; that is a made-up number that
+      looks like evidence. It is reported in the unsourced band with the
+      consequence stated in full, and the planner decides.

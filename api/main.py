@@ -19,6 +19,7 @@ from engine.clock import Clock
 from engine.config import load_config
 from engine.export import profile as profile_mod
 from engine.export import report as report_mod
+from engine.export import tms as tms_mod
 from engine.export.board import build_board
 from engine.pipeline import RunContext, RunOptions, run
 from engine.reason import ask as ask_mod
@@ -203,6 +204,37 @@ def ask(
     return JSONResponse(
         ask_mod.board_question(board, question, payload.get("route_id"))
     )
+
+
+# =====================================================================
+# TMS integration
+# =====================================================================
+
+
+@app.get("/api/v1/shipment-alerts")
+def shipment_alerts(
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+    band: str = Query("red", pattern="^(red|amber|green|all)$"),
+) -> JSONResponse:
+    """The alerts this system would POST to a TMS.
+
+    Exposed as a GET so an integrator can see the exact payload shape before
+    wiring anything, and so the contract is testable without a TMS. The
+    system does not POST from here — sending is an outward-facing action and
+    no endpoint is configured; see SECURITY.md.
+    """
+    board = _board(as_of, shipments)
+    context = _context(as_of, shipments)
+    alerts = tms_mod.alerts_for_board(board, context, band=band)
+    return JSONResponse({
+        "schema_version": tms_mod.SCHEMA_VERSION,
+        "endpoint": tms_mod.ENDPOINT,
+        "as_of": board["as_of"],
+        "band_filter": band,
+        "count": len(alerts),
+        "alerts": alerts,
+    })
 
 
 @app.get("/api/model")

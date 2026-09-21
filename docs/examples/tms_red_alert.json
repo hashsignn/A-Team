@@ -1,0 +1,196 @@
+{
+  "schema_version": "1.0.0",
+  "message_type": "shipment_risk_alert",
+  "idempotency_key": "EVT-DRIVEBAN-0042:SYN-0442:2026-09-18T06:00:00+00:00",
+  "emitted_at": "2026-09-18T06:00:00+00:00",
+  "as_of": "2026-09-18T06:00:00+00:00",
+  "run_id": "EXAMPLE0",
+  "config_version": "85e1691d9b65",
+  "alert": {
+    "band": "red",
+    "score": 76,
+    "level": "yellow",
+    "level_label": "Alert",
+    "directive": "Take action within 24–48 hours",
+    "rationale": "Alert sets 60-80; consequence of CHF 47,344 places it at 76. Band RED.",
+    "escalated": false,
+    "escalation_reason": null,
+    "scale": {
+      "note": "The score is a projection of the five-level ladder, not a second model. 20 points per rung; the fraction inside a rung is relative consequence within today's book and never crosses a rung boundary.",
+      "bands": [
+        {
+          "band": "green",
+          "range": [
+            0,
+            39
+          ],
+          "rungs": [
+            "green",
+            "white"
+          ],
+          "action": "Informational; monitor only."
+        },
+        {
+          "band": "amber",
+          "range": [
+            40,
+            69
+          ],
+          "rungs": [
+            "blue",
+            "yellow"
+          ],
+          "action": "Warning; evaluate an alternate route or schedule change."
+        },
+        {
+          "band": "red",
+          "range": [
+            70,
+            100
+          ],
+          "rungs": [
+            "yellow",
+            "red"
+          ],
+          "action": "Critical; immediate intervention."
+        }
+      ]
+    }
+  },
+  "shipment": {
+    "shipment_id": "SYN-0442",
+    "lane_id": "LANE_EU_01",
+    "lane_name": "Düdingen → Stuttgart (road, ADR)",
+    "customer": "Automotive OEM Süd (synthetic)",
+    "origin": "SIKA_DUD",
+    "destination": "DESTU",
+    "planned_eta": "2026-09-20T14:00:00+00:00",
+    "committed_date": "2026-09-20T16:00:00+00:00",
+    "value_chf": 41250.0,
+    "carrier": "CARR_ADR (synthetic stand-in)"
+  },
+  "taxonomy": {
+    "layer1_event": {
+      "variable_id": "GEO_REGULATORY",
+      "family": "geopolitical",
+      "severity": "moderate",
+      "pathway": "delay",
+      "probability": 1.0,
+      "probability_basis": "statutory and calendared; not an estimate",
+      "starts_at": "2026-09-20T00:00:00+00:00",
+      "ends_at": "2026-09-20T22:00:00+00:00"
+    },
+    "layer2_asset": {
+      "asset_id": "adr_tanker",
+      "mode": "road"
+    },
+    "layer3_channel": {
+      "channel_id": "jit_jis",
+      "free_hours": 0.25,
+      "penalty_shape": "cliff"
+    },
+    "layer4_cargo": {
+      "cargo_class": "adr_class_3",
+      "adr_class": "3",
+      "irreversible_if_damaged": false,
+      "scrap_fraction_if_damaged": 0.0
+    }
+  },
+  "assessment": {
+    "pathway_headline": "Delay only — nothing in this consignment is harmed by the event.",
+    "delay": {
+      "open": true,
+      "reason": "Delay applies to every consignment on this corridor, whatever is in the box."
+    },
+    "damage": {
+      "open": false,
+      "reason": "Regulatory change cannot harm goods — it only delays them.",
+      "irreversible": false,
+      "scrap_fraction": 0.0
+    },
+    "notes": [],
+    "chargeable_hours": 51.75,
+    "exposure_chf": 47343.75,
+    "exposure_explanation": "Just-in-time / just-in-sequence (OEM): CHF 15,000 the moment the window is missed, then CHF 15,000/day. 51.8 h chargeable — CHF 47,344.",
+    "clashes_resolved": [
+      {
+        "rule": "severe_event_invulnerable_cargo",
+        "title": "Severe event, invulnerable cargo",
+        "resolution": "Scored on delay alone. The event cannot harm this consignment, but it can still make it late, and both halves of that are reported."
+      },
+      {
+        "rule": "critical_channel_zero_vulnerability",
+        "title": "Critical channel, no cargo risk",
+        "resolution": "The channel's consequence stands in full — a stopped line costs the same whatever was on the pallet — but it does not manufacture a cargo risk that physics says is absent."
+      },
+      {
+        "rule": "adr_blocks_the_obvious_mitigation",
+        "title": "Regulation blocks the standard mitigation",
+        "resolution": "The action was removed rather than offered. A plan that cannot legally be executed costs the planner the hours they had left."
+      }
+    ]
+  },
+  "root_cause": {
+    "event_id": "EVT-DRIVEBAN-0042",
+    "title": "Weekend heavy-vehicle driving ban in force 00:00 Sun – 22:00 Sun",
+    "geo": {
+      "lat": 48.7758,
+      "lon": 9.1829
+    },
+    "source": "synthetic_authority",
+    "source_tier": 1,
+    "verbatim_quote": "Heavy goods vehicles above 7.5 t may not be operated on Sundays and public holidays between 00:00 and 22:00.",
+    "inferred": false
+  },
+  "recommended_actions": [
+    {
+      "action": "Depart Friday 18:00 ahead of the ban window",
+      "cost_chf": 780.0,
+      "avoids_chf": 31000.0,
+      "decide_by": "Decide by Fri 18 Sep 14:00 UTC (8 h)",
+      "owner": "us"
+    },
+    {
+      "action": "Apply for a Sonntagsfahrverbot exemption (ADR hardship)",
+      "cost_chf": 240.0,
+      "avoids_chf": 31000.0,
+      "decide_by": "Decide by Fri 18 Sep 10:00 UTC (4 h)",
+      "owner": "us"
+    }
+  ],
+  "suppressed_actions": [
+    {
+      "asset": "air_cargo",
+      "label": "Air cargo",
+      "cargo_class": "adr_class_3",
+      "reason": "ADR Class 3 — flammable liquid may not move by Air cargo.",
+      "clash_rule": "adr_blocks_the_obvious_mitigation"
+    }
+  ],
+  "contacts": {
+    "route_manager": {
+      "name": "P. Haas (synthetic)",
+      "role": "Intra-EU road & rail manager",
+      "email": "intraeu.surface@example-synthetic.invalid"
+    },
+    "escalation": {
+      "level": 3,
+      "notify": [
+        "Supply Chain",
+        "Procurement",
+        "Customer Service"
+      ]
+    }
+  },
+  "data_quality": {
+    "probability_is_null_means_unsourced": true,
+    "note": "A null probability is an event whose odds cannot be sourced from anything defensible. Do NOT coerce it to 0.5 or to any other default; render it as unsourced. Every CHF figure is modelled, not invoiced.",
+    "shipment_book_is_synthetic": true,
+    "config_source": "config.example"
+  },
+  "delivery": {
+    "endpoint": "POST /api/v1/shipment-alerts",
+    "auth": "Bearer token from the environment of the POSTing process. No credential appears in this payload by design.",
+    "retry": "exponential backoff; the idempotency_key makes replay safe"
+  }
+}

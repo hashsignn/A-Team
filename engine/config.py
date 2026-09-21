@@ -146,6 +146,7 @@ class Config:
 
 _FILES = (
     "company_profile",
+    "taxonomy",
     "network",
     "lanes",
     "variables",
