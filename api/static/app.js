@@ -224,6 +224,39 @@ function applyBoard(board) {
  * already exists — rebuilding it would drop the camera position and the
  * selection, and the point of switching themes is to look at the same board
  * in a different skin. */
+/* Lane markers.
+ *
+ * Radius scales with the SQUARE ROOT of the affected count, not linearly:
+ * a ring's visual weight is its area, so a linear radius makes a lane with
+ * twice the freight look four times as bad. The eye reads area, so the
+ * mapping has to compensate for it.
+ */
+function laneMarkers() {
+  if (!state.board) return [];
+  return visibleRoutes()
+    .map((r) => {
+      const m = r.marker || {};
+      if (m.lat == null || !m.affected) return null;
+      return {
+        route_id: r.route_id,
+        name: r.name,
+        level: r.level,
+        level_label: r.level_label,
+        lat: m.lat,
+        lon: m.lon,
+        affected: m.affected,
+        total: m.total,
+        radius: 1.1 + Math.sqrt(m.affected) * 0.62,
+        color: withAlpha(LEVEL_COLOR[r.level], 0.55),
+      };
+    })
+    .filter(Boolean);
+}
+
+function refreshMarkers() {
+  if (state.globe) state.globe.ringsData(laneMarkers());
+}
+
 function paintGlobe(globe) {
   globe
     .atmosphereColor(token('--globe-atmos'))
@@ -245,6 +278,7 @@ document.addEventListener('themechange', () => {
   // Route and node colours are level colours, so they move with the palette.
   state.globe.pointsData(state.board.nodes);
   refreshPaths();
+  refreshMarkers();
   renderLadder(state.board.levels);
   renderTable();
   // Re-select rather than re-render: the detail panel draws an SVG radar in
@@ -270,6 +304,23 @@ function initGlobe(countries, board) {
     .polygonAltitude(0.004);
 
   paintGlobe(globe);
+
+  // --- lane markers ---------------------------------------------------
+  /* One marker per lane, radius scaled by how much freight the gate touched.
+   *
+   * Deliberately NOT one marker per vessel. Roughly 65 of 125 shipments are
+   * touched in a typical run, and 65 dots on a globe is exactly the clutter
+   * the brief warned about. The per-vessel divergence is real — thirteen
+   * consignments on one lane routinely carry ten distinct deadlines — but it
+   * belongs on a page that can hold it, which is what clicking this opens.
+   */
+  globe
+    .ringsData(laneMarkers())
+    .ringLat('lat').ringLng('lon')
+    .ringMaxRadius((d) => d.radius)
+    .ringColor((d) => () => d.color)
+    .ringPropagationSpeed(0)
+    .ringRepeatPeriod(0);
 
   // --- ports & nodes -------------------------------------------------
   globe
@@ -396,6 +447,7 @@ function withAlpha(hex, a) {
 
 function refreshPaths() {
   if (state.globe) state.globe.pathsData(pathData());
+  refreshMarkers();
 }
 
 /* Pause the spin, then hand it back.
@@ -491,6 +543,7 @@ function select(routeId, { fly } = {}) {
   renderDetail(r);
   renderResponse(r);
   markTableRow(routeId);
+  linkOps(routeId);
 
   if (fly && state.globe && r.legs.length) {
     const pts = r.legs.flatMap((l) => l.path);
@@ -498,6 +551,24 @@ function select(routeId, { fly } = {}) {
     if (mid) state.globe.pointOfView({ lat: mid[0], lng: mid[1], altitude: 2.1 }, 1100);
   }
   holdRotation();
+}
+
+/* Carry the route AND the as-of across to the operational pages.
+ *
+ * Dropping the as-of would open the playbook at a different instant from the
+ * board that sent you there — the same trap the detail panel already hit
+ * once, where a header and a summary described two different moments. */
+function linkOps(routeId) {
+  const p = state.params || {};
+  const query = new URLSearchParams({
+    route: routeId,
+    as_of: p.as_of || DEFAULT_AS_OF,
+    shipments: String(p.shipments || 150),
+  });
+  const ops = $('link-ops');
+  const cargo = $('link-cargo');
+  if (ops) ops.href = `/ops?${query}`;
+  if (cargo) cargo.href = `/ops?${query}#cargo`;
 }
 
 function renderDetail(r) {

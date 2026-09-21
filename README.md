@@ -643,6 +643,132 @@ corroboration:
 
 ---
 
+## Operations: the playbook, the consignment list, the execute view
+
+`/ops?route=…` — three surfaces over one engine, none of which recomputes
+anything.
+
+### The playbook, and the gate that is the point
+
+Detect → Confirm → Act → Close out. Each task carries an owner and an SLA
+read from `contacts.yaml`, because a playbook quoting invented response times
+is one nobody is held to.
+
+The rule is the feature:
+
+> **Do not reroute until the disruption has been confirmed.**
+
+and it is *enforced*, not printed. `unlocked_actions()` withholds the routing
+mitigations until the confirming tasks are ticked. A rule that appears as
+advisory text above a button that still works is not a control — it is a
+caption.
+
+Why it matters here specifically: this tool reads trade press and, per Q5,
+social media. Those are **early** signals, which is their whole value, and
+early signals are wrong more often than late ones. Rerouting a barge on an
+unconfirmed rumour costs real money and burns the credibility that makes
+anyone act on the next alert. **The gate is what lets the tool be early
+without being reckless.**
+
+Three details worth knowing:
+
+* **Corroboration is part of the gate, not a separate idea.** An event whose
+  only source is uncorroborated tier 3 cannot be confirmed by ticking a box,
+  because nothing about ticking a box makes a rumour true. The task is
+  disabled and names what *would* resolve it — a carrier callback, an
+  authority notice.
+* **Notifying the customer is never locked.** Telling somebody early costs
+  nothing and is the one action that never needs confirming.
+* **Locked actions are withheld, not greyed**, and the reason is stated once
+  in the gate banner rather than repeated on every row. Identical per-shipment
+  actions are grouped — a planner takes one decision and applies it to the
+  freight it fits, so eight rows reading *"Switch barge leg to rail"* are one
+  row reading *"× 8 consignments"*.
+
+The engine owns the steps and the gate, both pure and testable. The **ticks
+live in the browser**, because *"has Maria called the carrier yet"* is
+per-planner working state, not a fact about the world — putting it in the
+engine would make the board's answer depend on who was looking at it.
+
+### The consignment list
+
+From the team:
+
+> *"one disruption on a route may only affect some of the vessels using that
+> route. And the effects will not be the same for all vessels along the same
+> route."*
+
+Correct — and it has always been true in the engine, because the gate is per
+`(event, shipment, leg)` and the Monte Carlo is per shipment. It was simply
+never visible: the board painted one colour per lane.
+
+On `LANE_RHINE_01`, one disruption, one lane:
+
+```
+17 consignments · 11 touched · 10 DISTINCT DEADLINES · 6 out of scope entirely
+                  deadlines running from 36 h to 11 days
+```
+
+If that number were 1, a lane colour would be sufficient and this page would
+be decoration. There is a test asserting it is not.
+
+Untouched consignments stay on the page **as untouched**, with `null` rather
+than zero — *"this event does not reach six of your seventeen"* is an answer
+a planner wants, and zero would read as "assessed and found harmless", which
+is a different claim.
+
+### The execute view
+
+Also from the team, and it is the binding architectural constraint:
+
+> *"The calculations cannot be simplified."*
+
+So `execute_view` returns a **subset of numbers already computed for the
+planner's board**. It recomputes nothing, and there is a test that asserts
+the deadline it shows is the identical float the board published. The moment
+a driver's screen works out its own ETA it will disagree with the planner's,
+and a planner contradicted by their own tool once stops using it.
+
+What the transport manager gets is therefore not a smaller model — it is the
+same model answering only the questions someone *executing* needs: where is
+it going next, which hop is the problem, what is the constraint, who do I
+call. The ladder arithmetic, the matrix and the convene rule are absent
+because they are not theirs to decide, not because they were too complicated
+to show. A test greps for them and fails if any leaks in.
+
+It names **which legs** are affected, not just the shipment: a Rhine
+low-water event hits the barge legs and leaves the road leg alone, and
+someone executing needs to know which hop is the problem.
+
+> **Assumption, pending an answer:** "transport manager" is built to serve
+> both readings — a driver and an on-site agent — since the view is the same
+> either way. If it turns out to mean only one, the `report_back` fields are
+> the part that would change.
+
+**Report back** is a socket. A driver or an agent knows things no feed here
+carries — the queue at the gate, whether the crane turned up, whether the
+load shifted — and submitting it would be the first **tier-1 observed**
+source in the system, better than anything currently wired, because it is
+somebody looking at the freight rather than a feed describing the region. The
+app composes; it does not submit, because no store is wired.
+
+### Lane markers
+
+One marker per lane on the globe, radius scaled by how much freight the gate
+touched, coloured by the lane's level. Clicking it opens the consignment
+list.
+
+Deliberately **not** one marker per vessel: roughly 65 of 125 shipments are
+touched in a typical run, and 65 dots on a globe is exactly the clutter the
+brief warned about. The per-vessel divergence is real and belongs on a page
+that can hold it.
+
+Radius scales with the **square root** of the affected count, because a
+ring's visual weight is its area — a linear radius makes a lane with twice
+the freight look four times as bad.
+
+---
+
 ## The four-layer taxonomy, and the idea that makes it compose
 
 Layer 1 is the 45-variable ledger. Layers 2–4 describe **our** side of the

@@ -159,6 +159,16 @@ def _build_route(
         # than an assertion — a level that moved for an invisible reason is a
         # level they will argue with, and they would be right to.
         "urgency": verdict.urgency,
+        # A single marker per lane, at the midpoint of its geometry, sized by
+        # how much freight the gate actually touched.
+        #
+        # One marker rather than one per vessel, deliberately: 65 of 125
+        # shipments are typically touched, and 65 dots on a globe is the
+        # clutter the brief warned about. The divergence they would show —
+        # thirteen consignments on this lane, ten distinct deadlines — is
+        # real and belongs on a page that can hold it, which is what the
+        # marker opens.
+        "marker": _lane_marker(lane, risks, context),
         "lead_time_hours": verdict.lead_time_hours,
         "exposure_chf": round(verdict.exposure_chf, 2),
         # NOT DISPLAYED. Kept because the convene rule is built on it, but it
@@ -319,6 +329,31 @@ def _event_matrix(risks: list[ShipmentRisk]) -> dict:
             max((p["conditional_loss_chf"] for p in points), default=0.0), 2
         ),
         "still_actionable": sum(1 for p in points if p["ring"] == "solid"),
+    }
+
+
+def _lane_marker(lane: dict, risks: list[ShipmentRisk], context: RunContext) -> dict:
+    """Where to put the lane's marker, and how big it should be."""
+    nodes = [lane["legs"][0]["from"]] + [leg["to"] for leg in lane["legs"]]
+    coords = [
+        (context.network.node(n).lat, context.network.node(n).lon)
+        for n in nodes if n in context.network.nodes
+    ]
+    if not coords:
+        return {"lat": None, "lon": None, "affected": 0, "total": 0}
+
+    # The geometric middle of the path, not the centroid of the endpoints: on
+    # a Rhine lane those differ by several hundred kilometres and the marker
+    # would sit in a field.
+    middle = coords[len(coords) // 2]
+
+    on_lane = [s for s in context.shipments if s.lane_id == lane["id"]]
+    affected = {r.shipment_id for r in risks}
+    return {
+        "lat": middle[0],
+        "lon": middle[1],
+        "affected": len(affected),
+        "total": len(on_lane),
     }
 
 
@@ -503,6 +538,12 @@ def _actions(risks: list[ShipmentRisk], context: RunContext) -> list[dict]:
                 "shipment_id": risk.shipment_id,
                 "customer": risk.customer,
                 "label": action.label,
+                # The machine-readable kind, not just the human label. The
+                # operational flow gates on this: matching a reroute by its
+                # label string would break the moment somebody rewords it,
+                # and a gate that silently stops matching is worse than no
+                # gate, because the lock still LOOKS applied.
+                "action_type": action.action_type,
                 "owner": action.owner,
                 "sentence": explain(
                     risk.do_nothing.expected_loss_chf,

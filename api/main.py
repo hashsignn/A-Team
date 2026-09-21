@@ -16,8 +16,10 @@ from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from engine.act import flow as flow_mod
 from engine.clock import Clock
 from engine.config import load_config
+from engine.export import cargo as cargo_mod
 from engine.export import profile as profile_mod
 from engine.export import report as report_mod
 from engine.export import tms as tms_mod
@@ -238,6 +240,87 @@ def shipment_alerts(
     })
 
 
+# =====================================================================
+# The operational flow, the cargo page and the execute view
+# =====================================================================
+
+
+@app.get("/api/flow/{route_id}")
+def flow(
+    route_id: str,
+    completed: str = Query("", description="comma-separated task ids"),
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Detect / Confirm / Act / Close for one route, and the gate.
+
+    The tick state arrives in the query rather than being stored, because
+    "has Maria called the carrier yet" is per-planner working state, not a
+    fact about the world. Keeping it out of the engine is what stops the
+    board's answer depending on who is looking at it.
+    """
+    board = _board(as_of, shipments)
+    context = _context(as_of, shipments)
+    route = _route(board, route_id)
+
+    tiers = [
+        e["source_tier"] for e in route.get("events", [])
+        if e.get("source_tier") is not None
+    ]
+    tasks = flow_mod.build(context.config, route, tiers)
+    done = {t.strip() for t in completed.split(",") if t.strip()}
+    state = flow_mod.evaluate(tasks, done)
+
+    payload = state.as_dict()
+    # The gate applied, not merely described. An action a planner can see and
+    # click is an action they will click.
+    payload["actions"] = flow_mod.unlocked_actions(route.get("actions", []), state)
+    payload["route"] = {
+        "route_id": route_id,
+        "name": route["name"],
+        "level": route["level"],
+        "level_label": route["level_label"],
+    }
+    return JSONResponse(payload)
+
+
+@app.get("/api/cargo/{route_id}")
+def cargo(
+    route_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Every consignment on one lane, each with its own answer.
+
+    One disruption on a lane reaches only some of the freight using it, and
+    reaches it differently. That has always been true in the engine and has
+    never been visible.
+    """
+    board = _board(as_of, shipments)
+    context = _context(as_of, shipments)
+    return JSONResponse(cargo_mod.lane_view(board, context, route_id))
+
+
+@app.get("/api/execute/{shipment_id}")
+def execute(
+    shipment_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """One consignment, for whoever is moving it.
+
+    Strictly a projection of the planner's board — nothing is recomputed.
+    A driver's screen that works out its own ETA will disagree with the
+    planner's, and a planner contradicted by the tool once stops using it.
+    """
+    board = _board(as_of, shipments)
+    context = _context(as_of, shipments)
+    view = cargo_mod.execute_view(board, context, shipment_id)
+    if "error" in view:
+        raise HTTPException(404, view["error"])
+    return JSONResponse(view)
+
+
 @app.get("/api/model")
 def model_status() -> JSONResponse:
     """What is running, so the UI can say so rather than fail silently."""
@@ -323,6 +406,12 @@ def index() -> Response:
 @app.head("/profile")
 def profile_page() -> Response:
     return _page("profile.html")
+
+
+@app.get("/ops")
+@app.head("/ops")
+def ops_page() -> Response:
+    return _page("ops.html")
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")
