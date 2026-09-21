@@ -643,6 +643,123 @@ corroboration:
 
 ---
 
+## The driver app, and the loop it closes
+
+`/driver` — one screen, for the person with the freight in front of them.
+
+### It is the only tier-1 *observed* source in the system
+
+Every other input here describes a **region**. Pegelonline says the Rhine is
+at 78 cm; trade press says Antwerp dockers have voted; a forecast says it
+will blow. All of it is inference about whether *your* freight is affected.
+
+A driver looking at their own trailer is not inference. *"I am third in a
+queue of forty at Kaub and the lock is shut"* is an observation of the actual
+consignment, and it beats every feed in this system — **including the ones
+that are not connected yet**. That is why it was worth building before the
+paid APIs.
+
+### The loop
+
+```
+planner's playbook       "confirm the disruption with the carrier"
+        │                "request the GPS position"
+        │                "record the revised ETA"
+        ▼
+driver's phone           taps four things
+        ▼
+report lands             tier 1, observed
+        ▼
+planner's gate OPENS     rerouting unlocked
+```
+
+The checklist steps a driver can answer are the three confirming ones, and
+answering them **is** the confirmation — a planner is not asked to re-tick a
+box a driver already answered, because that is the "we declare too late"
+failure expressed as a process. The gate then says so:
+
+> *Confirmed — 3 step(s) answered by a field report from the freight itself,
+> not from a feed.*
+
+**A driver saying "moving" does not confirm a disruption.** It is evidence
+*against* one. Only an explicit *"yes, I can see this happening"* counts,
+and it is a separate control from the status with its own warning, because
+treating a status as a confirmation would unlock a reroute on good news.
+
+### Designed for a cab, not a desk
+
+The person using this is in a tunnel, at a gate, or on a deck — often
+one-handed, in bad light, on a cracked phone, with no signal.
+
+* **Four taps to file**, and the first three are optional.
+* **48px+ targets**, asserted by the headless check.
+* **It shows what the office is waiting for.** The driver is not guessing
+  what would be useful; they are answering a question somebody actually
+  asked, and the field that answers it is marked *they are waiting for this*.
+* **No status the tool computed.** A driver is not asked whether the shipment
+  is Critical. The ladder, the matrix and the convene rule are absent.
+* **It works with no signal.** A report is written to the phone first and
+  sent afterwards. The queue drains itself when the connection returns, and
+  on the next visit if the app was closed. **A report lost in a tunnel is
+  worse than no app at all.**
+
+`observed_at` is stamped when the driver taps send, **not** when the report
+reaches the server. A report queued in the Gotthard and delivered forty
+minutes later must not claim to be a forty-minute-old observation — the
+planner's whole decision turns on when somebody actually looked.
+
+### Append-only, always
+
+A correction is a **new report**, never an edit. Three reasons, all of which
+bite:
+
+* a driver who said *"held"* at 09:00 and *"moving"* at 11:00 has told us
+  the **duration of the hold**, which a mutable row would erase;
+* an audit asking *"what did we know at 10:00"* needs the log as it stood at
+  10:00;
+* the hindcast replays the log, so an edited history makes every past board
+  irreproducible.
+
+Storage is JSON Lines under `data/`. No database — the base install is seven
+packages and a dependency here is one a planner installs before the demo
+runs. It is also the format an auditor can read without our help, and a
+report a lawyer can open in Notepad is worth more than one behind an ORM.
+
+### The as-of discipline survives a live feed
+
+This is where that usually breaks. It does not break here: a board at as-of
+**T** sees only reports observed at or **before** T, so replaying yesterday
+gives yesterday's answer even though the log has grown since. The wall clock
+is read **once**, at the API boundary, when a report arrives.
+
+Reports observed *after* the board's instant are **not hidden** — the
+endpoint reports how many it excluded, because a planner looking at
+Tuesday's board needs to know something came in on Thursday.
+
+> **The demo clock.** A pinned board plus a real-time report means the driver
+> taps send and nothing appears — correct, and useless. So the driver app,
+> *when opened from a pinned board*, stamps inside that board's frame and
+> **says so on screen**. The fiction is labelled rather than hidden: a demo
+> affordance a viewer cannot see is one they will mistake for real
+> behaviour.
+
+### Live both ways
+
+Server-sent events, so a planner sees a report land without refreshing.
+**SSE rather than websockets** — built into Starlette so it costs no new
+dependency, it reconnects on its own, and the traffic only ever flows one
+way. The stream is a *notification*; the append-only log is the record, and
+a client that was disconnected re-reads the log rather than expecting an
+in-memory buffer to have held its events.
+
+> **Security:** `POST /api/v1/reports` is **unauthenticated in the
+> prototype** and it is the one thing on the list that must change before
+> real drivers use it — this is the only endpoint that can unlock a reroute.
+> A shared token via `RADAR_REPORT_TOKEN` is enforced when set, and
+> `SECURITY.md` has the path to per-driver credentials.
+
+---
+
 ## Operations: the playbook, the consignment list, the execute view
 
 `/ops?route=…` — three surfaces over one engine, none of which recomputes

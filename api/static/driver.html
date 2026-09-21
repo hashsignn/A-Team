@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Report — Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="icon" href="data:,">
+<script src="/theme.js?v=__ASSETV__"></script>
+</head>
+<body class="driver-page">
+
+<!-- ============================================================
+     THE DRIVER APP
+
+     One screen. Big targets. No decisions.
+
+     The person using this is in a cab, at a gate, or on a deck — often with
+     one hand, in bad light, on a cracked phone, with no signal. Every design
+     choice follows from that:
+
+       * four taps to file a report, and the first three are optional
+       * nothing to read before you can use it
+       * NO status the tool computes for them. A driver is not being asked
+         whether the shipment is Critical; they are being asked what they can
+         see. The ladder, the matrix and the convene rule are absent because
+         they are not theirs to decide.
+       * it works with no signal. A report is written to the phone first and
+         sent when there is a connection, because a report lost in a tunnel
+         is worse than no app at all.
+     ============================================================ -->
+
+<header class="dv-head">
+  <div>
+    <h1 id="dv-title">Report</h1>
+    <p class="dv-sub" id="dv-sub">loading…</p>
+  </div>
+  <span class="dv-net" id="dv-net" title="connection"></span>
+</header>
+
+<main class="dv-main">
+
+  <!-- What the planner currently needs from this consignment. Shown FIRST
+       because it is the reason the driver opened the app. -->
+  <section class="dv-asked" id="dv-asked" hidden></section>
+
+  <form class="dv-form" id="dv-form">
+
+    <label class="dv-field">
+      <span>Consignment</span>
+      <input type="text" id="f-shipment" inputmode="text"
+             autocapitalize="characters" autocomplete="off"
+             placeholder="SYN-0060" required>
+    </label>
+
+    <!-- The one required answer, as buttons rather than a dropdown: a
+         dropdown on a phone is two taps and a scroll, and this is the field
+         that matters. -->
+    <fieldset class="dv-status">
+      <legend>What is happening right now?</legend>
+      <div class="dv-choices" id="f-status">
+        <button type="button" data-status="moving">Moving</button>
+        <button type="button" data-status="queued">Queued</button>
+        <button type="button" data-status="held">Held</button>
+        <button type="button" data-status="stopped">Stopped</button>
+        <button type="button" data-status="delivered">Delivered</button>
+      </div>
+    </fieldset>
+
+    <label class="dv-field">
+      <span>Where are you? <em>optional</em></span>
+      <input type="text" id="f-position" autocomplete="off"
+             placeholder="Kaub, third in the queue">
+      <button type="button" class="dv-gps" id="f-gps">Use my location</button>
+    </label>
+
+    <label class="dv-field">
+      <span>New arrival time <em>optional</em></span>
+      <input type="datetime-local" id="f-eta">
+    </label>
+
+    <fieldset class="dv-status">
+      <legend>Is the load alright?</legend>
+      <div class="dv-choices dv-choices--3" id="f-load">
+        <button type="button" data-load="intact" class="is-on">Intact</button>
+        <button type="button" data-load="damaged">Damaged</button>
+        <button type="button" data-load="unknown">Not sure</button>
+      </div>
+    </fieldset>
+
+    <label class="dv-field">
+      <span>Anything else? <em>optional</em></span>
+      <textarea id="f-note" rows="2"
+                placeholder="Lock is shut, nothing has moved since 06:00"></textarea>
+    </label>
+
+    <!-- Deliberately separate from "held". A driver saying they are stopped
+         is not the same as a driver saying the disruption we think is
+         happening IS happening — and only the second one may unlock a
+         reroute on the planner's side. -->
+    <label class="dv-confirm" id="dv-confirm-wrap" hidden>
+      <input type="checkbox" id="f-confirm">
+      <span>
+        <b id="dv-confirm-label">Yes, this is happening</b>
+        <em id="dv-confirm-note"></em>
+      </span>
+    </label>
+
+    <button type="submit" class="dv-send" id="dv-send">Send report</button>
+  </form>
+
+  <p class="dv-queue" id="dv-queue" hidden></p>
+  <div class="dv-log" id="dv-log"></div>
+
+  <p class="dv-foot">
+    Your name is not required. Reports are kept as a permanent record and
+    are never edited — a correction is a new report.
+  </p>
+</main>
+
+<script src="/driver.js?v=__ASSETV__"></script>
+</body>
+</html>

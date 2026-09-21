@@ -355,23 +355,80 @@ function renderExecute(v) {
     </div>
 
     <div class="psec">
-      <h2>Report back</h2>
-      <p class="psec-note">You can see things no feed here carries — the queue
-        at the gate, whether the crane turned up, whether the load shifted.</p>
-      <div class="pfields">
-        ${v.report_back.fields.map((f) => `
-          <label class="pfield">
-            <span class="pfield-l">${esc(f.label)}</span>
-            <span class="pfield-in">
-              ${f.type === 'choice'
-                ? `<select>${f.options.map((o) => `<option>${esc(o)}</option>`).join('')}</select>`
-                : `<input type="${f.type === 'datetime' ? 'datetime-local' : 'text'}"
-                     placeholder="${esc(f.hint || '')}">`}
-            </span>
-          </label>`).join('')}
+      <h2>From the field</h2>
+      <p class="psec-note">The only <b>tier-1 observed</b> source here. Every
+        other input describes a region; a driver looking at their own trailer
+        is looking at the freight.</p>
+      <div id="x-reports">checking…</div>
+      <div class="d-ops" style="padding:12px 0 0">
+        <a class="ctl ctl--primary" target="_blank" rel="noopener"
+           href="/driver?shipment=${encodeURIComponent(v.shipment_id)}&as_of=${encodeURIComponent(AS_OF)}">
+          Open the driver app for this consignment</a>
       </div>
-      <div class="socket">${esc(v.report_back.socket)}</div>
     </div>`;
+
+  loadReports(v.shipment_id);
+  watchReports(v.shipment_id);
+}
+
+/* Reports already filed on this consignment, and a live tail.
+ *
+ * The list is loaded from the append-only log, which is the record. The
+ * stream is only a notification: a client that was disconnected re-reads the
+ * log rather than expecting an in-memory buffer to have held its events.
+ */
+async function loadReports(shipmentId) {
+  const el = document.getElementById('x-reports');
+  if (!el) return;
+  try {
+    const res = await fetch(
+      `/api/v1/reports?shipment_id=${encodeURIComponent(shipmentId)}&as_of=${encodeURIComponent(AS_OF)}`
+    );
+    const data = await res.json();
+    if (!data.reports.length) {
+      el.innerHTML = `<div class="socket">Nothing reported from the field on
+        this consignment yet.</div>`;
+      return;
+    }
+    el.innerHTML = data.reports.slice().reverse().map(reportCard).join('');
+  } catch {
+    el.innerHTML = `<div class="socket">Could not read the report log.</div>`;
+  }
+}
+
+function reportCard(r) {
+  return `<div class="xreport${r.confirms_disruption ? ' is-confirming' : ''}">
+    <div class="xleg-top">
+      <b>${esc(r.status)}</b>
+      <span class="tag ${r.load_state === 'damaged' ? 'tag--warn' : 'tag--off'}">load ${esc(r.load_state)}</span>
+    </div>
+    ${r.position ? `<div class="xreport-pos">${esc(r.position)}</div>` : ''}
+    ${r.note ? `<div class="xreport-note">“${esc(r.note)}”</div>` : ''}
+    <div class="xleg-meta">observed ${esc(r.observed_at.slice(0, 16).replace('T', ' '))} UTC
+      · tier ${r.source_tier} observed${r.confirms_disruption
+        ? ' · <b>confirms the disruption</b>' : ''}</div>
+  </div>`;
+}
+
+/* One stream at a time. Re-opening on every render would leak a connection
+ * per tab switch, and the browser caps them at six per origin — the seventh
+ * silently never connects. */
+let reportStream = null;
+
+function watchReports(shipmentId) {
+  if (reportStream) { reportStream.close(); reportStream = null; }
+  if (!window.EventSource) return;
+  reportStream = new EventSource('/api/v1/reports/stream');
+  reportStream.addEventListener('report', (e) => {
+    try {
+      const row = JSON.parse(e.data);
+      if (row.shipment_id !== shipmentId) return;
+      const el = document.getElementById('x-reports');
+      if (!el) return;
+      if (el.querySelector('.socket')) el.innerHTML = '';
+      el.insertAdjacentHTML('afterbegin', reportCard(row));
+    } catch { /* a malformed frame is not worth breaking the page for */ }
+  });
 }
 
 // ===============================================================
