@@ -8,11 +8,12 @@ server running.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Body, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from engine.clock import Clock
@@ -248,14 +249,80 @@ def health() -> dict:
     return {"status": "ok", "cached_runs": len(_BOARDS)}
 
 
+# =====================================================================
+# Serving the pages
+# =====================================================================
+# THE HTML IS A MANIFEST AND MUST NEVER BE CACHED.
+#
+# It is the file that says which script and stylesheet to load. Cache it and
+# a browser keeps asking for last week's assets by last week's names, so a
+# deploy lands on the server and never reaches the screen — the page looks
+# untouched, which is indistinguishable from nothing having been shipped.
+# That is not hypothetical: it happened here, and cost a round trip of
+# "are you sure you merged it".
+#
+# So: the HTML revalidates every time, and the assets it points at carry a
+# content version, which makes them safe to cache hard and impossible to
+# serve stale.
+
+
+def _asset_version() -> str:
+    """A short hash over every asset the pages reference.
+
+    Computed per request rather than at import, because the dev server is
+    started once and edited behind it — a version that only changes on
+    restart lies exactly when you are iterating, which is the worst possible
+    time.
+
+    The first-party files (~130 KB) are hashed by CONTENT: they change often
+    and correctness matters more than the microseconds.
+
+    The vendored libraries (globe.gl alone is 1.9 MB) are fingerprinted by
+    name and size instead. Re-reading two megabytes on every page load to
+    detect a change in a file that only moves when somebody deliberately
+    swaps a library would be a real cost for no real benefit — and size
+    alone catches that swap, while staying identical across fresh clones in
+    a way mtime would not.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(STATIC.glob("*.js")) + sorted(STATIC.glob("*.css")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    for path in sorted(STATIC.glob("vendor/*.js")):
+        digest.update(path.name.encode())
+        digest.update(str(path.stat().st_size).encode())
+    return digest.hexdigest()[:12]
+
+
+def _page(filename: str) -> Response:
+    html = (STATIC / filename).read_text(encoding="utf-8")
+    html = html.replace("__ASSETV__", _asset_version())
+    return Response(
+        content=html,
+        media_type="text/html; charset=utf-8",
+        headers={
+            # no-store, not no-cache: no-cache still permits a stored copy
+            # served after revalidation, and some intermediaries revalidate
+            # lazily. There is nothing to gain from storing an 11 KB file.
+            "Cache-Control": "no-store, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+# HEAD as well as GET: uptime monitors, load balancers and `curl -I` all use
+# it, and a 404 from a health probe on the app's own front page is a false
+# alarm somebody has to chase.
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(STATIC / "index.html")
+@app.head("/")
+def index() -> Response:
+    return _page("index.html")
 
 
 @app.get("/profile")
-def profile_page() -> FileResponse:
-    return FileResponse(STATIC / "profile.html")
+@app.head("/profile")
+def profile_page() -> Response:
+    return _page("profile.html")
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")
