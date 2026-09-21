@@ -349,6 +349,9 @@ class ShipmentOutcome(BaseModel):
     expected_lateness_days: float
     expected_loss_chf: float
     p90_loss_chf: float
+    # The bill IF it goes late, not the probability-weighted one. This is the
+    # matrix's impact axis; see engine/score/impact.py::summarise.
+    conditional_loss_chf: float = 0.0
     driving_event_ids: list[str]
 
 

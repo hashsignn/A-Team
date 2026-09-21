@@ -17,6 +17,11 @@ from collections import defaultdict
 from engine.act import contacts as contacts_mod
 from engine.pipeline import RunContext
 from engine.schemas import ShipmentRisk
+from engine.score.matrix import (
+    UNSOURCED_BAND_ID,
+    band_grid,
+    ring_style,
+)
 from engine.score.severity import (
     LEVEL_DIRECTIVE,
     LEVEL_LABEL,
@@ -61,6 +66,11 @@ def build_board(context: RunContext) -> dict:
             }
             for lvl in (Level.RED, Level.YELLOW, Level.BLUE, Level.WHITE, Level.GREEN)
         ],
+        # The band definitions, sent ONCE. The per-event matrices carry only
+        # their points; the grid they sit on is the same for all of them, and
+        # a second copy of the band logic in JavaScript is a second copy that
+        # drifts.
+        "matrix_grid": band_grid(config),
         "nodes": _nodes(context),
         "routes": routes,
         "funnel": {
@@ -237,10 +247,62 @@ def _events(assessments: list, risks: list[ShipmentRisk]) -> list[dict]:
                 "exposure_chf": round(
                     sum(r.do_nothing.expected_loss_chf for r in local), 2
                 ),
+                "matrix": _event_matrix(local),
             }
         )
     out.sort(key=lambda e: e["exposure_chf"], reverse=True)
     return out
+
+
+def _event_matrix(risks: list[ShipmentRisk]) -> dict:
+    """The per-event matrix: one point per shipment this event touches.
+
+    BRIEF §5.7 and §12 together: the matrix is PER EVENT and hidden until
+    asked for. There is no dashboard-level P x I scatter, because aggregating
+    every event into one grid throws away the only thing a planner needs from
+    it — *which of my shipments*.
+
+        The event is the question; the shipments are the answer.
+
+    The axes are independent by construction: x is P(this shipment is late),
+    y is the bill IF it is late. They multiply back to the expected loss, which
+    is the check that the probability is counted once (see
+    engine/score/impact.py::summarise).
+    """
+    points = [
+        {
+            "shipment_id": risk.shipment_id,
+            "customer": risk.customer,
+            # None for an unsourced event — the UI draws it in the separate
+            # band beside the grid, never at a computed 0.5.
+            "p_late": (
+                None if risk.probability_band == UNSOURCED_BAND_ID
+                else round(risk.do_nothing.p_late, 4)
+            ),
+            "conditional_loss_chf": round(risk.do_nothing.conditional_loss_chf, 2),
+            "expected_loss_chf": round(risk.do_nothing.expected_loss_chf, 2),
+            "probability_band": risk.probability_band,
+            "impact_band": risk.impact_band,
+            # Lead time is an OVERLAY, not a third axis: a solid ring is still
+            # actionable, a hollow one has run out of options. Four dimensions
+            # on a chart that stays readable.
+            "ring": ring_style(risk.actionability),
+            "actionability": risk.actionability,
+            "lead_time_hours": risk.lead_time_hours,
+            "value_chf": risk.value_chf,
+        }
+        for risk in risks
+    ]
+    unsourced = [p for p in points if p["p_late"] is None]
+    return {
+        "points": points,
+        "shipments": len(points),
+        "unsourced": len(unsourced),
+        "worst_conditional_chf": round(
+            max((p["conditional_loss_chf"] for p in points), default=0.0), 2
+        ),
+        "still_actionable": sum(1 for p in points if p["ring"] == "solid"),
+    }
 
 
 def _eligible_families(lane: dict, context: RunContext) -> list[str]:

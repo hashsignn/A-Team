@@ -21,6 +21,8 @@ from engine.export import profile as profile_mod
 from engine.export import report as report_mod
 from engine.export.board import build_board
 from engine.pipeline import RunContext, RunOptions, run
+from engine.reason import ask as ask_mod
+from engine.reason import llm as llm_mod
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -170,6 +172,43 @@ def profile_reset() -> JSONResponse:
     if outcome["removed"]:
         _invalidate()
     return JSONResponse(outcome)
+
+
+# =====================================================================
+# The assistant
+# =====================================================================
+# Grounded in the board and nothing else. With no model reachable this
+# returns answered=false plus what connecting one would unlock — the same
+# socket shape every other absent input uses. It is never an error: the whole
+# board is computed without a model and is unaffected by its absence.
+
+
+@app.post("/api/ask")
+def ask(
+    payload: Annotated[dict, Body()],
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Ask about one event, or about the board."""
+    question = str(payload.get("question", "")).strip()
+    if not question:
+        raise HTTPException(400, "question is required")
+    if len(question) > 2000:
+        raise HTTPException(400, "question is too long")
+
+    board = _board(as_of, shipments)
+    event_id = payload.get("event_id")
+    if event_id:
+        return JSONResponse(ask_mod.event_question(board, str(event_id), question))
+    return JSONResponse(
+        ask_mod.board_question(board, question, payload.get("route_id"))
+    )
+
+
+@app.get("/api/model")
+def model_status() -> JSONResponse:
+    """What is running, so the UI can say so rather than fail silently."""
+    return JSONResponse(llm_mod.report())
 
 
 @app.get("/api/health")

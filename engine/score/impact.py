@@ -107,6 +107,24 @@ def summarise(
 ) -> dict:
     """Headline numbers for one shipment under one scenario."""
     losses = loss_per_draw(shipment, draws, config, cost_multiplier)
+    late = draws.lateness_days > 0.0
+
+    # CONDITIONAL loss: the bill IF this goes wrong, averaged over the draws
+    # where it actually went wrong.
+    #
+    # This is what a risk matrix's impact axis means, and it is NOT the
+    # expected loss. Expected loss already has the probability multiplied in
+    # (the Monte Carlo masks an event's delay by its occurrence draw), so
+    # plotting it against P(late) would count the same probability twice and
+    # push every low-probability shipment into the bottom-left corner for a
+    # reason the axis already expressed.
+    #
+    # The two axes now multiply back:  p_late x conditional = expected loss.
+    # That identity is the check that the double count is gone (exact when no
+    # always-on surcharge applies; a low-water surcharge is charged on every
+    # draw, late or not, and sits outside it).
+    conditional = float(np.mean(losses[late])) if bool(late.any()) else 0.0
+
     return {
         "p_late": draws.p_late,
         "expected_delay_days": draws.expected_delay,
@@ -114,6 +132,7 @@ def summarise(
         "expected_lateness_days": draws.expected_lateness,
         "expected_loss_chf": float(np.mean(losses)),
         "p90_loss_chf": float(np.percentile(losses, 90)),
+        "conditional_loss_chf": conditional,
         "losses": losses,
     }
 
