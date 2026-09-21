@@ -256,8 +256,57 @@ def execute_view(board: dict, context: RunContext, shipment_id: str) -> dict:
             "route_manager": response.get("route_manager"),
             "carrier": shipment.carrier,
         },
+        # What the planner's checklist is still waiting on. The driver is not
+        # being asked to guess what would be useful — they are shown the
+        # question somebody actually asked, which is the difference between
+        # a form and a conversation.
+        "office_needs": _outstanding(context, route, shipment_id),
         "report_back": report_template(shipment_id),
     }
+
+
+def _outstanding(context: RunContext, route: dict | None, shipment_id: str) -> list[dict]:
+    """Confirming steps a field report could still answer."""
+    if route is None:
+        return []
+    from engine.act import flow as flow_mod
+    from engine.ingest import reports as reports_mod
+
+    tiers = [
+        e["source_tier"] for e in route.get("events", [])
+        if e.get("source_tier") is not None
+    ]
+    tasks = flow_mod.build(context.config, route, tiers)
+
+    on_lane = {
+        s.shipment_id for s in context.shipments
+        if s.lane_id == route["route_id"]
+    }
+    lane_reports = [
+        r for r in reports_mod.as_of(context.clock.as_of)
+        if r.shipment_id in on_lane
+    ]
+    state = flow_mod.evaluate(tasks, set(), lane_reports)
+
+    # Only the ones a REPORT can answer. Telling a driver the office still
+    # needs "secure replacement capacity" would be asking them to do
+    # somebody else's job.
+    answerable = set(flow_mod.REPORT_SATISFIES)
+    asks = {
+        "confirm.carrier": "Can you see the disruption yourself?",
+        "confirm.position": "Where are you right now?",
+        "confirm.eta": "When do you now expect to arrive?",
+    }
+    return [
+        {
+            "task_id": t.id,
+            "ask": asks.get(t.id, t.label),
+            "answered": t.id in state.from_reports,
+            "blocked_reason": t.blocked_reason,
+        }
+        for t in tasks
+        if t.id in answerable
+    ]
 
 
 def report_template(shipment_id: str) -> dict:

@@ -135,6 +135,10 @@ class FlowState:
     gate_open: bool = False
     gate_reason: str = ""
     progress: float = 0.0
+    # task id -> report id, for the ones a driver answered rather than the
+    # planner. Shown differently, because "already done" and "done by
+    # somebody in a tunnel two minutes ago" are different facts.
+    from_reports: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {
@@ -151,6 +155,7 @@ class FlowState:
             "gate_open": self.gate_open,
             "gate_reason": self.gate_reason,
             "progress": round(self.progress, 3),
+            "from_reports": dict(self.from_reports),
         }
 
 
@@ -323,15 +328,67 @@ def _corroboration(
 # =====================================================================
 
 
-def evaluate(tasks: list[Task], completed: set[str] | None = None) -> FlowState:
+# Which confirming tasks a field report answers.
+#
+# THIS IS THE LOOP CLOSING. The planner's checklist says "confirm the
+# disruption with the carrier" and "request the GPS position"; a driver with
+# the freight in front of them answers both from their phone in ten seconds.
+#
+# The alternative — a planner phoning a carrier who phones a vessel — is the
+# delay the client named in Q6, expressed as a process rather than a feeling.
+REPORT_SATISFIES = {
+    # Any report at all proves somebody looked, and carries where they were.
+    "confirm.position": lambda r: bool(r.position) or r.status in (
+        "queued", "held", "stopped", "moving", "delivered"
+    ),
+    # A revised ETA is exactly what this task asks for.
+    "confirm.eta": lambda r: r.revised_eta is not None,
+    # Only an explicit confirmation counts here. A driver saying "moving"
+    # does not confirm a disruption — it is evidence AGAINST one, and
+    # treating it as confirmation would unlock a reroute on good news.
+    "confirm.carrier": lambda r: r.confirms_disruption,
+}
+
+
+def satisfied_by_reports(tasks: list[Task], reports: list) -> dict[str, str]:
+    """Task ids a field report has already answered, and which report did it.
+
+    Returned rather than merged into ``completed`` so the UI can show these
+    as ticked BY SOMEBODY ELSE — a planner seeing a box already checked needs
+    to know a driver checked it, not wonder whether they did.
+    """
+    out: dict[str, str] = {}
+    known = {t.id for t in tasks}
+    for report in sorted(reports, key=lambda r: r.observed_at):
+        for task_id, answers in REPORT_SATISFIES.items():
+            if task_id in known and answers(report):
+                out[task_id] = report.report_id
+    return out
+
+
+def evaluate(
+    tasks: list[Task],
+    completed: set[str] | None = None,
+    reports: list | None = None,
+) -> FlowState:
     """Where the flow is, and whether the routing actions are unlocked.
 
-    Pure: same tasks and same ticks give the same answer, every time, with no
-    reference to a clock or a store. That is what makes the gate testable and
-    what keeps two planners looking at the same route from seeing different
-    stages for the same ticks.
+    Pure: same tasks, same ticks and same reports give the same answer every
+    time, with no reference to a clock or a store. That is what makes the
+    gate testable and keeps two planners looking at one route from seeing
+    different stages.
+
+    ``reports`` are field reports already filtered to this route AND to the
+    board's as-of by the caller. Passing them in rather than reading them
+    here keeps this function pure and keeps the as-of discipline at the one
+    boundary that owns it.
     """
     completed = set(completed or ())
+    from_reports = satisfied_by_reports(tasks, reports or [])
+    # A task a driver has answered IS done. Requiring the planner to also
+    # tick it would mean the gate stays shut while the evidence sits on the
+    # screen, which is precisely the "we declare too late" failure.
+    completed |= set(from_reports)
     # A tick for a task that does not exist is ignored rather than trusted.
     known = {t.id for t in tasks}
     completed &= known
@@ -379,10 +436,18 @@ def evaluate(tasks: list[Task], completed: set[str] | None = None) -> FlowState:
         )
     else:
         gate_open = True
-        gate_reason = (
-            "Confirmed. Rerouting is unlocked. Notifying the customer was "
-            "available throughout."
-        )
+        by_field = [t for t in confirm_required if t.id in from_reports]
+        if by_field:
+            gate_reason = (
+                f"Confirmed — {len(by_field)} step(s) answered by a field "
+                "report from the freight itself, not from a feed. Rerouting "
+                "is unlocked."
+            )
+        else:
+            gate_reason = (
+                "Confirmed. Rerouting is unlocked. Notifying the customer was "
+                "available throughout."
+            )
 
     return FlowState(
         tasks=tasks,
@@ -391,6 +456,7 @@ def evaluate(tasks: list[Task], completed: set[str] | None = None) -> FlowState:
         gate_open=gate_open,
         gate_reason=gate_reason,
         progress=(len(completed) / len(tasks)) if tasks else 0.0,
+        from_reports=from_reports,
     )
 
 

@@ -8,12 +8,16 @@ server running.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
+import os
+import secrets
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Body, FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse, Response
+from fastapi import Body, FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from engine.act import flow as flow_mod
@@ -24,6 +28,7 @@ from engine.export import profile as profile_mod
 from engine.export import report as report_mod
 from engine.export import tms as tms_mod
 from engine.export.board import build_board
+from engine.ingest import reports as reports_mod
 from engine.pipeline import RunContext, RunOptions, run
 from engine.reason import ask as ask_mod
 from engine.reason import llm as llm_mod
@@ -35,6 +40,12 @@ STATIC = Path(__file__).resolve().parent / "static"
 DEFAULT_AS_OF = "2026-09-18T06:00:00+00:00"
 
 app = FastAPI(title="Supply Chain Risk Radar", docs_url="/api/docs")
+
+# In-process fan-out for the live stream. Bounded on purpose: this is a
+# notification channel, not the record. The record is the append-only log on
+# disk, and a client that missed events while disconnected re-reads that
+# rather than expecting the buffer to have held them.
+_REPORT_FEED: list[dict] = []
 
 # A full pipeline run is a 10k-draw Monte Carlo over the whole book. Both the
 # board and the profile are pure functions of (as_of, shipment_count, config),
@@ -269,7 +280,19 @@ def flow(
     ]
     tasks = flow_mod.build(context.config, route, tiers)
     done = {t.strip() for t in completed.split(",") if t.strip()}
-    state = flow_mod.evaluate(tasks, done)
+
+    # Field reports for THIS lane, filtered to the board's as-of. The as-of
+    # filter is what keeps a live feed compatible with a pinned board:
+    # replaying yesterday gives yesterday's answer even though the log has
+    # grown since.
+    on_lane = {
+        s.shipment_id for s in context.shipments if s.lane_id == route_id
+    }
+    lane_reports = [
+        r for r in reports_mod.as_of(context.clock.as_of)
+        if r.shipment_id in on_lane
+    ]
+    state = flow_mod.evaluate(tasks, done, lane_reports)
 
     payload = state.as_dict()
     # The gate applied, not merely described. An action a planner can see and
@@ -319,6 +342,123 @@ def execute(
     if "error" in view:
         raise HTTPException(404, view["error"])
     return JSONResponse(view)
+
+
+# =====================================================================
+# Field reports — the driver / on-site channel
+# =====================================================================
+# The only TIER-1 OBSERVED source in the system. Every other input describes
+# a region; a driver looking at their own trailer is looking at the freight.
+#
+# SECURITY: this endpoint is UNAUTHENTICATED in the prototype. See
+# SECURITY.md — a shared token via RADAR_REPORT_TOKEN is the minimum before
+# this is exposed beyond a demo, and it is enforced below when set.
+
+
+def _report_auth(token: str | None) -> None:
+    """Enforce the shared token IF one is configured.
+
+    Deliberately opt-in rather than opt-out: the demo has to run with no
+    setup at all, and a token that must be invented before anything works is
+    a token somebody will hardcode. When RADAR_REPORT_TOKEN is set the
+    endpoint requires it, so turning it on is one environment variable.
+    """
+    expected = os.environ.get("RADAR_REPORT_TOKEN")
+    if not expected:
+        return
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(401, "a valid report token is required")
+
+
+@app.post("/api/v1/reports")
+def submit_report(
+    payload: Annotated[dict, Body()],
+    x_report_token: Annotated[str | None, Header()] = None,
+) -> JSONResponse:
+    """File one field report.
+
+    The wall clock is read HERE and nowhere deeper — the same single
+    sanctioned call site the rest of the system uses. The report carries the
+    instant it was OBSERVED, which a queued offline report sets to when the
+    driver actually saw it rather than when the signal came back.
+    """
+    _report_auth(x_report_token)
+    try:
+        report = reports_mod.validate(payload, Clock.wall().as_of)
+    except reports_mod.ReportError as exc:
+        # Refused loudly. This is the one source that can unlock a reroute,
+        # so a malformed report quietly coerced into a valid-looking one is a
+        # reroute taken on a misunderstanding.
+        raise HTTPException(422, str(exc)) from exc
+
+    reports_mod.append(report)
+    _REPORT_FEED.append(report.as_dict())
+    return JSONResponse(report.as_dict(), status_code=201)
+
+
+@app.get("/api/v1/reports")
+def list_reports(
+    shipment_id: str = Query("", description="filter to one consignment"),
+    as_of: str = Query(DEFAULT_AS_OF),
+) -> JSONResponse:
+    """Reports OBSERVED at or before the as-of."""
+    try:
+        clock = Clock.at(as_of)
+    except ValueError as exc:
+        raise HTTPException(400, f"bad as_of: {exc}") from exc
+    everything = reports_mod.read_all()
+    if shipment_id:
+        everything = [r for r in everything if r.shipment_id == shipment_id]
+
+    rows = [r for r in everything if r.observed_at <= clock.as_of]
+    # Reports observed AFTER this board's instant are not part of it — that
+    # is the as-of discipline and it is what keeps a hindcast reproducible.
+    # But they are not hidden either: a planner looking at Tuesday's board
+    # needs to know something came in on Thursday, or the tool is quietly
+    # withholding the newest information in the system.
+    later = [r for r in everything if r.observed_at > clock.as_of]
+
+    return JSONResponse({
+        "as_of": as_of,
+        "count": len(rows),
+        "reports": [r.as_dict() for r in rows],
+        "arrived_since": len(later),
+        "arrived_since_note": (
+            f"{len(later)} report(s) were observed after this board's as-of "
+            "and are not part of it. Move the as-of forward to include them."
+        ) if later else None,
+    })
+
+
+@app.get("/api/v1/reports/stream")
+async def stream_reports() -> StreamingResponse:
+    """Server-sent events, so a planner sees a report land without refreshing.
+
+    SSE rather than websockets: it is built into Starlette so it costs no new
+    dependency, it reconnects on its own, and the traffic is one-directional
+    anyway — the driver posts, the planner watches. A websocket would be more
+    machinery for a channel that only ever flows one way.
+    """
+    async def events():
+        cursor = len(_REPORT_FEED)
+        # Announce the cursor immediately so a client knows it is connected
+        # rather than waiting for the first report to find out.
+        yield f"event: ready\ndata: {json.dumps({'from': cursor})}\n\n"
+        while True:
+            if cursor < len(_REPORT_FEED):
+                for row in _REPORT_FEED[cursor:]:
+                    yield f"event: report\ndata: {json.dumps(row)}\n\n"
+                cursor = len(_REPORT_FEED)
+            else:
+                # A comment line keeps proxies from closing an idle stream.
+                yield ": keep-alive\n\n"
+            await asyncio.sleep(1.0)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/model")
@@ -412,6 +552,12 @@ def profile_page() -> Response:
 @app.head("/ops")
 def ops_page() -> Response:
     return _page("ops.html")
+
+
+@app.get("/driver")
+@app.head("/driver")
+def driver_page() -> Response:
+    return _page("driver.html")
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")

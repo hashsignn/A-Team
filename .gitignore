@@ -8,6 +8,13 @@ data/*.sqlite-shm
 data/cache/
 data/exports/
 
+# Field reports from drivers and on-site agents. OPERATIONAL DATA: it names
+# real consignments and, once the app is in real hands, real people. It is
+# also append-only evidence — committing it would put an audit log in a
+# public history where it can never be redacted.
+data/reports.jsonl
+data/reports.*.jsonl
+
 # Python
 .venv/
 __pycache__/

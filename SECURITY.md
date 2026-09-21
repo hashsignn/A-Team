@@ -90,6 +90,41 @@ the only one that ships.
 does not remove it from the history, and `git filter-repo` does not remove it
 from anyone's existing clone. Rotation is the only fix.
 
+### The field-report endpoint is unauthenticated in the prototype
+
+`POST /api/v1/reports` accepts a report from anyone who can reach it. That is
+a deliberate prototype choice and it is the **one thing on this list that
+must change before real drivers use it**, because this endpoint is the only
+source that can *unlock a reroute*: a forged report confirming a disruption
+that is not happening sends freight the long way round at somebody's expense.
+
+What is already true:
+
+| | |
+|---|---|
+| **Bounded** | every field is length-capped and enum-checked; an unbounded note is a denial-of-service and a log nobody can open |
+| **Refused loudly** | a malformed report is a 422, never coerced into something valid-looking — coercion here means a reroute on a misunderstanding |
+| **Append-only** | a report cannot overwrite or delete an earlier one, so a bad actor can add noise but cannot erase evidence |
+| **Shared token, when set** | `RADAR_REPORT_TOKEN` in the environment makes the endpoint require `X-Report-Token`, compared with `secrets.compare_digest` |
+
+The token is **opt-in rather than opt-out** on purpose: the demo has to run
+with no setup, and a secret that must be invented before anything works is a
+secret somebody will hardcode. Setting one environment variable turns it on.
+
+Before production, in order of importance:
+
+1. **Per-driver credentials, not a shared token.** A shared token cannot be
+   revoked for one person and cannot tell you who filed what.
+2. **Scope a credential to its consignments.** A driver on the Rhine should
+   not be able to file against a Singapore shipment.
+3. **Rate-limit per credential.** Append-only means abuse is unbounded
+   growth rather than corruption, which is still a problem.
+
+`data/reports.jsonl` is gitignored. It names real consignments and, once the
+app is in real hands, real people — and it is append-only evidence, so
+committing it would put an audit log in a public history where it can never
+be redacted.
+
 ### Why the radar does not POST to the TMS itself
 
 A separate process does, reading `TMS_BEARER_TOKEN` from its own environment.

@@ -1268,3 +1268,163 @@ a.ctl { text-decoration: none; }
 
 .d-ops { display: flex; gap: 7px; flex-wrap: wrap; padding: 0 22px 4px; }
 .pb-action-n { font-style: normal; font-size: 10.5px; color: var(--muted); margin-left: 8px; }
+
+/* ============================================================
+   THE DRIVER APP
+
+   Phone-first and one-handed. Targets are 48px+ because the person using
+   this is in a cab or on a deck, often in gloves, often in bad light.
+   Nothing here scales down from the desktop layout — it was sized for the
+   phone and left alone on larger screens, because a driver app that looks
+   impressive on a laptop was designed for the wrong device.
+   ============================================================ */
+.driver-page {
+  background: var(--plane);
+  max-width: 520px; margin: 0 auto;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+
+.dv-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--plane) 94%, transparent);
+  backdrop-filter: blur(8px);
+}
+.dv-head h1 { font-size: 19px; }
+.dv-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+.dv-net {
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); padding: 4px 9px; border-radius: 20px;
+  border: 1px solid var(--border); flex: none;
+}
+.dv-net.is-on { color: var(--lvl-green); border-color: var(--lvl-green); }
+
+.dv-main { padding: 16px 20px 40px; }
+
+/* ---- what the office is asking ---- */
+.dv-asked {
+  border: 1px solid var(--accent); border-left-width: 4px;
+  border-radius: 11px; padding: 14px 16px; margin-bottom: 20px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.dv-asked-label {
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 6px;
+}
+.dv-asked-title { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.dv-asked-meta { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+.dv-asked-quiet { font-size: 13px; color: var(--muted); }
+
+/* ---- fields ---- */
+.dv-field { display: block; margin-bottom: 20px; }
+.dv-field > span {
+  display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px;
+}
+.dv-field em { font-style: normal; color: var(--muted); font-weight: 400; }
+.dv-field input, .dv-field textarea {
+  width: 100%; font: inherit; font-size: 17px;   /* 17px: iOS zooms below 16 */
+  padding: 13px 14px; border-radius: 11px;
+  color: var(--text-primary); background: var(--surface-1);
+  border: 1.5px solid var(--border);
+}
+.dv-field input:focus, .dv-field textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.dv-gps {
+  margin-top: 8px; font: inherit; font-size: 13px; cursor: pointer;
+  padding: 9px 14px; border-radius: 9px; min-height: 40px;
+  color: var(--accent); background: transparent;
+  border: 1.5px solid var(--border);
+}
+
+.dv-status { border: 0; padding: 0; margin: 0 0 20px; }
+.dv-status legend {
+  font-size: 13px; font-weight: 500; padding: 0; margin-bottom: 8px;
+}
+.dv-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.dv-choices--3 { grid-template-columns: repeat(3, 1fr); }
+.dv-choices button {
+  font: inherit; font-size: 15px; cursor: pointer;
+  min-height: 52px; padding: 12px 8px; border-radius: 11px;
+  color: var(--text-primary); background: var(--surface-1);
+  border: 1.5px solid var(--border);
+  transition: border-color .12s, background .12s;
+}
+.dv-choices button:active { transform: scale(.98); }
+.dv-choices button.is-on {
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+.dv-choices.is-missing button { border-color: var(--lvl-yellow); }
+
+/* ---- the confirmation, deliberately distinct from a status ---- */
+.dv-confirm {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px 16px; border-radius: 11px; margin-bottom: 20px;
+  border: 1.5px dashed var(--lvl-yellow);
+  background: color-mix(in srgb, var(--lvl-yellow) 8%, transparent);
+  cursor: pointer;
+}
+.dv-confirm input { width: 22px; height: 22px; margin-top: 1px; flex: none; accent-color: var(--lvl-yellow); }
+.dv-confirm b { display: block; font-size: 14px; }
+.dv-confirm em {
+  display: block; font-style: normal; font-size: 12px;
+  color: var(--muted); margin-top: 4px; line-height: 1.45;
+}
+
+.dv-send {
+  width: 100%; font: inherit; font-size: 17px; font-weight: 600;
+  min-height: 56px; border-radius: 12px; cursor: pointer;
+  color: var(--accent-contrast); background: var(--accent);
+  border: 0;
+}
+.dv-send:active { filter: brightness(.94); }
+
+.dv-queue {
+  font-size: 13px; color: var(--lvl-yellow); margin-top: 16px;
+  padding: 11px 14px; border-radius: 9px;
+  background: color-mix(in srgb, var(--lvl-yellow) 10%, transparent);
+  line-height: 1.5;
+}
+.dv-log { margin-top: 16px; display: grid; gap: 7px; }
+.dv-sent {
+  font-size: 13px; padding: 11px 14px; border-radius: 9px;
+  border: 1px solid var(--border); border-left: 3px solid var(--lvl-green);
+  background: var(--surface-1);
+}
+.dv-sent.is-bad { border-left-color: var(--lvl-red); }
+.dv-sent b { color: var(--lvl-green); margin-right: 6px; }
+.dv-sent.is-bad b { color: var(--lvl-red); }
+.dv-sent em { font-style: normal; color: var(--muted); font-family: var(--mono); margin-left: 6px; }
+.dv-foot {
+  font-size: 11.5px; color: var(--muted); line-height: 1.55;
+  margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+.xreport {
+  border: 1px solid var(--border); border-left: 3px solid var(--lvl-green);
+  border-radius: 9px; padding: 11px 14px; margin-bottom: 7px;
+  background: var(--surface-1);
+}
+.xreport.is-confirming { border-left-color: var(--lvl-yellow); }
+.xreport-pos { font-size: 12.5px; margin-top: 5px; }
+.xreport-note { font-size: 12.5px; color: var(--text-secondary); margin-top: 5px; font-style: italic; }
+.dv-pinned {
+  font-size: 12px; line-height: 1.5; margin-bottom: 18px;
+  padding: 11px 14px; border-radius: 10px;
+  border: 1px dashed var(--lvl-yellow);
+  background: color-mix(in srgb, var(--lvl-yellow) 8%, transparent);
+}
+.dv-pinned b { display: block; color: var(--lvl-yellow); margin-bottom: 3px; }
+.dv-needs { margin: 10px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+.dv-needs li { color: var(--text-primary); }
+.dv-needs-done { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+/* The field that answers an outstanding question, marked so a driver does
+   not have to work out which of five boxes matters. */
+.dv-field.is-wanted > span::after {
+  content: 'they are waiting for this';
+  display: inline-block; margin-left: 8px; font-size: 10px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--lvl-yellow);
+}
+.dv-field.is-wanted input { border-color: var(--lvl-yellow); }
