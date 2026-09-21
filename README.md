@@ -531,6 +531,118 @@ board is complete either way.
 
 ---
 
+## The severity formula
+
+`engine/score/severity.py::classify` — the swap point, filled in.
+
+### It is a time-to-act scale, so severity is a deadline
+
+The client's own wording phrases every rung as one: *act within 6 hours*,
+*within 24–48*, *determine action within 3–7 days*. So severity here is **how
+soon must somebody decide**, never *how bad is this*. The raw answer is the
+clock the engine already computes:
+
+```
+τ = decision_deadline − as_of        where  decision_deadline = impact − action_duration
+τ_binding = min(τ) over shipments that still have an option open
+```
+
+### Magnitude compresses the clock, it does not replace it
+
+On its own the clock under-serves the question: two routes both a week out
+score identically whether CHF 900 or CHF 225 000 sits on them. That is
+precisely the failure Sika named in Q6 — *the real problem is that we declare
+a crisis too late* — arriving as an arithmetic property rather than a
+cultural one.
+
+$$\tau_{\text{eff}} = \frac{\tau_{\text{binding}}}{U}, \qquad U = 1 + 0.8M + 0.4L + 0.8D$$
+
+and `τ_eff` is read against **the client's own 6 / 48 / 168**. Their
+thresholds are never touched: re-tuning them would make the ladder ours
+instead of theirs.
+
+| term | is | why |
+|---|---|---|
+| $M$ | $\text{clamp}\!\left(\dfrac{\log_{10}(E/1000)}{\log_{10}(150000/1000)},0,1\right)$ | **Log.** Money here spans four orders of magnitude; a linear term saturates at the first big number, after which every large route looks identical. Anchored on the material floor and the convene threshold — both already in `scoring.yaml`, so no new parameter. |
+| $L$ | $P(\text{late})$ of the binding shipment | At $P=0.95$ decide now; at $P=0.2$ waiting buys information. Straight from the Monte Carlo. |
+| $D$ | 1 if an **irreversible** damage pathway is open | From the Layer 4 gate. Reversible degradation does *not* count — that is a cost, already carried by $E$, and counting it twice would make a chilled-but-recoverable adhesive read like scrapped polymer. |
+
+**Additive, never multiplicative.** A product of [0,1] factors drives toward
+zero as dimensions are added, so the model would get *quieter* the more it
+was taught. A bounded sum cannot, and each term stays separately inspectable
+— you can ask which one moved a route and get an answer.
+
+**$U \ge 1$ always.** Compression may only make a deadline sooner. A term
+that could push one further out would let a large exposure *hide* a real
+clock, which is the opposite of the point.
+
+### The one-rung bound is provable, and tested against the live config
+
+$U_{\max} = 1 + \sum w = 3.0$. The adjacent threshold ratios are
+$168/48 = 3.5$ and $48/6 = 8$. Since $3.0 < 3.5$:
+
+> **A single compression can never advance more than one rung.**
+
+Money may make you decide sooner; it can never manufacture a six-hour
+emergency out of a week of slack. The test asserts the two sides *against
+each other* rather than against constants, so changing either the weights or
+the client's cutoffs fails loudly instead of quietly letting the bound lapse.
+
+### A dead band, because boundaries are sticky
+
+Near a threshold any continuous modifier tips — 176 h with CHF 2 000 still
+crosses 168. Without a band a route churns between rungs on successive runs
+as exposure wobbles, and **a level that flickers is a level nobody
+believes**. `dead_band: 0.10` requires the compressed clock to clear the next
+boundary by 10 % before re-levelling.
+
+Measured over 22 instants of the demo board: **10 re-levellings, every one
+exactly one rung**, concentrated on the highest-exposure route. Not silent,
+not noisy.
+
+### The deadline a planner works to is never changed
+
+Compression moves the **level**. `lead_time_hours` stays the real clock, and
+the reason string carries both:
+
+> *5 shipment(s) on this route still have an option open; the first expires
+> in 7 h. **Treated as 4 h rather than 7 h — CHF 62,803 at stake.***
+
+Telling somebody they have 4 hours when they have 7 would be a lie dressed
+as urgency. The full working — multiplier, each term, raw and effective
+hours — rides on the route payload as `urgency`, because a level that moved
+for a reason nobody can see is a level they will argue with, and they would
+be right to.
+
+### Corroboration: what one uncorroborated source may do
+
+Sika, answering Q5: factor in social media, in line with the corroboration
+threshold. Social media is not a *better* signal, it is an *earlier* one —
+its whole value is arriving while there is still time to act.
+
+So it may raise a flag and may not on its own move a delivery date. An
+uncorroborated tier-3 report **caps at Watch**; a second independent tier-3
+source lifts the cap; an authority notice at tier 1–2 needs no corroboration
+at all, because it is the record rather than a claim about it. The cap only
+ever *lowers* a level — it can never promote a quiet route.
+
+### The numbers, and who owns them
+
+All in `config.example/scoring.yaml` under `urgency` and `corroboration`,
+marked **ASSUMED**, editable from the risk profile page. They are the
+arguable part and they belong to the planning team:
+
+```yaml
+urgency:
+  weights: {magnitude: 0.8, likelihood: 0.4, irreversible: 0.8}   # sum ≤ 2.5
+  magnitude_reference_chf: 150000
+  dead_band: 0.10
+corroboration:
+  uncorroborated_tier3_cap: blue
+```
+
+---
+
 ## The four-layer taxonomy, and the idea that makes it compose
 
 Layer 1 is the 45-variable ledger. Layers 2–4 describe **our** side of the
