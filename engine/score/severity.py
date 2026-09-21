@@ -34,7 +34,8 @@ arrives, it replaces ``classify()`` and nothing else moves.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 from enum import Enum
 
 from engine.config import Config
@@ -91,6 +92,10 @@ class Verdict:
     lead_time_hours: float | None
     exposure_chf: float
     recoverable_chf: float
+    # How the clock was compressed, and by what. Carried so a planner can ask
+    # "why is this Watch and not Bias" and get the arithmetic back rather
+    # than an assertion.
+    urgency: dict = field(default_factory=dict)
 
     @property
     def rank(self) -> int:
@@ -105,6 +110,177 @@ class Verdict:
         return LEVEL_DIRECTIVE[self.level]
 
 
+# =====================================================================
+# URGENCY COMPRESSION
+# =====================================================================
+
+
+def magnitude_term(exposure_chf: float, config: Config) -> float:
+    """CHF exposure on [0, 1], log-scaled.
+
+    Log because money here spans four orders of magnitude — CHF 900 to CHF
+    400,000 on the same board — and a linear term saturates at the first big
+    number, after which every large route looks identical.
+
+    Anchored at the two figures already in this config: the material floor
+    (below which nothing is at stake) and the convene threshold (big enough
+    to pull the team out of their weekly cycle). No new parameter.
+    """
+    spec = config.scoring.get("urgency", {})
+    floor = float(_thresholds(config).get("material_chf", 1000.0))
+    reference = float(spec.get("magnitude_reference_chf", 150_000.0))
+    if reference <= floor or exposure_chf <= floor:
+        return 0.0
+    span = math.log10(reference / floor)
+    if span <= 0:
+        return 0.0
+    return max(0.0, min(1.0, math.log10(exposure_chf / floor) / span))
+
+
+def urgency_multiplier(
+    exposure_chf: float,
+    p_late: float,
+    irreversible: bool,
+    config: Config,
+) -> tuple[float, dict]:
+    """U >= 1. Returns the multiplier and the working, for the audit trail.
+
+    ADDITIVE on purpose. A product of [0, 1] factors drives toward zero as
+    dimensions are added, so the model would get quieter the more it was
+    taught — backwards. A bounded sum cannot, and each term stays separately
+    inspectable.
+
+    U is never below 1: compression may only make a deadline sooner, never
+    later. A term that could push a deadline further out would let a large
+    exposure HIDE a real clock, which is the opposite of the failure this is
+    for.
+    """
+    spec = config.scoring.get("urgency", {})
+    weights = spec.get("weights", {})
+    w_m = float(weights.get("magnitude", 0.0))
+    w_l = float(weights.get("likelihood", 0.0))
+    w_d = float(weights.get("irreversible", 0.0))
+
+    m = magnitude_term(exposure_chf, config)
+    likely = max(0.0, min(1.0, float(p_late)))
+    damage = 1.0 if irreversible else 0.0
+
+    multiplier = 1.0 + w_m * m + w_l * likely + w_d * damage
+    return multiplier, {
+        "multiplier": round(multiplier, 3),
+        "magnitude": round(m, 3),
+        "likelihood": round(likely, 3),
+        "irreversible": bool(irreversible),
+        "weights": {"magnitude": w_m, "likelihood": w_l, "irreversible": w_d},
+    }
+
+
+def max_multiplier(config: Config) -> float:
+    weights = config.scoring.get("urgency", {}).get("weights", {})
+    return 1.0 + sum(float(v) for v in weights.values())
+
+
+def smallest_threshold_ratio(config: Config) -> float:
+    """The tightest gap between adjacent rungs.
+
+    U_max must stay below this, and that is what makes a single compression
+    unable to advance more than one rung. With the client's own 6/48/168 the
+    ratios are 3.5 and 8.0, so anything under 3.5 is safe.
+    """
+    spec = _thresholds(config)
+    red = float(spec.get("red_hours", 6))
+    yellow = float(spec.get("yellow_hours", 48))
+    blue = float(spec.get("blue_hours", 168))
+    ratios = [r for r in (yellow / red, blue / yellow) if r > 0]
+    return min(ratios) if ratios else float("inf")
+
+
+def _level_for_hours(hours: float, config: Config) -> Level:
+    spec = _thresholds(config)
+    if hours <= float(spec.get("red_hours", 6)):
+        return Level.RED
+    if hours <= float(spec.get("yellow_hours", 48)):
+        return Level.YELLOW
+    if hours <= float(spec.get("blue_hours", 168)):
+        return Level.BLUE
+    return Level.WHITE
+
+
+def _apply_dead_band(
+    raw_hours: float, effective_hours: float, config: Config
+) -> tuple[Level, bool]:
+    """Re-level only if the compressed clock clears the boundary decisively.
+
+    Near a threshold ANY continuous modifier tips: 176 h with CHF 2,000 still
+    crosses 168. Without a dead-band a route churns between rungs on
+    successive runs as the exposure wobbles, and a level that flickers is a
+    level nobody believes.
+    """
+    raw_level = _level_for_hours(raw_hours, config)
+    new_level = _level_for_hours(effective_hours, config)
+    if new_level is raw_level:
+        return raw_level, False
+
+    band = float(config.scoring.get("urgency", {}).get("dead_band", 0.0))
+    if band <= 0.0:
+        return new_level, True
+
+    spec = _thresholds(config)
+    boundary = {
+        Level.RED: float(spec.get("red_hours", 6)),
+        Level.YELLOW: float(spec.get("yellow_hours", 48)),
+        Level.BLUE: float(spec.get("blue_hours", 168)),
+        Level.WHITE: float("inf"),
+    }[new_level]
+    if boundary == float("inf"):
+        return new_level, True
+    # Must be inside the new rung by the band, not merely across the line.
+    if effective_hours <= boundary * (1.0 - band):
+        return new_level, True
+    return raw_level, False
+
+
+# =====================================================================
+# CORROBORATION
+# =====================================================================
+
+
+def corroboration_cap(
+    source_tiers: list[int] | None, config: Config
+) -> tuple[Level | None, str | None]:
+    """The highest rung an uncorroborated low-tier report may reach.
+
+    Sika, answering Q5: factor in social media, in line with the
+    corroboration threshold. Social media is not a BETTER signal, it is an
+    EARLIER one — its whole value is arriving while there is still time to
+    act. So it may raise a flag and may not on its own move a delivery date.
+
+    Returns ``(None, None)`` when nothing is capped, which is the common case.
+    """
+    if not source_tiers:
+        return None, None
+    spec = config.scoring.get("corroboration", {})
+    authoritative_at = int(spec.get("authoritative_tier_at_or_below", 2))
+    needed = int(spec.get("tier3_sources_for_corroboration", 2))
+
+    if any(t <= authoritative_at for t in source_tiers):
+        return None, None
+    low = [t for t in source_tiers if t > authoritative_at]
+    if len(low) >= needed:
+        return None, None
+
+    cap_name = str(spec.get("uncorroborated_tier3_cap", "blue")).lower()
+    try:
+        cap = Level(cap_name)
+    except ValueError:
+        return None, None
+    return cap, (
+        f"Capped at {LEVEL_LABEL[cap]}: the only source is tier "
+        f"{min(low)} and nothing corroborates it. It can raise a flag; it "
+        f"cannot move a delivery date on its own."
+    )
+
+
 def _thresholds(config: Config) -> dict:
     return config.scoring.get("alert_levels", {})
 
@@ -112,16 +288,42 @@ def _thresholds(config: Config) -> dict:
 def classify(
     risks: list[ShipmentRisk],
     config: Config,
+    source_tiers: list[int] | None = None,
+    irreversible_damage: bool = False,
 ) -> Verdict:
     """Assign a level to a set of shipment risks (one route, or one event).
 
-    THE SWAP POINT. When the real severity formula arrives it replaces the body
-    of this function; callers, the API shape and the UI stay as they are.
+    THE SEVERITY FORMULA.
+
+    The ladder is a TIME-TO-ACT scale, so severity here is "how soon must
+    somebody decide", never "how bad is this". The raw answer is the clock:
+
+        tau = decision_deadline - as_of
+
+    On its own that under-serves the question — two routes both a week out
+    score identically whether CHF 900 or CHF 225,000 sits on them, which is
+    the exact failure Sika named in Q6: a large, slow-building exposure stays
+    in "monitor" until suddenly it is not, and by then the options are gone.
+
+    So magnitude COMPRESSES the clock rather than replacing it:
+
+        tau_effective = tau_binding / U
+        U = 1 + 0.8*magnitude + 0.4*P(late) + 0.8*irreversible
+
+    and tau_effective is read against the CLIENT'S OWN 6/48/168. Their
+    thresholds are never touched: re-tuning them would make the ladder ours
+    instead of theirs.
+
+    U <= 3 is a load-bearing bound, not a preference. The adjacent threshold
+    ratios are 168/48 = 3.5 and 48/6 = 8, so a U below 3.5 cannot cross two
+    boundaries — money may make you decide sooner, it can never manufacture a
+    six-hour emergency out of a week of slack. ``test_severity.py`` asserts
+    that against the live config, so changing either side fails loudly.
+
+    ``source_tiers`` and ``irreversible_damage`` are optional and default to
+    the uninformed case, so every existing caller keeps working unchanged.
     """
     spec = _thresholds(config)
-    red_h = float(spec.get("red_hours", 6))
-    yellow_h = float(spec.get("yellow_hours", 48))
-    blue_h = float(spec.get("blue_hours", 168))
     material_floor = float(spec.get("material_chf", 1000))
 
     if not risks:
@@ -173,16 +375,36 @@ def classify(
 
     # The binding deadline is the EARLIEST one on the route: the first option to
     # expire sets the clock, not the average and not the most comfortable.
-    soonest = min(r.lead_time_hours for r in actionable)  # type: ignore[type-var]
+    binding = min(actionable, key=lambda r: r.lead_time_hours)  # type: ignore[arg-type]
+    soonest = float(binding.lead_time_hours)  # type: ignore[arg-type]
 
-    if soonest <= red_h:
-        level = Level.RED
-    elif soonest <= yellow_h:
-        level = Level.YELLOW
-    elif soonest <= blue_h:
-        level = Level.BLUE
+    # ---- compress the clock -------------------------------------------
+    enabled = bool(config.scoring.get("urgency", {}).get("enabled", False))
+    if enabled:
+        multiplier, working = urgency_multiplier(
+            exposure, binding.do_nothing.p_late, irreversible_damage, config
+        )
+        effective = soonest / multiplier if multiplier > 0 else soonest
+        level, moved = _apply_dead_band(soonest, effective, config)
+        working.update({
+            "raw_hours": round(soonest, 2),
+            "effective_hours": round(effective, 2),
+            "re_levelled": moved,
+        })
     else:
-        level = Level.WHITE
+        multiplier, effective = 1.0, soonest
+        level = _level_for_hours(soonest, config)
+        working = {"multiplier": 1.0, "raw_hours": round(soonest, 2),
+                   "effective_hours": round(soonest, 2), "re_levelled": False}
+
+    # ---- corroboration cap --------------------------------------------
+    cap, cap_reason = corroboration_cap(source_tiers, config)
+    capped = False
+    if cap is not None and LEVEL_RANK[level] > LEVEL_RANK[cap]:
+        working["capped_from"] = level.value
+        level = cap
+        capped = True
+    working["capped"] = capped
 
     when = (
         f"{soonest:.0f} h"
@@ -198,6 +420,24 @@ def classify(
         f"{len(actionable)} shipment(s) on this route still have an option "
         f"open; the first expires in {when}."
     )
+    # Say WHY the clock was compressed, in the same sentence as the clock.
+    # A level that moved for a reason the planner cannot see is a level they
+    # will argue with, and they would be right to.
+    if working.get("re_levelled"):
+        drivers = []
+        if working["magnitude"] >= 0.25:
+            drivers.append(f"CHF {exposure:,.0f} at stake")
+        if working["likelihood"] >= 0.5:
+            drivers.append(f"{working['likelihood']:.0%} chance of lateness")
+        if working["irreversible"]:
+            drivers.append("cargo that cannot be saved by arriving later")
+        if drivers:
+            reason += (
+                f" Treated as {working['effective_hours']:.0f} h rather than "
+                f"{working['raw_hours']:.0f} h — {' and '.join(drivers)}."
+            )
+    if capped and cap_reason:
+        reason += " " + cap_reason
     if level is Level.WHITE:
         reason += " No decision needed yet."
 
@@ -207,6 +447,7 @@ def classify(
         lead_time_hours=soonest,
         exposure_chf=exposure,
         recoverable_chf=recoverable,
+        urgency=working,
     )
 
 

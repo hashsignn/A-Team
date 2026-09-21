@@ -190,3 +190,77 @@ alert_levels:
   # ASSUMED — ranking within a level is by CHF exposure. Lexicographic: the
   # rung always wins, and money only breaks ties inside it.
   rank_within_level_by: exposure_chf
+
+# =====================================================================
+# URGENCY COMPRESSION — the severity formula
+# =====================================================================
+# The ladder above is a TIME-TO-ACT scale, so severity is "how soon must
+# somebody decide", not "how bad is this". The raw answer is the clock:
+#
+#     tau = decision_deadline - as_of
+#
+# On its own that under-serves the question. Two routes both a week out score
+# identically whether CHF 900 or CHF 225,000 sits on them — which is exactly
+# the failure Sika named in Q6: a large, slow-building exposure stays in
+# "monitor" until suddenly it is not, and by then the options are gone.
+#
+# So magnitude COMPRESSES the clock rather than replacing it:
+#
+#     tau_effective = tau / U
+#     U = 1 + w_magnitude*M + w_likelihood*L + w_irreversible*D
+#
+# and tau_effective is classified against the CLIENT'S OWN 6/48/168. Their
+# thresholds are never touched, which matters: re-tuning them would make the
+# ladder ours instead of theirs.
+#
+# ADDITIVE, NOT MULTIPLICATIVE. A product of [0,1] factors collapses toward
+# zero as dimensions are added, so the model would get quieter the more it
+# was taught. A bounded sum cannot, and each term stays independently
+# inspectable — you can ask which one moved a route and get an answer.
+urgency:
+  enabled: true
+
+  # ASSUMED — how hard each term pulls. They are the arguable numbers in this
+  # file and they belong to the planning team.
+  #
+  # THE CAP IS NOT A TASTE CALL. U_max = 1 + sum(weights) must stay BELOW the
+  # smallest ratio between adjacent thresholds — here min(168/48, 48/6) = 3.5
+  # — because that is what makes a single compression unable to advance more
+  # than one rung. Money may make you decide sooner; it must never
+  # manufacture a six-hour emergency out of a week of slack. A test asserts
+  # this against the live thresholds, so changing either side fails loudly.
+  weights:
+    magnitude: 0.8      # CHF exposure, log-scaled
+    likelihood: 0.4     # P(late) of the binding shipment
+    irreversible: 0.8   # cargo that cannot be saved by arriving later
+
+  # The exposure at which the magnitude term saturates. Reuses the convene
+  # threshold rather than inventing a number: "big enough to pull the team
+  # out of their weekly cycle" is the same notion of big.
+  magnitude_reference_chf: 150000
+
+  # Near a boundary ANY continuous modifier tips — 176 h with CHF 2,000 still
+  # crosses 168. A dead-band requires the compressed time to clear the next
+  # threshold by this fraction before it re-levels, so a marginal nudge does
+  # not churn a route between rungs on successive runs.
+  # ASSUMED. Set to 0.0 to disable.
+  dead_band: 0.10
+
+# =====================================================================
+# CORROBORATION — what a single uncorroborated source may do
+# =====================================================================
+# Sika, answering Q5: factor in social media, in line with the corroboration
+# threshold. Social media is not a BETTER signal, it is an EARLIER one, and
+# its whole value is arriving while there is still time to act.
+#
+# So it may raise a flag; it may not on its own move a delivery date. An
+# uncorroborated tier-3 report caps at the rung below "act within 48 hours",
+# and a second independent source lifts the cap.
+corroboration:
+  # ASSUMED — the cap, as a level name.
+  uncorroborated_tier3_cap: blue
+  # How many independent tier-3 sources count as corroboration on their own.
+  tier3_sources_for_corroboration: 2
+  # A tier at or below this needs no corroboration: an authority notice is
+  # the record, not a claim about it.
+  authoritative_tier_at_or_below: 2

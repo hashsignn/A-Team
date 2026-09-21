@@ -130,7 +130,19 @@ def _build_route(
     risks = risks_by_route.get(lane_id, [])
     assessments = list(events_by_route.get(lane_id, {}).values())
 
-    verdict = classify(risks, context.config)
+    # The severity formula reads two things beyond the clock: how well the
+    # events are sourced, and whether any cargo on this route can be
+    # irreversibly damaged. Both are known here and nowhere deeper, so they
+    # are resolved at the call site rather than by making classify() reach
+    # back into the run context.
+    source_tiers = [a.event.provenance.source_tier for a in assessments]
+    irreversible = _route_has_irreversible_damage(lane, assessments, context)
+
+    verdict = classify(
+        risks, context.config,
+        source_tiers=source_tiers,
+        irreversible_damage=irreversible,
+    )
     shipments = [s for s in context.shipments if s.lane_id == lane_id]
 
     return {
@@ -142,6 +154,11 @@ def _build_route(
         "directive": verdict.directive,
         "reason": verdict.reason,
         "severity_score": severity_score(verdict, exposure_cap),
+        # The severity formula's working. Carried so a planner can ask why a
+        # route is Watch rather than Bias and get the arithmetic back rather
+        # than an assertion — a level that moved for an invisible reason is a
+        # level they will argue with, and they would be right to.
+        "urgency": verdict.urgency,
         "lead_time_hours": verdict.lead_time_hours,
         "exposure_chf": round(verdict.exposure_chf, 2),
         # NOT DISPLAYED. Kept because the convene rule is built on it, but it
@@ -303,6 +320,58 @@ def _event_matrix(risks: list[ShipmentRisk]) -> dict:
         ),
         "still_actionable": sum(1 for p in points if p["ring"] == "solid"),
     }
+
+
+def _route_has_irreversible_damage(
+    lane: dict, assessments: list, context: RunContext
+) -> bool:
+    """Can anything on this route be harmed rather than merely delayed?
+
+    Runs the Layer 4 gate over each event against the cargo actually moving
+    on the lane. Only IRREVERSIBLE damage counts: reversible degradation is a
+    cost, and costs are already carried by the exposure term. Double-counting
+    it would let a chilled-but-recoverable adhesive read like scrapped
+    polymer.
+
+    Observations are not available per leg yet — no live temperature feed is
+    connected — so this asks the structural question: is there cargo here
+    whose damage pathway COULD open. That is deliberately conservative in one
+    direction only. It can say "this route carries freeze-critical goods and
+    the event class can freeze them", which is true and useful; it never
+    claims a freeze was observed.
+    """
+    from engine.export.tms import _cargo_class_of
+    from engine.taxonomy.pathways import Pathway, declared_pathway
+
+    config = context.config
+    try:
+        cargo_classes = {
+            _cargo_class_of(s) for s in context.shipments
+            if s.lane_id == lane["id"]
+        }
+    except Exception:  # noqa: BLE001 — a mapping gap must not fail the board
+        return False
+
+    taxonomy = config.raw("taxonomy")["layer4_cargo"]
+    for assessment in assessments:
+        for variable_id in assessment.event.active_variables:
+            pathway, _ = declared_pathway(config, variable_id)
+            if pathway is not Pathway.BOTH and pathway is not Pathway.DAMAGE:
+                continue
+            variable = config.variables.get(variable_id)
+            if variable is None:
+                continue
+            for cargo_class in cargo_classes:
+                spec = taxonomy.get(cargo_class, {})
+                conditions = spec.get("damage_conditions") or []
+                if not conditions:
+                    continue
+                at_risk = spec.get("families_at_risk") or []
+                if at_risk and variable.family not in at_risk:
+                    continue
+                if any(c.get("irreversible") for c in conditions):
+                    return True
+    return False
 
 
 def _eligible_families(lane: dict, context: RunContext) -> list[str]:
