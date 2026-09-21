@@ -102,6 +102,14 @@
 
         <div class="stat-row" id="d-stats"></div>
 
+        <!-- Into the operational surfaces: the playbook (what to do, in
+             order, and what is locked), the consignment list (every shipment
+             on this lane with its OWN deadline) and the execute view. -->
+        <div class="d-ops">
+          <a class="ctl ctl--primary" id="link-ops" href="/ops">Open the playbook</a>
+          <a class="ctl" id="link-cargo" href="/ops#cargo">Consignments</a>
+        </div>
+
         <!-- Radar: families as spokes, in DAYS OF DELAY.
              Only families actually active on this route get a spoke — a
              sleeping family on the chart would imply it was assessed and

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operations — Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="icon" href="data:,">
+<script src="/theme.js?v=__ASSETV__"></script>
+</head>
+<body class="ops-page">
+
+<!-- ============================================================
+     THREE SURFACES OVER ONE ENGINE
+
+     Playbook   what to do first, and what is not allowed yet
+     Consignments  every shipment on this lane, each with its own answer
+     Execute    one shipment, for whoever is moving it
+
+     None of them recomputes anything. Every figure shown here was computed
+     once for the planner's board — a second calculation would eventually
+     disagree with the first, and a planner contradicted by their own tool
+     stops using it.
+     ============================================================ -->
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <h1 id="ops-title">Operations</h1>
+      <p class="brand-sub" id="brand-sub">loading…</p>
+    </div>
+  </div>
+  <div class="prof-head-right">
+    <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+    <a class="ctl" href="/">&larr; Back to the radar</a>
+  </div>
+</header>
+
+<nav class="ops-tabs" id="ops-tabs" aria-label="Operations views">
+  <button type="button" class="ops-tab is-on" data-view="playbook">
+    <b>Playbook</b><span>what to do, in order</span>
+  </button>
+  <button type="button" class="ops-tab" data-view="cargo">
+    <b>Consignments</b><span>each with its own deadline</span>
+  </button>
+  <button type="button" class="ops-tab" data-view="execute">
+    <b>Execute</b><span>for whoever is moving it</span>
+  </button>
+</nav>
+
+<main class="ops-main">
+  <section class="ops-view is-on" id="view-playbook"></section>
+  <section class="ops-view" id="view-cargo"></section>
+  <section class="ops-view" id="view-execute"></section>
+</main>
+
+<script src="/ops.js?v=__ASSETV__"></script>
+</body>
+</html>
