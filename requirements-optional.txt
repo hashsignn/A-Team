@@ -14,3 +14,9 @@ searoute>=1.4
 playwright>=1.47
 pillow>=10.0
 ruff>=0.6
+
+# Only for scripts/import_sika_flows.py, which reads the customer's .xlsx
+# export once and writes config/flows.yaml. The engine reads that YAML, not
+# the workbook, so nothing at runtime needs this — install it when you have
+# an export to import, and not otherwise.
+openpyxl>=3.1

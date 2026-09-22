@@ -90,9 +90,14 @@ def read(path: Path) -> list[dict]:
     try:
         import openpyxl
     except ImportError:  # pragma: no cover - environment, not logic
+        # The path differs by platform, and printing the wrong one is worse
+        # than printing none: somebody types it, gets "not recognised", and
+        # is now debugging their Python install instead of installing one
+        # package. sys.executable is already the interpreter running this,
+        # so it is right by construction on every platform.
         raise SystemExit(
-            "openpyxl is needed to read the export:\n"
-            "  .venv/bin/pip install openpyxl"
+            "openpyxl is needed to read the export, and is not installed.\n"
+            f"  {sys.executable} -m pip install openpyxl"
         ) from None
 
     ws = openpyxl.load_workbook(path, data_only=True, read_only=True).worksheets[0]
