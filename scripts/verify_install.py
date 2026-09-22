@@ -30,9 +30,20 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 # file for that feature to exist at all.
 MARKERS = {
     # Solution A — the delivery-first surface. First in the table because it
-    # is what "/" now serves, so it is the thing somebody reporting "still the
-    # old front end" is actually asking about.
-    "Front page is the decision surface": ("api/main.py", 'def index() -> Response:\n    return _page("fast.html")'),
+    # is the thing somebody reporting "still the old front end" is asking
+    # about.
+    #
+    # This marker named the wrong page for a while. It checked that "/" served
+    # fast.html, which was true for exactly as long as it took to hear that
+    # the globe and the affected routes belong on one screen. "/" went back to
+    # serving the globe board with the routes panel beside it, /fast stayed as
+    # its own surface, and the marker was left pointing at the arrangement
+    # that had been deliberately replaced — so it reported "YOUR CLONE IS
+    # BEHIND" at anybody whose clone was perfectly current. A check that
+    # cries wolf is worse than no check: it sends people to chase a git pull
+    # that cannot help them. It now names what is actually on each page.
+    "Globe and affected routes on one page": ("api/static/index.html", 'id="panel-list"'),
+    "Front page links to the fast board": ("api/static/index.html", 'href="/fast"'),
     "Fast dashboard page":            ("api/static/fast.html", "What needs a decision"),
     "One-click execute":              ("api/static/fast.js", "/api/v2/act"),
     "Undo window with a countdown":   ("api/static/fast.js", "to change your mind"),
@@ -40,6 +51,11 @@ MARKERS = {
     "Profitability veto":             ("engine/fast/margin.py", "margin_floor_chf"),
     "Generated reroutes":             ("engine/fast/contingency.py", "fastest_path"),
     "Event bus":                      ("engine/fast/bus.py", "TOPIC_DISRUPTION"),
+    "Mixed-capacity plans":           ("engine/fast/capacity.py", "units_needed_by"),
+    "Solution board tabs":            ("api/static/board.js", "ptab--on"),
+    "A mode can be half shut":        ("engine/fast/view.py", "_mode_pressure"),
+    "Options say if the trucks exist": ("engine/fast/view.py", "capacity_note"),
+    "Declared corridor ceilings":     ("config.example/fast.yaml", "tonnes_per_unit"),
 
     "Globe stops when you touch it":  ("api/static/app.js", "pointerdown"),
     "Click a port to open its lane":  ("api/static/app.js", "busiestRouteThrough"),
@@ -109,8 +125,14 @@ def main() -> int:
             name = rel.removeprefix("api/static/")
             if name not in served:
                 served[name] = _served(f"/{name}") or ""
-        # The front page is served at "/", not at its filename.
-        served["fast.html"] = index
+        # A page is served at its ROUTE, and the route is not always the
+        # filename. "/" is the globe board; the fast board has its own path,
+        # which the loop above already fetched. This line used to assign the
+        # front page's HTML to fast.html — true while "/" served fast.html,
+        # false the moment the globe went back to the front, and from then on
+        # it checked one page's marker against another page's markup and
+        # reported a missing dashboard on a clone that had one.
+        served["index.html"] = index
 
     print("\n  FEATURE                              ON DISK   SERVED")
     missing_disk = missing_served = 0
@@ -150,9 +172,18 @@ def main() -> int:
 
     print("Everything is present, on disk and in what the server sends.")
     print()
-    print('"/" is the decision surface. The globe board moved to "/board".')
-    print("If you are looking at the globe, you are on /board, and that page")
-    print("is meant to look the way it always did.")
+    # This said the opposite for a while — that "/" was the decision surface
+    # and the globe had moved aside. That was true briefly, and then the globe
+    # went back to the front because the globe is what people mean when they
+    # say "the radar". A message that misdescribes the pages sends somebody
+    # looking for a screen that is already in front of them.
+    print("Where each screen lives:")
+    print("  /                the globe board, with every affected route")
+    print("                   beside it (/board is an alias)")
+    print("  /fast            what needs a decision, fastest first")
+    print("  /fast/<LANE_ID>  one lane: the options, and below them the")
+    print("                   capacity tabs — how the freight actually moves")
+    print("  /ops?route=<ID>  the operations console for that lane")
     if space:
         # In a Codespace the likeliest remaining cause is not the browser
         # cache at all — it is that you are not looking at a browser.
