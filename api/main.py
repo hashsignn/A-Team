@@ -341,6 +341,10 @@ async def upload_photo(
     # Same gate as the reports themselves: a photo is part of a report, and
     # an endpoint that accepts files with weaker auth than the text beside
     # them is the one an attacker uses.
+    # The same gate as the reports themselves. The identity is not stamped on
+    # the photo — a photo has no author field — but an endpoint that accepts
+    # files with weaker auth than the text beside them is the one an attacker
+    # uses to fill a disk.
     _report_auth(x_report_token)
 
     body = await request.body()
@@ -422,19 +426,41 @@ def execute(
 # this is exposed beyond a demo, and it is enforced below when set.
 
 
-def _report_auth(token: str | None) -> None:
-    """Enforce the shared token IF one is configured.
+def _report_auth(token: str | None):
+    """Who is filing this. Returns a Driver, or None when nobody is required.
 
-    Deliberately opt-in rather than opt-out: the demo has to run with no
-    setup at all, and a token that must be invented before anything works is
-    a token somebody will hardcode. When RADAR_REPORT_TOKEN is set the
-    endpoint requires it, so turning it on is one environment variable.
+    Three modes, in precedence:
+
+    1. **No drivers, no shared token** — open, as the prototype has always
+       been. A demo that needs a credential before it demonstrates anything
+       is a demo nobody runs.
+    2. **RADAR_REPORT_TOKEN set** — one shared secret. Opt-in, because a token
+       you must invent before anything works is a token somebody hardcodes.
+    3. **A driver store exists** — a per-driver credential is required, and
+       the shared token STOPS BEING SUFFICIENT.
+
+    That last clause is the point of the whole feature. If the shared token
+    still worked once drivers existed, registering them would not increase
+    security — it would add a second way in and call it progress.
+
+    The failure message never says which mode is in force or which key ids
+    exist. Telling an attacker that turns guessing a token into guessing a
+    secret for a key they know is real.
     """
+    from engine.ingest import credentials as creds  # noqa: PLC0415
+
+    if creds.in_force():
+        driver = creds.verify(token)
+        if driver is None:
+            raise HTTPException(401, "a valid driver credential is required")
+        return driver
+
     expected = os.environ.get("RADAR_REPORT_TOKEN")
     if not expected:
-        return
+        return None
     if not token or not secrets.compare_digest(token, expected):
         raise HTTPException(401, "a valid report token is required")
+    return None
 
 
 @app.post("/api/v1/reports")
@@ -449,7 +475,23 @@ def submit_report(
     instant it was OBSERVED, which a queued offline report sets to when the
     driver actually saw it rather than when the signal came back.
     """
-    _report_auth(x_report_token)
+    driver = _report_auth(x_report_token)
+
+    # WHO filed it is established by the credential, not by the payload.
+    #
+    # `reported_by` was a free-text field nobody filled in. A report saying
+    # "Hans" is only evidence if Hans is who sent it, and a self-declared name
+    # is worth exactly nothing on the endpoint that can release a re-route.
+    # When a driver is authenticated their name overwrites whatever arrived,
+    # and the report records that it was verified.
+    if driver is not None:
+        payload = {
+            **payload,
+            "reported_by": driver.name,
+            "driver_key": driver.key_id,
+            "authenticated": True,
+        }
+
     try:
         report = reports_mod.validate(payload, Clock.wall().as_of)
     except reports_mod.ReportError as exc:

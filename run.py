@@ -158,6 +158,77 @@ def _default_host() -> str:
     return "0.0.0.0" if in_container else "127.0.0.1"  # noqa: S104
 
 
+# =====================================================================
+# Driver credentials
+# =====================================================================
+def cmd_driver(args) -> int:
+    """Issue, list and revoke the credentials that can file field reports.
+
+    A subcommand rather than a web form on purpose. Issuing a credential is
+    an administrative act with a consequence — the holder can confirm a
+    disruption and release a re-route — and it belongs with the person who
+    has a shell on the machine, not behind a page anybody who reaches the
+    server can find.
+    """
+    from datetime import UTC, datetime
+
+    from engine.ingest import credentials as creds
+
+    now = datetime.now(UTC)
+
+    if args.action == "list":
+        found = creds.drivers()
+        if not found:
+            print("No drivers registered.")
+            print("The report endpoint is open, or uses RADAR_REPORT_TOKEN if set.")
+            return 0
+        print(f"{len(found)} driver(s):\n")
+        for d in found:
+            mark = "  " if d.active else "R "
+            carrier = f"  {d.carrier}" if d.carrier else ""
+            print(f"  {mark}{d.key_id}  {d.name}{carrier}")
+            if not d.active:
+                print(f"       revoked {d.revoked_at}")
+        print("\nR = revoked. Per-driver credentials are IN FORCE while any "
+              "driver is active;\nthe shared RADAR_REPORT_TOKEN is not "
+              "sufficient on its own once they are.")
+        return 0
+
+    if args.action == "revoke":
+        if not args.key:
+            print("Which one? Pass the key id from `run.py driver list`.", file=sys.stderr)
+            return 2
+        try:
+            gone = creds.revoke(args.key, now)
+        except creds.CredentialError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"Revoked {gone.key_id} ({gone.name}). Their reports stay in the log —")
+        print("it is append-only, and what they filed while trusted still happened.")
+        return 0
+
+    # add
+    if not args.name:
+        print("A driver needs a name: run.py driver add \"Hans Meier\"", file=sys.stderr)
+        return 2
+    try:
+        driver, token = creds.issue(args.name, args.carrier, now)
+    except creds.CredentialError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    base = args.base_url.rstrip("/")
+    print(f"\n  {driver.name}" + (f"  ({driver.carrier})" if driver.carrier else ""))
+    print(f"  key   {driver.key_id}")
+    print(f"\n  TOKEN {token}")
+    print("\n  Hand them this link once, on the phone that will use it:")
+    print(f"    {base}/driver?k={token}")
+    print("\n  The app keeps it and strips it from the address bar. The token is")
+    print("  shown HERE AND NOWHERE ELSE — only its hash is stored, so it cannot")
+    print("  be looked up later. Lost means revoke and issue a new one.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="run.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -174,6 +245,14 @@ def main() -> int:
         p.add_argument("--host", default=_default_host())
         p.add_argument("--port", type=int, default=8000)
         p.set_defaults(handler=handler)
+
+    driver = sub.add_parser("driver", help="issue and revoke driver credentials")
+    driver.add_argument("action", choices=["add", "list", "revoke"])
+    driver.add_argument("name", nargs="?", help="the driver's name, for `add`")
+    driver.add_argument("--carrier", default=None)
+    driver.add_argument("--key", default=None, help="key id, for `revoke`")
+    driver.add_argument("--base-url", default="http://localhost:8000")
+    driver.set_defaults(handler=cmd_driver)
 
     args = parser.parse_args()
     return args.handler(args)

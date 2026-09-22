@@ -76,7 +76,67 @@ discarded and stored in a sidecar, so the rotation survives as a value we
 control rather than as camera metadata we cannot audit. The page applies it
 as a CSS transform.
 
-**Before real drivers:** per-driver credentials and a virus scan on upload.
+### Per-driver credentials
+
+`POST /api/v1/reports` and `POST /api/v1/photos` take a credential belonging
+to **one named person**. Three modes, in precedence:
+
+| | |
+|---|---|
+| no store, no `RADAR_REPORT_TOKEN` | open, as the prototype has always been |
+| `RADAR_REPORT_TOKEN` set | one shared secret |
+| `config/drivers.json` exists | **a per-driver credential is required, and the shared token stops being sufficient** |
+
+That last clause is the point. If the shared token still worked once drivers
+existed, registering them would not increase security — it would add a second
+way in and call it progress.
+
+```
+run.py driver add "Hans Meier" --carrier CARR_RHN
+run.py driver list
+run.py driver revoke --key 7c3b878c5a6e
+```
+
+**The identity comes from the credential, never from the payload.**
+`reported_by` used to be free text nobody filled in; a report saying "Hans" is
+only evidence if Hans is who sent it. An authenticated driver's name
+overwrites whatever arrived, and `authenticated: true` is what tells a planner
+the name means anything.
+
+**Only a hash is stored.** A 256-bit random token, SHA-256, compared in
+constant time. Not bcrypt or scrypt — those are slow on purpose to make
+dictionary attacks on human-chosen passwords expensive, and a random token has
+no dictionary to attack. The work factor would buy nothing and add ~100 ms to
+every photo upload from a phone on a bad connection. The token is printed once
+by the command that creates it and is never recoverable: a store that can
+print its own tokens leaks all of them the day somebody copies the file.
+
+**The mode is keyed on the store existing, not on a count of active drivers.**
+Revoke the last driver — the moment you most want the door shut — and a
+count-based rule would silently reopen the endpoint. Revoking everybody now
+means nobody can file: a deliberate, visible outage rather than a quiet
+downgrade. A store that cannot be parsed also fails closed.
+
+`config/drivers.json` is written `0600` and lives under the already-gitignored
+`config/`.
+
+**The token is handed over in a link** (`/driver?k=…`), which the app stores
+and strips from the address bar immediately. A token in a URL can reach a
+server log, a proxy log or a browser history — that is a real trade-off, taken
+because it is the only channel that works for handing a credential to somebody
+standing next to a truck. A login form means a password, a password means a
+reset flow, and a reset flow means the driver cannot file the report they
+stopped to file. Revocation is one command.
+
+**A 401 comes out of the driver's queue rather than being retried.** That is
+the failure most likely to go unnoticed: the queue would grow quietly while
+the driver believed every report had landed. The app also checks on open, so
+somebody who stopped at a lock finds out their link expired *before* they type
+the report, not after.
+
+**Before real drivers:** a virus scan on upload, and TLS terminated in front
+of this — every credential here is a bearer token, and a bearer token on plain
+HTTP is a credential you have given away.
 
 ## How each external dependency is stubbed
 
