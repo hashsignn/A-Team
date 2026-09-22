@@ -55,8 +55,15 @@ def main() -> int:
     args = parser.parse_args()
 
     if not cache.recording() and not args.dry_run:
+        import platform
+
         print("Recording is off. Re-run with:")
-        print(f"  {cache.RECORD_ENV}=1 .venv/bin/python scripts/record_reasoning.py")
+        if platform.system() == "Windows":
+            print(f"  set {cache.RECORD_ENV}=1")
+            print(r"  .venv\Scripts\python scripts\record_reasoning.py")
+        else:
+            print(f"  {cache.RECORD_ENV}=1 "
+                  ".venv/bin/python scripts/record_reasoning.py")
         print("\nIt is off by default so a demo machine can never quietly")
         print("write answers into the repository.")
         return 1
@@ -67,6 +74,8 @@ def main() -> int:
     if not status.available:
         print("\nNo model is reachable, so there is nothing to record.")
         print("Run scripts/check_models.py — it names the one thing to fix.")
+        print("(It is platform-aware; the command it prints will be the right")
+        print(" one for this machine.)")
         return 1
 
     before = cache.report()

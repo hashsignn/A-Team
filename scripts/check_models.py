@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -74,6 +75,41 @@ def _matches(wanted: str, installed: list[str]) -> str | None:
     return None
 
 
+WINDOWS = platform.system() == "Windows"
+
+# The venv layout differs, and a Unix path printed on Windows is advice that
+# cannot be followed. This script exists to remove guesswork, so it has no
+# business adding any.
+PY_BIN = r".venv\Scripts\python" if WINDOWS else ".venv/bin/python"
+
+
+def _install_hint() -> list[str]:
+    if WINDOWS:
+        return [
+            "     winget install Ollama.Ollama",
+            "   or download the installer from https://ollama.com/download",
+            "",
+            "   After installing, CLOSE AND REOPEN this terminal — the",
+            "   installer adds ollama to PATH and an open shell keeps the old one.",
+        ]
+    if platform.system() == "Darwin":
+        return ["     brew install ollama",
+                "   or download from https://ollama.com/download"]
+    return ["     curl -fsSL https://ollama.com/install.sh | sh"]
+
+
+def _serve_hint() -> list[str]:
+    if WINDOWS:
+        return [
+            "     Start Ollama from the Start menu — it runs in the system tray.",
+            "     Or from a terminal:  ollama serve",
+        ]
+    return [
+        "     ollama serve            # foreground",
+        "     systemctl --user start ollama   # if installed as a service",
+    ]
+
+
 def _step(n: int, text: str) -> None:
     print(f"\n{n}. {text}")
 
@@ -96,9 +132,9 @@ def main() -> int:
     else:
         print("   NO — the `ollama` command is not on PATH.")
         print("\n   Install it:")
-        print("     curl -fsSL https://ollama.com/install.sh | sh   # Linux / WSL")
-        print("     brew install ollama                             # macOS")
-        print("   Then run this again.")
+        for line in _install_hint():
+            print(line)
+        print("\n   Then run this again.")
         print("\n   You do NOT need it to run the radar. Without a model the")
         print("   deterministic router runs alone and the board is complete —")
         print("   it just has no reasoned layer to measure against.")
@@ -110,8 +146,8 @@ def main() -> int:
     if installed is None:
         print("   NO — installed but not reachable.")
         print("\n   Start it:")
-        print("     ollama serve            # foreground")
-        print("     systemctl --user start ollama   # if it was installed as a service")
+        for line in _serve_hint():
+            print(line)
         print(f"\n   If it listens somewhere else, set OLLAMA_HOST "
               f"(currently {llm.OLLAMA_HOST}).")
         return 1
@@ -135,9 +171,10 @@ def main() -> int:
         print("\n   Pull what is missing:")
         for want in missing:
             print(f"     ollama pull {want['model']}    # {want['size']}")
+        setter = "set" if WINDOWS else "export"
         print("\n   Or point the radar at something you already have:")
         for want in missing:
-            print(f"     export {want['env']}=<one of: "
+            print(f"     {setter} {want['env']}=<one of: "
                   f"{', '.join(installed[:3]) or 'none pulled'}>")
 
     # ---- 4. what the radar itself thinks -------------------------------
@@ -152,7 +189,8 @@ def main() -> int:
         print("             unless you set RADAR_LLM_BACKEND=api deliberately.")
 
     if missing:
-        print("\n   Not ready: pull the models above, then run this again.")
+        print(f"\n   Not ready: pull the models above, then run "
+              f"{PY_BIN} scripts/check_models.py again.")
         return 1
 
     print("\n   Ready. The two-stage funnel will use these models.")

@@ -81,6 +81,45 @@ ollama pull qwen2.5:1.5b-instruct                  # triage,  ~1.0 GB
 ollama pull qwen2.5:7b-instruct                    # extract, ~4.7 GB
 ```
 
+### On Windows
+
+`cmd.exe` and PowerShell differ from the Unix commands above in three ways
+that all produce confusing errors rather than useful ones:
+
+| | Unix | Windows |
+|---|---|---|
+| venv python | `.venv/bin/python` | `.venv\Scripts\python` |
+| create venv | `python3.11 -m venv .venv` | `py -3.11 -m venv .venv` |
+| set a variable | `VAR=1 cmd` | `set VAR=1` on its own line |
+
+And **`cmd.exe` does not strip `#` comments.** Pasting
+
+```
+ollama pull qwen2.5:7b-instruct   # extract, ~4.7 GB
+```
+
+gives `Error: accepts 1 arg(s), received 5` — which reads like Ollama is
+broken when in fact it is installed and working, and only the comment is
+wrong. Paste the command without the comment.
+
+Full sequence:
+
+```bat
+py -3.11 -m venv .venv
+.venv\Scripts\python -m pip install --upgrade pip
+.venv\Scripts\pip install -r requirements.txt
+
+ollama pull qwen2.5:1.5b-instruct
+ollama pull qwen2.5:7b-instruct
+.venv\Scripts\python scripts\check_models.py
+
+set RADAR_RECORD_REASONING=1
+.venv\Scripts\python scripts\record_reasoning.py --as-of 2026-09-16
+```
+
+`scripts/check_models.py` is platform-aware: the commands it prints when
+something is wrong are the ones for the machine it is running on.
+
 ### In a Codespace
 
 Two things bite:
