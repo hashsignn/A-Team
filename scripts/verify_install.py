@@ -58,7 +58,19 @@ def _served(path: str) -> str | None:
         return None
 
 
+def _codespace() -> str | None:
+    """The Codespace name, if we are in one."""
+    import os
+
+    if os.environ.get("CODESPACES", "").lower() == "true":
+        return os.environ.get("CODESPACE_NAME") or "unnamed"
+    return None
+
+
 def main() -> int:
+    space = _codespace()
+    if space:
+        print(f"environment    : GitHub Codespace ({space})")
     print(f"commit on disk : {_git('rev-parse', '--short', 'HEAD') or '?'}")
     print(f"branch         : {_git('rev-parse', '--abbrev-ref', 'HEAD') or '?'}")
     dirty = _git("status", "--porcelain")
@@ -95,6 +107,8 @@ def main() -> int:
     print()
     if missing_disk:
         print("YOUR CLONE IS BEHIND. Run:  git checkout main && git pull origin main")
+        if space:
+            print("(A Codespace is a clone. It does not update itself when main moves.)")
         return 1
     if missing_served:
         print("The files are correct but the server is serving something older.")
@@ -106,8 +120,24 @@ def main() -> int:
         return 0
 
     print("Everything is present, on disk and in what the server sends.")
-    print("If the browser still looks old, it is caching: press Ctrl+Shift+R")
-    print("(Cmd+Shift+R on a Mac) once with the page open.")
+    if space:
+        # In a Codespace the likeliest remaining cause is not the browser
+        # cache at all — it is that you are not looking at a browser.
+        print()
+        print("You are in a Codespace, so check this FIRST:")
+        print("  Are you looking at VS Code's preview pane rather than a browser?")
+        print("  That pane caches hard and cannot be force-reloaded — it shows")
+        print("  whatever the app looked like when it first opened, forever.")
+        print()
+        print("  Open the PORTS tab at the bottom of VS Code, find port 8000,")
+        print("  and click the globe icon to open it in a real browser tab.")
+        print()
+        print("  Then Ctrl+Shift+R once, with that tab focused.")
+        print()
+        print("  See .devcontainer/README.md for the rest of the checklist.")
+    else:
+        print("If the browser still looks old, it is caching: press Ctrl+Shift+R")
+        print("(Cmd+Shift+R on a Mac) once with the page open.")
     return 0
 
 

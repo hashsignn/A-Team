@@ -56,6 +56,45 @@ Everything runs **offline**. No API key, no network, no model required.
 
 ---
 
+## Running it in a GitHub Codespace
+
+Two things in here bite specifically in a Codespace, and both are now handled:
+
+**The preview pane lies.** `onAutoForward` was `openPreview`, which opens
+VS Code's Simple Browser — an embedded webview that caches hard and cannot be
+force-reloaded. It opens once, at whatever the app looked like then, and keeps
+showing that, so every deploy after the first looks like nothing changed. It
+is now `notify`: a toast with an **Open in Browser** button, which opens the
+forwarded `https://…app.github.dev` URL in a real tab where `no-store` is
+honoured and `Ctrl+Shift+R` works.
+
+**If the preview pane is already open, close it.** Use the **PORTS** tab at
+the bottom of VS Code, find port 8000, and click the globe icon.
+
+**Loopback is invisible to the forwarder.** A Codespace reaches the app
+through a port forwarder outside the process namespace, so a server bound to
+`127.0.0.1` can be curled from the same terminal and still not load at the
+forwarded URL. `run.py serve` now detects `CODESPACES` and binds every
+interface; an explicit `--host` still wins.
+
+**A Codespace is a clone, and it does not update itself.** When main moves,
+`git pull` in the Codespace terminal.
+
+When something looks stale:
+
+```bash
+git pull
+.venv/bin/python scripts/verify_install.py
+```
+
+That prints your commit, which features are present in the files on disk, and
+which are present in the bytes a running server actually sends. The three can
+disagree, and which pair disagrees names the fix: disk behind means pull, disk
+ahead of the server means restart it, both correct means you are looking at a
+cache. `.devcontainer/README.md` has the rest of the checklist.
+
+---
+
 ## What this is
 
 Nine pipeline stages behind a four-pane dashboard:
