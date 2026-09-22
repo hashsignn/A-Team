@@ -41,6 +41,34 @@ export RADAR_EXTRACT_MODEL=mistral-small:22b
 A single-model install works: leave both unset and everything uses
 `RADAR_LOCAL_MODEL` (`qwen2.5:7b-instruct`).
 
+### If you are recording, go bigger
+
+The defaults above are sized for a planner running the funnel **live, every
+day** — that is the case where a 7B reading hundreds of headlines is the wrong
+trade.
+
+**Recording inverts that.** The model runs once, on one machine, and every
+later run replays the answers for free. Speed stops mattering and quality
+stops being expensive, so the right size is whatever your laptop can hold:
+
+```bash
+export RADAR_TRIAGE_MODEL=qwen2.5:7b-instruct     # ~4.7 GB
+export RADAR_EXTRACT_MODEL=qwen2.5:14b-instruct   # ~9 GB
+```
+
+| model | RAM it wants | on a laptop |
+|---|---|---|
+| `qwen2.5:1.5b-instruct` | ~2 GB | instant |
+| `qwen2.5:7b-instruct` | ~6 GB | comfortable on 16 GB |
+| `qwen2.5:14b-instruct` | ~10 GB | fine on 16 GB, better on 32 |
+| `qwen2.5:32b-instruct` | ~20 GB | needs 32 GB, slow without a GPU |
+
+A recording pass over one as-of is a few hundred calls. At 14B on CPU that is
+tens of minutes — once. The Codespace still needs nothing.
+
+`check_models.py` checks whatever the environment is set to, so set the
+variables first and it will look for the models you actually chose.
+
 ---
 
 ## 2. Do I already have them? — step by step

@@ -117,6 +117,9 @@ def _step(n: int, text: str) -> None:
 def main() -> int:
     print("  MODELS — what the reasoning layer needs, and what you have")
     print("  " + "-" * 62)
+    print("  Checking the models this machine is CONFIGURED for. Override")
+    print("  either with RADAR_TRIAGE_MODEL / RADAR_EXTRACT_MODEL and run")
+    print("  again — a bigger model is a one-time cost if you are recording.")
 
     # ---- 1. is Ollama on the machine at all --------------------------
     _step(1, "Is Ollama installed?")
