@@ -145,13 +145,16 @@ async function fetchBoard({ as_of, shipments }) {
  * as-of — nothing happens and the parameter is dropped, which is the honest
  * outcome. A dialog saying "event not found" helps nobody. */
 function restoreDeepLinkedEvent() {
-  const id = new URLSearchParams(location.search).get('event');
+  const params = new URLSearchParams(location.search);
+  const id = params.get('event');
   if (!id) return;
-  if (findEvent(id)) {
-    openEventModal(id);
+  const routeId = params.get('route');
+  if (findEvent(id, routeId)) {
+    openEventModal(id, routeId);
   } else {
     const url = new URL(location.href);
     url.searchParams.delete('event');
+    url.searchParams.delete('route');
     history.replaceState(null, '', url);
   }
 }
@@ -1336,7 +1339,9 @@ document.addEventListener('click', (e) => {
   if (mx) {
     e.stopPropagation();
     closeMatrix();
-    openEventModal(mx.dataset.matrix);
+    // The route the button was clicked from, so the modal shows that lane's
+    // radar rather than whichever lane happens to list the event first.
+    openEventModal(mx.dataset.matrix, state.selected);
   }
 });
 
@@ -1496,8 +1501,28 @@ function initAsk() {
 // ===============================================================
 const EVENT_MODAL = { open: null, lastFocus: null };
 
-function findEvent(eventId) {
-  for (const route of (state.board?.routes || [])) {
+/* An event id alone does not identify a context.
+ *
+ * One event sits on every route it affects — a closed Suez is on all six
+ * lanes through Suez, correctly, because it is one event and not six. So
+ * "first route that lists it" is the wrong answer: it shows the radar for a
+ * lane the reader never chose, and the modal says "on this route" while
+ * meaning a different one.
+ *
+ * Preference order: the route asked for, then the route currently selected,
+ * then the first that lists it. The last case is a genuine fallback — a link
+ * shared before this existed, or an as-of where that lane has dropped off the
+ * board — and showing the event against some route beats showing nothing. */
+function findEvent(eventId, preferRouteId) {
+  const routes = state.board?.routes || [];
+  const wanted = [preferRouteId, state.selected].filter(Boolean);
+
+  for (const routeId of wanted) {
+    const route = routes.find((r) => r.route_id === routeId);
+    const found = (route?.events || []).find((e) => e.event_id === eventId);
+    if (found) return { event: found, route };
+  }
+  for (const route of routes) {
     const found = (route.events || []).find((e) => e.event_id === eventId);
     if (found) return { event: found, route };
   }
@@ -1614,8 +1639,8 @@ function provenanceLine(event) {
   return bits.join(' · ');
 }
 
-function openEventModal(eventId) {
-  const found = findEvent(eventId);
+function openEventModal(eventId, preferRouteId) {
+  const found = findEvent(eventId, preferRouteId);
   if (!found || !state.board) return;
   const { event, route } = found;
   closeEventModal({ keepUrl: true });
@@ -1698,6 +1723,7 @@ function openEventModal(eventId) {
 
   const url = new URL(location.href);
   url.searchParams.set('event', eventId);
+  url.searchParams.set('route', route.route_id);
   history.replaceState(null, '', url);
 
   scrim.querySelector('#evm-close').focus();
@@ -1712,6 +1738,7 @@ function closeEventModal({ keepUrl = false } = {}) {
   if (!keepUrl) {
     const url = new URL(location.href);
     url.searchParams.delete('event');
+    url.searchParams.delete('route');
     history.replaceState(null, '', url);
   }
   if (EVENT_MODAL.lastFocus?.isConnected) EVENT_MODAL.lastFocus.focus();
