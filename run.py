@@ -139,6 +139,25 @@ def cmd_serve(args: argparse.Namespace) -> int:
     )
 
 
+
+def _default_host() -> str:
+    """Loopback normally; every interface inside a forwarded container.
+
+    A Codespace reaches the app through a port forwarder that lives outside
+    the process namespace. Bound to 127.0.0.1 the server can be curled from
+    the same terminal and still be invisible at the forwarded URL, which
+    presents as "the page will not load" with a server that is plainly
+    running — a confusing half-hour for anyone who has not hit it before.
+
+    CODESPACES is set by GitHub; REMOTE_CONTAINERS by the Dev Containers
+    extension locally. Explicit --host always wins.
+    """
+    import os
+
+    in_container = os.environ.get("CODESPACES") or os.environ.get("REMOTE_CONTAINERS")
+    return "0.0.0.0" if in_container else "127.0.0.1"  # noqa: S104
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="run.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -152,7 +171,7 @@ def main() -> int:
         p.add_argument("--as-of", default=DEFAULT_AS_OF)
         p.add_argument("--shipments", type=int, default=150)
         p.add_argument("--seed", type=int, default=None)
-        p.add_argument("--host", default="127.0.0.1")
+        p.add_argument("--host", default=_default_host())
         p.add_argument("--port", type=int, default=8000)
         p.set_defaults(handler=handler)
 
