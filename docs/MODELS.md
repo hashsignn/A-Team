@@ -371,3 +371,53 @@ rehearsed run, not a capability.
 **On your own machine, not in the Codespace.** Pull them once, record, commit,
 and the Codespace never needs them. Install in the Codespace only if you want
 to reason over *new* events there — and then mind the RAM note above.
+
+---
+
+## 7. The customer's own data
+
+Sika supplied an intercompany flow export (`20260921_innovathon_Sika_share.xlsx`).
+It lives in `config/`, which is **gitignored** — it is real commercial data
+about who supplies whom and how often, and it does not belong in a public
+history where it can never be redacted.
+
+```bash
+.venv/bin/python scripts/import_sika_flows.py config/20260921_innovathon_Sika_share.xlsx
+```
+
+That writes `config/flows.yaml` (also gitignored) with the real lanes, their
+document counts, weights and month-by-month profile.
+
+### What it gives
+
+19,698 line items over 9,707 purchase documents, **Jan 2025 → Jun 2026**,
+across **57 lanes**. Every one originates in DACH — CH (13,640 lines), DE
+(5,975), AT (83) — and lands in one of 23 countries. The busiest are
+CN←CH (2,548), US←DE (2,028), IN←CH (1,415), AU←CH (1,358).
+
+### What it does not give
+
+No consignment value, no promised delivery date, no mode, no carrier. The
+scoring needs all four, so they stay declared in `lanes.yaml` and the inputs
+panel reports them as assumptions rather than as Sika data.
+
+Weights are small: median **3.7 kg per document**, p90 254 kg, 775 tonnes
+over eighteen months. This is intercompany replenishment — samples,
+additives, specialist product — not bulk freight.
+
+### Coverage, stated rather than fudged
+
+The importer maps each real lane onto the modelled network and reports what
+it cannot route:
+
+```
+mapped   : 10 lane(s), 4,474 document(s)
+unmapped : 47 lane(s), 5,233 document(s)
+the network can route 46% of the real order volume
+```
+
+Nothing is invented to close that gap. A lane whose endpoints the network
+cannot represent is listed as `mapped: false` with the reason — the largest
+are CH→MX (672), CH→IN (646), DE→MX (324), CH→CA (292), CH→JP (256).
+Closing it is a `network.yaml` edit adding destination ports, not a code
+change.
