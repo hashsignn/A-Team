@@ -51,7 +51,8 @@ function observedNow() {
   return new Date(base - 60000 + nth * 1000).toISOString();
 }
 
-const state = { status: null, load: 'intact', sending: false, role: 'driver' };
+const state = { status: null, load: 'intact', sending: false, role: 'driver',
+                fix: null, photos: [] };
 
 /* Who can report, and what it means for the planner.
  *
@@ -98,6 +99,8 @@ function renderRoles() {
       state.role = btn.dataset.role;
       saveRole(state.role);
       renderRoles();
+  renderPhotos();
+  $('f-photo').addEventListener('change', (e) => addPhotos(e.target.files));
     });
   });
   const note = document.getElementById('dv-role-note');
@@ -274,19 +277,83 @@ $('f-load').addEventListener('click', (e) => {
     x.classList.toggle('is-on', x === b));
 });
 
+/* The fix is KEPT AS NUMBERS, and the text box is left alone.
+ *
+ * This used to write "47.5564, 7.5904" into the position field and throw the
+ * coordinates away. Nothing downstream could use that: a string that happens
+ * to look like a position is not one, and it also destroyed the more useful
+ * answer — "Kaub, third in the queue" — by overwriting it.
+ *
+ * Now both travel. The numbers put a pin on the planner's map; the words say
+ * what the pin cannot. */
 $('f-gps').addEventListener('click', () => {
   if (!navigator.geolocation) { $('f-gps').textContent = 'not available'; return; }
   $('f-gps').textContent = 'locating…';
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      $('f-position').value =
-        `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-      $('f-gps').textContent = 'Use my location';
+      state.fix = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy_m: pos.coords.accuracy,
+      };
+      const acc = Math.round(pos.coords.accuracy || 0);
+      $('f-gps').textContent = `location attached ±${acc} m`;
+      $('f-gps').classList.add('is-on');
     },
     () => { $('f-gps').textContent = 'could not locate'; },
-    { timeout: 8000, maximumAge: 60000 },
+    { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true },
   );
 });
+
+/* Photos.
+ *
+ * Uploaded as they are taken, not held until send: the upload is the slow
+ * part on a bad connection, and doing it while the driver is still typing
+ * means send is instant. Each returns an id; the report carries the ids.
+ *
+ * If the upload fails the photo is dropped with a visible message rather than
+ * silently queued. A photo is evidence, and evidence that quietly did not
+ * arrive is worse than one the driver knows to retake. */
+const MAX_PHOTOS = 6;
+
+async function addPhotos(files) {
+  const note = $('dv-photo-note');
+  for (const file of Array.from(files).slice(0, MAX_PHOTOS - state.photos.length)) {
+    note.textContent = 'sending photo…';
+    try {
+      const res = await fetch('/api/v1/photos', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      state.photos.push(body.photo_id);
+      note.textContent = '';
+    } catch (err) {
+      note.textContent = `photo not sent: ${err.message}. Try again.`;
+    }
+  }
+  renderPhotos();
+}
+
+function renderPhotos() {
+  const host = $('dv-photos');
+  if (!host) return;
+  host.innerHTML = state.photos.map((id) => `
+    <div class="dv-thumb">
+      <img src="/api/v1/photos/${id}" alt="photo from site">
+      <button type="button" class="dv-thumb-x" data-photo="${id}"
+              aria-label="Remove this photo">&times;</button>
+    </div>`).join('');
+  host.querySelectorAll('[data-photo]').forEach((b) =>
+    b.addEventListener('click', () => {
+      state.photos = state.photos.filter((x) => x !== b.dataset.photo);
+      renderPhotos();
+    }));
+  const input = $('f-photo');
+  if (input) input.disabled = state.photos.length >= MAX_PHOTOS;
+}
 
 $('f-shipment').addEventListener('change', () => {
   const value = $('f-shipment').value.trim();
@@ -317,6 +384,10 @@ $('dv-form').addEventListener('submit', (e) => {
     note: $('f-note').value.trim() || null,
     reported_by: null,
     role: state.role,
+    lat: state.fix ? state.fix.lat : null,
+    lon: state.fix ? state.fix.lon : null,
+    accuracy_m: state.fix ? state.fix.accuracy_m : null,
+    photos: state.photos.slice(),
     confirms_disruption: $('f-confirm').checked,
     // Stamped NOW, on the device. See the header comment.
     observed_at: observedNow(),
@@ -343,6 +414,8 @@ window.addEventListener('offline', renderNet);
   }
   renderNet();
   renderRoles();
+  renderPhotos();
+  $('f-photo').addEventListener('change', (e) => addPhotos(e.target.files));
   renderQueue();
   const shipment = params.get('shipment') || recall();
   if (shipment) {

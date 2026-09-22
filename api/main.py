@@ -16,7 +16,7 @@ import secrets
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Body, FastAPI, Header, HTTPException, Query
+from fastapi import Body, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -322,6 +322,50 @@ def cargo(
     board = _board(as_of, shipments)
     context = _context(as_of, shipments)
     return JSONResponse(cargo_mod.lane_view(board, context, route_id))
+
+
+@app.post("/api/v1/photos")
+async def upload_photo(
+    request: Request,
+    x_report_token: Annotated[str | None, Header()] = None,
+) -> JSONResponse:
+    """One photo from the field. Raw bytes in, an id out.
+
+    Raw body rather than multipart: the sender is a phone on a bad connection
+    and multipart adds a parser, a boundary and a dependency for no gain when
+    there is exactly one file. The type is sniffed from the CONTENT, because
+    the filename and the Content-Type header are both chosen by the sender.
+    """
+    from engine.ingest import photos as photos_mod  # noqa: PLC0415
+
+    # Same gate as the reports themselves: a photo is part of a report, and
+    # an endpoint that accepts files with weaker auth than the text beside
+    # them is the one an attacker uses.
+    _report_auth(x_report_token)
+
+    body = await request.body()
+    try:
+        stored = photos_mod.store(body)
+    except photos_mod.PhotoError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    return JSONResponse(stored, status_code=201)
+
+
+@app.get("/api/v1/photos/{photo_id}")
+def get_photo(photo_id: str) -> Response:
+    """Serve one photo. The id is pattern-checked before it touches the disk."""
+    from engine.ingest import photos as photos_mod  # noqa: PLC0415
+
+    path = photos_mod.path_for(photo_id)
+    if path is None:
+        return Response(status_code=404)
+    return Response(
+        path.read_bytes(),
+        media_type=photos_mod.media_type_for(path),
+        # Content-addressed: these bytes can never change under this id, so
+        # they are safe to cache for as long as the browser likes.
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.get("/api/route/{route_id}")

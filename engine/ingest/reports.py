@@ -118,6 +118,21 @@ class FieldReport:
     confirms_disruption: bool
     role: str = DEFAULT_ROLE
 
+    # A real fix from the phone, kept as numbers rather than folded into the
+    # position text. The app already asked the device for coordinates and
+    # then wrote them into a free-text field, where nothing could use them:
+    # a string that happens to read "47.1234, 7.5678" is not a position, and
+    # "Kaub, third in the queue" — which is the more useful answer — has no
+    # numbers in it at all. Both are kept, because they say different things.
+    lat: float | None = None
+    lon: float | None = None
+    accuracy_m: float | None = None
+
+    # Photo ids, not photo bytes. An append-only JSONL with base64 images in
+    # it stops being a file anyone can open, and the log is evidence: it has
+    # to stay readable with `cat` in five years.
+    photos: tuple[str, ...] = ()
+
     def as_dict(self) -> dict:
         return {
             "report_id": self.report_id,
@@ -132,6 +147,10 @@ class FieldReport:
             "reported_by": self.reported_by,
             "confirms_disruption": self.confirms_disruption,
             "role": self.role,
+            "lat": self.lat,
+            "lon": self.lon,
+            "accuracy_m": self.accuracy_m,
+            "photos": list(self.photos),
             "role_label": ROLES[self.role]["label"],
             # Derived from the role, never hardcoded: a relayed account is
             # tier 2 however confidently it is worded.
@@ -162,6 +181,61 @@ def _clean(value, limit: int) -> str | None:
     return text[:limit]
 
 
+MAX_PHOTOS = 6
+_PHOTO_RE = re.compile(r"^[a-f0-9]{16,64}$")
+
+
+def _coords(payload: dict) -> tuple[float | None, float | None]:
+    """Latitude and longitude, or neither.
+
+    Refused as a PAIR. A report carrying only a latitude is not half a
+    position, it is a bug somewhere upstream, and storing it would put a
+    vehicle on the prime meridian.
+    """
+    raw_lat, raw_lon = payload.get("lat"), payload.get("lon")
+    if raw_lat is None and raw_lon is None:
+        return None, None
+    if raw_lat is None or raw_lon is None:
+        raise ReportError("lat and lon must be given together or not at all")
+    try:
+        lat, lon = float(raw_lat), float(raw_lon)
+    except (TypeError, ValueError) as exc:
+        raise ReportError(f"lat/lon are not numbers: {exc}") from exc
+    if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
+        raise ReportError(f"lat/lon out of range: {lat}, {lon}")
+    return lat, lon
+
+
+def _positive(value, limit: float) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if 0.0 <= number <= limit else None
+
+
+def _photo_ids(value) -> tuple[str, ...]:
+    """Ids of photos already uploaded, bounded and shape-checked.
+
+    Bounded because this arrives from a phone over an endpoint that is
+    unauthenticated in the prototype, and an unbounded list is a way to make
+    one line of the log arbitrarily long.
+    """
+    if not value:
+        return ()
+    if not isinstance(value, (list, tuple)):
+        raise ReportError("photos must be a list of ids")
+    ids = [str(v).strip().lower() for v in value if str(v).strip()]
+    if len(ids) > MAX_PHOTOS:
+        raise ReportError(f"at most {MAX_PHOTOS} photos per report")
+    bad = [i for i in ids if not _PHOTO_RE.match(i)]
+    if bad:
+        raise ReportError(f"not photo ids: {', '.join(bad[:3])}")
+    return tuple(ids)
+
+
 def validate(payload: dict, received_at: datetime) -> FieldReport:
     """Turn a submitted payload into a report, or refuse it.
 
@@ -188,6 +262,10 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
     role = str(payload.get("role", DEFAULT_ROLE)).strip().lower() or DEFAULT_ROLE
     if role not in ROLES:
         raise ReportError(f"role must be one of {', '.join(ROLES)}")
+
+    lat, lon = _coords(payload)
+    accuracy = _positive(payload.get("accuracy_m"), limit=100_000)
+    photos = _photo_ids(payload.get("photos"))
 
     # The moment the driver SAW it, which is not the moment it reached us —
     # a report queued in a tunnel can arrive an hour late and must not claim
@@ -222,6 +300,10 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
         reported_by=_clean(payload.get("reported_by"), MAX_TEXT),
         confirms_disruption=bool(payload.get("confirms_disruption")),
         role=role,
+        lat=lat,
+        lon=lon,
+        accuracy_m=accuracy,
+        photos=photos,
     )
 
 
@@ -269,6 +351,10 @@ def read_all(log: Path | None = None) -> list[FieldReport]:
                 # Reports written before the role existed are 'driver', which
                 # is what they were: the app had no other kind of user.
                 role=raw.get("role") or DEFAULT_ROLE,
+                lat=raw.get("lat"),
+                lon=raw.get("lon"),
+                accuracy_m=raw.get("accuracy_m"),
+                photos=tuple(raw.get("photos") or ()),
                 confirms_disruption=bool(raw.get("confirms_disruption")),
             ))
         except (json.JSONDecodeError, KeyError, ValueError, TypeError):
