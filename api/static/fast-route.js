@@ -92,9 +92,15 @@ function render() {
       </div>
     </div>
 
+    <div id="sboard"></div>
+
     ${foldsHTML(row)}`;
 
   wireActions();
+  // Loaded after the page paints. Allocating four hundred consignments
+  // across four strategies is not something the lane header should wait
+  // on, and the header is what the planner reads first.
+  Board.load(el('sboard'), row.route_id);
 }
 
 function foldsHTML(row) {

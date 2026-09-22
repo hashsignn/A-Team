@@ -117,6 +117,27 @@ def route(
     return JSONResponse(detail)
 
 
+@router.get("/board/{route_id}")
+def board(
+    route_id: str,
+    as_of: str = Query(...),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """The mixed-capacity plans for one lane.
+
+    Separate from ``/route`` because it is a different question and a much
+    heavier one: ``/route`` asks what to do about a consignment, this asks
+    what the mix is for four hundred of them. Kept behind its own call so the
+    lane page paints before the allocator has finished.
+    """
+    context = _ctx(as_of, shipments)
+    payload = view.solution_board(context, route_id, ledger=LEDGER)
+    if payload is None:
+        raise HTTPException(404, f"no affected route {route_id!r}")
+    payload["server_time"] = _now().isoformat()
+    return JSONResponse(payload)
+
+
 @router.get("/incidents")
 def incidents(limit: int = Query(20, ge=1, le=200)) -> JSONResponse:
     return JSONResponse({"incidents": [i.as_dict() for i in WATCHER.live(limit)]})

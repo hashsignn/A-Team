@@ -383,3 +383,122 @@ def test_units_never_disagree_with_tonnes_on_the_wire(config, caps, clock):
             assert row["tonnes_available"] == pytest.approx(
                 row["units_available"] * cap.tonnes_per_unit
             )
+
+
+# =====================================================================
+# Derate: the state a disruption is usually actually in
+# =====================================================================
+def test_a_squeezed_mode_is_neither_open_nor_shut(config, caps, clock):
+    """"Loading restricted to 45%" is not a closure and not a normal week.
+
+    Forcing it to one or the other is wrong twice over: calling it shut
+    invents an emergency, calling it open misses the one that is happening.
+    """
+    displaced = capacity.displaced_from(block(300), config, clock)
+    full = capacity.plans(displaced, config)
+    half = capacity.plans(displaced, config, derate={"barge": 0.45})
+    shut = capacity.plans(displaced, config, blocked_modes={"barge"})
+
+    def barge_units(plans):
+        return sum(
+            a.units_available for p in plans for a in p.allocations
+            if a.mode == "barge"
+        )
+
+    assert barge_units(full) > 0
+    assert barge_units(shut) == 0
+    assert 0 <= barge_units(half) < barge_units(full)
+
+
+def test_a_derate_scales_the_ceiling_not_the_demand(config, caps, clock):
+    """Half a river is half the sailings, not half the freight."""
+    displaced = capacity.displaced_from(block(400), config, clock)
+    plans = capacity.plans(displaced, config, derate={"barge": 0.5})
+    horizon = plans[0].horizon_hours
+    ceiling = caps["barge"].available_units(horizon)
+
+    for plan in plans:
+        for allocation in plan.allocations:
+            if allocation.mode == "barge":
+                assert allocation.units_available == math.floor(ceiling * 0.5)
+                assert allocation.whole_units <= allocation.units_available
+        assert plan.displaced_tonnes == pytest.approx(
+            sum(d.tonnes for d in displaced), abs=0.1
+        )
+
+
+def test_a_derate_that_leaves_nothing_usable_says_so(config, clock):
+    """But only when the plan actually came up short because of it."""
+    displaced = capacity.displaced_from(block(900), config, clock)
+    squeezed = capacity.plans(
+        displaced, config, blocked_modes={"rail"}, derate={"barge": 0.01}
+    )
+    assert any(plan.deferred for plan in squeezed)
+    assert any(
+        any("derated to" in limit for limit in plan.limits)
+        for plan in squeezed
+    )
+
+
+def test_a_derate_nobody_needed_does_not_make_a_plan_infeasible(config, clock):
+    """A mode squeezed to nothing on a lane whose freight all fits elsewhere
+    has cost this plan nothing."""
+    displaced = capacity.displaced_from(block(20), config, clock)
+    for plan in capacity.plans(displaced, config, derate={"barge": 0.0}):
+        if not plan.deferred:
+            assert plan.feasible, plan.limits
+
+
+def test_a_derate_of_zero_is_the_same_as_a_closure(config, clock):
+    """The scale ends where the binary case is, which is why there is no
+    threshold in here for anybody to argue with."""
+    displaced = capacity.displaced_from(block(200), config, clock)
+    zeroed = capacity.plans(displaced, config, derate={"barge": 0.0})
+    shut = capacity.plans(displaced, config, blocked_modes={"barge"})
+
+    assert {p.plan_id for p in zeroed} == {p.plan_id for p in shut}
+    by_id = {p.plan_id: p for p in shut}
+    for plan in zeroed:
+        twin = by_id[plan.plan_id]
+        assert plan.coverage == twin.coverage
+        assert plan.worst_days_late == twin.worst_days_late
+        assert plan.extra_cost_chf == twin.extra_cost_chf
+        assert [(a.mode, a.tonnes) for a in plan.allocations] == [
+            (a.mode, a.tonnes) for a in twin.allocations
+        ]
+
+
+def test_hitting_a_ceiling_is_not_the_same_as_coming_up_short(config, clock):
+    """A plan that books the last truck on the corridor and still lands
+    everything on the date has hit a ceiling, not failed.
+
+    Conflating the two sends a planner looking for a problem that is not
+    there, and — worse — demotes a plan that is doing exactly what was asked.
+    """
+    # Sized so road is exhausted but the freight still all moves.
+    displaced = capacity.displaced_from(block(40, spread=6), config, clock)
+    plans = capacity.plans(
+        displaced, config, blocked_modes={"barge", "rail"},
+        derate={"road": 0.02},
+    )
+    at_ceiling = [
+        p for p in plans
+        if any("at its ceiling" in limit for limit in p.limits)
+    ]
+    assert at_ceiling, "this fixture is meant to exhaust road"
+    for plan in at_ceiling:
+        assert plan.short == bool(plan.deferred and not plan.feasible)
+        if not plan.deferred:
+            assert plan.feasible, (
+                f"{plan.plan_id} moved everything and was still called short"
+            )
+
+
+def test_a_plan_that_leaves_freight_behind_is_not_feasible(config, clock):
+    displaced = capacity.displaced_from(block(900, spread=1), config, clock)
+    plans = capacity.plans(displaced, config, blocked_modes={"barge"})
+    assert plans
+    for plan in plans:
+        assert plan.deferred
+        assert not plan.feasible
+        assert plan.short

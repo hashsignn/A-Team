@@ -221,6 +221,11 @@ class Allocation:
     # two trucks and a 12 t one needs a truck; totalling the tonnage first
     # loses both facts and under-reports the fleet by a third.
     units: float = 0.0
+    # The ceiling this mode was actually assigned against, which is the
+    # corridor's fleet after any derate. Stored rather than recomputed at
+    # render time so the bar on screen cannot disagree with the budget the
+    # allocator used.
+    units_available: int = 0
     shipment_ids: list[str] = field(default_factory=list)
     cost_chf: float = 0.0
     # When each consignment on this mode can leave — the mode's readiness
@@ -235,16 +240,17 @@ class Allocation:
         return math.ceil(self.units - 1e-9)
 
     def as_dict(self, capacity: ModeCapacity, hours: float) -> dict:
-        available = capacity.available_units(hours)
+        available = self.units_available
         return {
             "mode": self.mode,
             "tonnes": round(self.tonnes, 1),
             "shipments": len(self.shipment_ids),
             "shipment_ids": sorted(self.shipment_ids),
             "units": self.whole_units,
-            "unit_name": _UNIT_NAMES.get(self.mode, "units"),
+            "unit_name": unit_name(self.mode, self.whole_units),
+            "unit_name_available": unit_name(self.mode, available),
             "units_available": available,
-            "tonnes_available": round(capacity.available_tonnes(hours), 1),
+            "tonnes_available": round(available * capacity.tonnes_per_unit, 1),
             "share_of_ceiling": (
                 round(self.units / available, 3) if available else None
             ),
@@ -262,6 +268,19 @@ _UNIT_NAMES = {
     "road": "trucks",
     "sea": "sailings",
 }
+
+
+def unit_name(mode: str, count: float = 2) -> str:
+    """What one of this mode's units is called, in the right number.
+
+    "1 train slots" is the kind of thing that makes a reader stop trusting
+    the rest of the sentence, and the rest of the sentence is where the
+    numbers are.
+    """
+    plural = _UNIT_NAMES.get(mode, "units")
+    if abs(count) == 1:
+        return plural[:-1] if plural.endswith("s") else plural
+    return plural
 
 
 @dataclass(frozen=True)
@@ -284,6 +303,12 @@ class Plan:
     late_shipments: int
     hours_to_first_move: float
     limits: tuple[str, ...]           # what ran out, in words
+    # Did the plan actually fail to move freight it should have moved?
+    # Deliberately NOT "limits is non-empty". A plan that books the last
+    # truck on the corridor and still lands everything on the date has hit a
+    # ceiling, which is worth saying, and has not come up short, which is a
+    # different sentence and the one a planner acts on.
+    short: bool = False
     margin: margin_mod.Margin | None = None
     # Consignments this plan individually pushes under the floor, even where
     # the block as a whole still pays. Reported, never vetoed: spending one
@@ -328,7 +353,7 @@ class Plan:
 
     @property
     def feasible(self) -> bool:
-        return not self.limits
+        return not self.short
 
     @property
     def viable(self) -> bool:
@@ -385,6 +410,9 @@ class Plan:
             "hours_to_first_move": round(self.hours_to_first_move, 1),
             "on_time": self.on_time,
             "feasible": self.feasible,
+            "at_ceiling": [
+                limit for limit in self.limits if "at its ceiling" in limit
+            ],
             "viable": self.viable,
             "limits": list(self.limits),
             "also": list(self.also),
@@ -571,6 +599,7 @@ def _assign(
     horizon_hours: float,
     *,
     blocked: frozenset[str],
+    share: dict[str, float],
     order_consignments,
     prefer_modes,
     defer_cap_tonnes: float,
@@ -586,7 +615,9 @@ def _assign(
     # short of. Tonnes are what the freight weighs; sailings and drivers are
     # what runs out.
     fleet = {
-        name: float(cap.available_units(horizon_hours))
+        name: float(
+            math.floor(cap.available_units(horizon_hours) * share.get(name, 1.0))
+        )
         for name, cap in capacities.items()
         if name not in blocked
     }
@@ -615,7 +646,10 @@ def _assign(
                 continue
 
             used[name] = used.get(name, 0.0) + need
-            row = allocations.setdefault(name, Allocation(mode=name))
+            row = allocations.setdefault(
+                name,
+                Allocation(mode=name, units_available=int(fleet.get(name, 0.0))),
+            )
             ready = cap.ready_hours_for(math.ceil(row.units + need - 1e-9))
             row.units += need
             row.tonnes += item.tonnes
@@ -648,6 +682,7 @@ def _assign(
         )
         late_count += 1
 
+    short = bool(no_equipment) or deferred_tonnes > defer_cap_tonnes + 1e-9
     if deferred_tonnes > defer_cap_tonnes + 1e-9:
         over = deferred_tonnes - defer_cap_tonnes
         limits.append(
@@ -663,10 +698,25 @@ def _assign(
             continue
         available = fleet.get(name, 0.0)
         if available and math.ceil(used.get(name, 0.0)) >= available:
+            derated = share.get(name, 1.0)
+            note = (
+                f" — and it is running at {derated * 100:.0f}% of normal"
+                if derated < 1.0 else ""
+            )
             limits.append(
                 f"{name} is at its ceiling — {available:,.0f} "
-                f"{_UNIT_NAMES.get(name, 'units')} is all this corridor has "
-                f"inside {horizon_hours:,.0f} h"
+                f"{unit_name(name, available)} is all this corridor has "
+                f"inside {horizon_hours:,.0f} h{note}"
+            )
+        elif deferred and not available and share.get(name, 1.0) < 1.0:
+            # Only when the plan actually came up short. A mode squeezed to
+            # nothing on a lane whose freight all fits elsewhere has cost
+            # this plan nothing, and listing it under "what runs out" would
+            # mark a perfectly executable plan infeasible for a shortage it
+            # never felt.
+            limits.append(
+                f"{name} is derated to {share[name] * 100:.0f}% of normal, "
+                f"which leaves nothing usable inside {horizon_hours:,.0f} h"
             )
 
     ordered = sorted(
@@ -690,6 +740,7 @@ def _assign(
         late_shipments=late_count,
         hours_to_first_move=first_move,
         limits=tuple(limits),
+        short=short,
     )
 
 
@@ -718,19 +769,28 @@ def plans(
     config: Config,
     *,
     blocked_modes: frozenset[str] | set[str] = frozenset(),
+    derate: dict[str, float] | None = None,
     horizon_hours: float | None = None,
 ) -> list[Plan]:
     """The three-to-four mixes, ranked delivery-first.
 
-    ``blocked_modes`` is the disruption: a closed river takes barge off the
-    board and every plan has to work without it. That is the whole exercise —
-    the plans are interesting precisely because one mode has gone.
+    The disruption arrives here in two forms, because disruptions come in two
+    forms. ``blocked_modes`` is the clean case: a closed river takes barge off
+    the board entirely and every plan has to work without it.
+
+    ``derate`` is the commoner and more interesting one. "Rhine low water at
+    Kaub — loading restricted to 45%" is not a closure; the barges still sail,
+    they sail half empty, and a model that can only say open or shut has to
+    round that to one or the other. Both roundings are wrong: calling it shut
+    invents an emergency, calling it open misses the one that is happening.
+    So a mode's ceiling is scaled, and 0.0 is simply where the scale ends.
     """
     capacities = modes(config)
     if not capacities or not displaced:
         return []
 
     blocked = frozenset(blocked_modes)
+    share = {k: max(0.0, min(1.0, v)) for k, v in (derate or {}).items()}
     horizon = (
         horizon_hours
         if horizon_hours is not None
@@ -760,7 +820,7 @@ def plans(
             "Fewest external units, lowest cost per tonne — and the slowest "
             "to start, which is the price of it.",
             displaced, capacities, horizon,
-            blocked=blocked,
+            blocked=blocked, share=share,
             order_consignments=_by_deadline,
             prefer_modes=lambda _item: big_first,
             defer_cap_tonnes=cap_t,
@@ -771,7 +831,7 @@ def plans(
             "Whatever loads soonest takes the freight, cost unconstrained. "
             "Earliest first movement, most trucks, biggest bill.",
             displaced, capacities, horizon,
-            blocked=blocked,
+            blocked=blocked, share=share,
             order_consignments=_by_deadline,
             prefer_modes=lambda _item: soon_first,
             defer_cap_tonnes=cap_t,
@@ -783,7 +843,7 @@ def plans(
             "Not the cheapest plan and not the fastest — the cheapest one "
             "that does not cost a delivery.",
             displaced, capacities, horizon,
-            blocked=blocked,
+            blocked=blocked, share=share,
             order_consignments=_by_deadline,
             prefer_modes=cheapest_that_holds,
             defer_cap_tonnes=cap_t,
@@ -804,7 +864,7 @@ def plans(
                 f"{defer_share(config) * 100:.0f}% of the tonnage waits for "
                 "next week's sailings.",
                 _triage_set(displaced, cap_t), capacities, horizon,
-                blocked=blocked,
+                blocked=blocked, share=share,
                 order_consignments=_by_slack_then_value,
                 prefer_modes=cheapest_that_holds,
                 defer_cap_tonnes=cap_t,
@@ -894,7 +954,9 @@ def _restore_deferred(
     # not a plan, it is a shrug. Re-checked here rather than trusted from the
     # assignment, which only ever saw the reduced set.
     limits = tuple(x for x in plan.limits if "beyond what may be deferred" not in x)
+    short = any("carries" in x for x in limits)
     if deferred_t > cap_tonnes + 1e-9:
+        short = True
         limits += (
             f"{deferred_t:,.0f} t cannot be moved inside "
             f"{plan.horizon_hours:,.0f} h — "
@@ -914,6 +976,7 @@ def _restore_deferred(
         late_shipments=plan.late_shipments + len(held),
         hours_to_first_move=plan.hours_to_first_move,
         limits=limits,
+        short=short,
         margin=plan.margin,
     )
 
@@ -1013,6 +1076,7 @@ def price(
         late_shipments=plan.late_shipments,
         hours_to_first_move=plan.hours_to_first_move,
         limits=plan.limits,
+        short=plan.short,
         margin=margin_mod.Margin(
             contribution_chf=round(contribution, 2),
             action_cost_chf=round(plan.extra_cost_chf, 2),

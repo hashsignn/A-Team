@@ -482,29 +482,54 @@ def clock_of(context: RunContext) -> Clock:
 VENDOR_LIMIT = 3
 
 
-def _blocked_modes(context: RunContext, shipment_ids: set[str]) -> set[str]:
-    """Which modes the disruption has taken away from the WHOLE lane.
+def _mode_pressure(
+    context: RunContext, shipments: list[Shipment]
+) -> tuple[set[str], dict[str, float]]:
+    """How much of each mode the disruption has taken, as a share.
 
     Read off the gate hits, because the gate is where "this event touches this
-    leg by this mode" was already decided and deciding it twice is how the two
-    answers drift apart. But a hit is per leg, and a mode is corridor-wide, so
-    the two are not the same question: one consignment stopped on its road leg
-    at Basel does not mean the European road market has closed.
+    leg by this mode" was already decided, and deciding it twice is how the
+    two answers drift apart. What the gate cannot say is whether a mode is
+    GONE, and forcing that question to a yes or no breaks it both ways.
 
-    So a mode counts as gone only when EVERY displaced consignment has lost
-    it. That is strict on purpose. Taking road off the board is the single
-    most consequential thing this function can do — it is the fallback every
-    plan leans on — and doing it because one leg of one consignment was
-    touched would manufacture an impossibility the corridor does not have.
+    Answer "yes, any hit removes it" and one consignment stopped on its road
+    leg at Basel closes the European road market — an impossibility the
+    corridor does not have. Answer "only if every consignment lost it" and
+    "Rhine low water at Kaub, loading restricted to 45%" registers as nothing
+    at all, because the barges still upstream of Kaub have not been touched
+    yet. Both roundings are wrong, and the second is wrong about the scenario
+    this whole system was built for.
+
+    So it is not rounded. Each mode is scaled by the share of ITS OWN users
+    that have lost it: seven of twenty barges caught by the low water is a
+    river running at sixty-five percent, not an open river and not a shut one.
+    A full closure falls out as the end of the same scale, which is why there
+    is no threshold here for anybody to argue with.
     """
-    if not shipment_ids:
-        return set()
-    per_shipment: dict[str, set[str]] = {sid: set() for sid in shipment_ids}
+    users: dict[str, set[str]] = defaultdict(set)
+    for shipment in shipments:
+        for leg in shipment.legs:
+            mode = leg.mode.value if hasattr(leg.mode, "value") else str(leg.mode)
+            users[mode].add(shipment.shipment_id)
+
+    lost: dict[str, set[str]] = defaultdict(set)
+    ids = {s.shipment_id for s in shipments}
     for hit in context.hits:
-        if hit.shipment_id in per_shipment:
+        if hit.shipment_id in ids:
             mode = hit.mode.value if hasattr(hit.mode, "value") else str(hit.mode)
-            per_shipment[hit.shipment_id].add(mode)
-    return set.intersection(*per_shipment.values())
+            lost[mode].add(hit.shipment_id)
+
+    blocked: set[str] = set()
+    derate: dict[str, float] = {}
+    for mode, on_it in users.items():
+        if not on_it:
+            continue
+        gone = len(on_it & lost.get(mode, set())) / len(on_it)
+        if gone >= 1.0:
+            blocked.add(mode)
+        elif gone > 0:
+            derate[mode] = round(1.0 - gone, 3)
+    return blocked, derate
 
 
 def _vendor_rows(context: RunContext, shipments: list[Shipment]) -> list[dict]:
@@ -578,12 +603,14 @@ def solution_board(
 
     config = context.config
     displaced = capacity.displaced_from(shipments, config, context.clock)
-    blocked = _blocked_modes(context, set(at_risk))
+    blocked, derate = _mode_pressure(context, shipments)
     capacities = capacity.modes(config)
 
     built = [
         capacity.price(plan, at_risk, config, capacities)
-        for plan in capacity.plans(displaced, config, blocked_modes=blocked)
+        for plan in capacity.plans(
+            displaced, config, blocked_modes=blocked, derate=derate
+        )
     ]
     built.sort(key=lambda p: p.rank_key)
 
@@ -594,10 +621,18 @@ def solution_board(
         "displaced_shipments": len(displaced),
         "displaced_tonnes": round(sum(d.tonnes for d in displaced), 1),
         "blocked_modes": sorted(blocked),
+        # Only modes the allocator can act on. A derate on a mode with no
+        # declared ceiling changes nothing and would put a number on screen
+        # that no plan below it ever refers to.
+        "derated_modes": {
+            k: derate[k] for k in sorted(derate) if k in capacities
+        },
         "horizon_hours": round(built[0].horizon_hours, 1) if built else None,
         "plans": [p.as_dict(capacities) for p in built],
         "vendors": _vendor_rows(context, shipments),
-        "replacement": _replacement_note(capacities, blocked, displaced),
+        "replacement": _replacement_note(
+            capacities, blocked, derate, displaced
+        ),
         "sentence": (
             built[0].sentence() if built
             else "No mode on this corridor carries this freight."
@@ -608,28 +643,35 @@ def solution_board(
 def _replacement_note(
     capacities: dict[str, capacity.ModeCapacity],
     blocked: set[str],
+    derate: dict[str, float],
     displaced: list[capacity.Displaced],
 ) -> str | None:
     """"One sailing is a hundred and three drivers", said in numbers.
 
-    The sentence the whole capacity model exists to let the board say, and it
-    is only sayable when a high-capacity mode is the thing that has gone —
-    which is why it is computed here rather than printed unconditionally.
+    The sentence the whole capacity model exists to let the board say. It
+    earns its place whenever a high-capacity mode is under pressure — gone or
+    merely squeezed — because a river at sixty percent still has to have its
+    missing forty percent carried by something, and that something is trucks.
     """
     road = capacities.get("road")
     if road is None:
         return None
-    lost = [
-        capacities[m] for m in blocked
+    under_pressure = [
+        capacities[m] for m in (blocked | set(derate))
         if m in capacities and capacities[m].tonnes_per_unit > road.tonnes_per_unit
     ]
-    if not lost:
+    if not under_pressure:
         return None
-    biggest = max(lost, key=lambda c: c.tonnes_per_unit)
-    per_unit = road.units_to_replace(biggest.tonnes_per_unit)
+    biggest = max(under_pressure, key=lambda c: c.tonnes_per_unit)
     tonnes = sum(d.tonnes for d in displaced)
+    state = (
+        "is shut" if biggest.name in blocked
+        else f"is running at {derate[biggest.name] * 100:.0f}% of normal"
+    )
     return (
         f"One {biggest.name} unit carries {biggest.tonnes_per_unit:,.0f} t — "
-        f"{per_unit} trucks. The {tonnes:,.0f} t displaced here needs "
-        f"{road.units_to_replace(tonnes)} of them if it all goes by road."
+        f"{road.units_to_replace(biggest.tonnes_per_unit)} trucks. "
+        f"{biggest.name.capitalize()} {state}, and the {tonnes:,.0f} t "
+        f"displaced here needs {road.units_to_replace(tonnes)} trucks if it "
+        f"all goes by road."
     )

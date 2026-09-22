@@ -169,3 +169,53 @@ def test_radar_axes_exist_for_routes_that_have_events(board):
         if route.get("events"):
             assert "radar" in route, f"{route['route_id']} has events but no radar"
             assert "axes" in route["radar"]
+
+
+# =====================================================================
+# The solution board
+# =====================================================================
+@pytest.fixture(scope="module")
+def solution(context):
+    from engine.fast import view as fast_view
+    rows = fast_view.route_summaries(context)
+    assert rows, "the fixture must produce at least one affected lane"
+    return fast_view.solution_board(context, rows[0]["route_id"])
+
+
+def test_the_board_carries_the_fields_the_tabs_render(solution):
+    for key in ("route_id", "name", "displaced_shipments", "displaced_tonnes",
+                "blocked_modes", "derated_modes", "horizon_hours", "plans",
+                "vendors", "sentence"):
+        assert key in solution, f"the board lost {key}"
+
+
+def test_every_plan_carries_what_its_tab_needs(solution):
+    for plan in solution["plans"]:
+        for key in ("plan_id", "label", "thesis", "sentence", "coverage",
+                    "covered_tonnes", "deferred_tonnes", "displaced_tonnes",
+                    "extra_cost_chf", "worst_days_late", "late_shipments",
+                    "hours_to_first_move", "feasible", "viable", "limits",
+                    "also", "allocations", "deferred", "margin_chf",
+                    "unprofitable_shipments"):
+            assert key in plan, f"{plan.get('plan_id')} lost {key}"
+
+
+def test_every_allocation_carries_what_its_bar_needs(solution):
+    """The fleet bar divides units by units_available. A missing or zero
+    denominator renders a bar of NaN% wide, which is a blank row rather than
+    a visible error."""
+    for plan in solution["plans"]:
+        for row in plan["allocations"]:
+            for key in ("mode", "tonnes", "units", "units_available",
+                        "unit_name", "unit_name_available", "shipments",
+                        "hours_to_ready", "hours_to_last_away", "cost_chf"):
+                assert key in row, f"{row.get('mode')} lost {key}"
+            assert row["units_available"] > 0
+            assert row["units"] > 0
+
+
+def test_a_plan_id_is_unique_so_tabs_and_panels_pair_up(solution):
+    """The tab sets aria-controls to plan-<id> and the panel uses it as its
+    DOM id. Two plans sharing an id makes one tab unreachable."""
+    ids = [p["plan_id"] for p in solution["plans"]]
+    assert len(ids) == len(set(ids))

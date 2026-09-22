@@ -303,3 +303,182 @@ details.fold .fold__body { padding: 0 15px 15px; font-size: 13px; }
   background: linear-gradient(90deg,
     var(--sika-yellow) 0 42%, var(--sika-red) 42% 100%);
 }
+
+/* =====================================================================
+   The solution board.
+
+   Tabs are big because each one is an argument, not a row. A planner
+   choosing between four mixes is making a judgement call, and a judgement
+   needs its reasoning on screen rather than folded behind a chevron.
+   ===================================================================== */
+.sboard {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.sboard__head { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
+.sboard__head h3 { margin: 0; font-size: 15px; }
+.sboard__sub { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
+
+/* The one line the whole capacity model exists to let the board say. */
+.sboard__swap {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--lvl-yellow);
+  background: var(--surface-2);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.ptabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.ptab {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 13px;
+  border: 0;
+  border-top: 3px solid transparent;
+  background: var(--surface-2);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-secondary);
+}
+.ptab:hover { background: var(--surface-1); }
+.ptab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+.ptab--on {
+  background: var(--surface-1);
+  border-top-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.ptab__icon { font-size: 17px; line-height: 1.2; opacity: 0.75; }
+.ptab--on .ptab__icon { opacity: 1; color: var(--accent); }
+.ptab__body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ptab__label { font-weight: 600; font-size: 13px; }
+.ptab__line { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.ptab__nums { font-family: var(--mono); font-size: 10.5px; color: var(--text-secondary); }
+.ptab__nums b { color: var(--text-primary); }
+.ptab__nums em { color: var(--lvl-yellow); font-style: normal; }
+
+.plan { padding: 16px; }
+.plan__thesis { margin: 0 0 12px; font-size: 13px; line-height: 1.6; max-width: 68ch; }
+.plan__also {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-left: 3px solid var(--axis);
+  padding-left: 9px;
+}
+.plan__h {
+  margin: 16px 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- coverage: what moves, and what is still standing there ---- */
+.cover { margin: 0 0 14px; }
+.cover__bar {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.cover__moved { background: var(--lvl-green); }
+.cover__left {
+  background: repeating-linear-gradient(
+    -45deg, var(--surface-3), var(--surface-3) 4px, var(--axis) 4px, var(--axis) 8px);
+}
+.cover__legend {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  margin-top: 7px; font-size: 11.5px; color: var(--text-secondary);
+}
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+.sw--moved { background: var(--lvl-green); }
+.sw--left { background: var(--axis); }
+
+.facts--plan { margin: 0 0 4px; }
+
+/* ---- one mode's share of the fleet ---- */
+.alloc {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--surface-2);
+}
+/* At the ceiling is not a warning about this plan — it is the fact that
+   there is no more of this mode to be had. */
+.alloc--tight { border-color: var(--lvl-yellow); }
+
+.alloc__head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.alloc__mode { font-weight: 600; font-size: 13px; text-transform: capitalize; }
+.alloc__icon { margin-right: 5px; opacity: 0.7; }
+.alloc__units { font-family: var(--mono); font-size: 12px; color: var(--text-secondary); }
+.alloc__units strong { color: var(--text-primary); font-size: 14px; }
+
+.alloc__bar {
+  height: 7px; margin: 8px 0 7px;
+  border-radius: 4px; background: var(--surface-3); overflow: hidden;
+}
+.alloc__bar > span { display: block; height: 100%; background: var(--accent); }
+.alloc--tight .alloc__bar > span { background: var(--lvl-yellow); }
+
+.alloc__foot {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: 11px; color: var(--muted);
+}
+.alloc__foot .num { margin-left: auto; font-family: var(--mono); }
+
+.plan__limits { margin-top: 4px; }
+.plan__limits ul { margin: 0; padding-left: 18px; }
+.plan__limits li { font-size: 12px; line-height: 1.6; color: var(--lvl-yellow); }
+
+.plan__money {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  margin-top: 16px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.plan__warn { color: var(--lvl-yellow); }
+.plan__veto { color: var(--lvl-red); font-weight: 600; }
+
+.fold--inline { margin-top: 12px; }
+
+@media (max-width: 640px) {
+  .ptabs { grid-template-columns: 1fr; }
+  .alloc__foot .num { margin-left: 0; }
+}
+
+.plan__title { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.plan__title h4 { margin: 0; font-size: 14px; }
+
+/* What the delivery-first ranking chose. A board of four mixes with no
+   recommendation makes the planner do the ranking again by eye. */
+.pick, .ptab__pick {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  white-space: nowrap;
+}
+.ptab__pick { margin-left: 6px; font-size: 9px; padding: 1px 5px; }
