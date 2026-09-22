@@ -196,6 +196,22 @@ def _build_route(
         "legs": _legs(lane, context),
         "events": _events(assessments, risks),
         "radar": _radar(assessments, lane, context),
+        # The same data cut the way a planner reasons about it. A measured
+        # variable has an instrument behind it — a gauge, a forecast, a
+        # congestion feed — so it has a level you can read right now and
+        # watch move. A reported one does not: nobody publishes a number for
+        # "will the dockers walk out". Mixing them on one chart puts a
+        # reading and a rumour on the same spoke.
+        #
+        # Split per VARIABLE rather than per family, because the families are
+        # themselves mixed: on the waterway spoke a water level is measured
+        # and a lock closure is not.
+        "radar_measured": _radar(
+            assessments, lane, context, keep=lambda v: v.probability_sourceable
+        ),
+        "radar_reported": _radar(
+            assessments, lane, context, keep=lambda v: not v.probability_sourceable
+        ),
         "actions": _actions(risks, context),
         "response": _response(lane, verdict, risks, context),
     }
@@ -422,7 +438,9 @@ def _route_has_irreversible_damage(
     return False
 
 
-def _eligible_families(lane: dict, context: RunContext) -> list[str]:
+def _eligible_families(
+    lane: dict, context: RunContext, keep=None
+) -> list[str]:
     """Families that COULD touch this route, via the exposure mask.
 
     These become the radar's axes even when they contribute nothing, and that
@@ -443,6 +461,8 @@ def _eligible_families(lane: dict, context: RunContext) -> list[str]:
 
     families: list[str] = []
     for var in context.config.variables.values():
+        if keep is not None and not keep(var):
+            continue
         if var.family in families:
             continue
         if not any(mode_applies(var, m).exposed for m in modes):
@@ -457,7 +477,7 @@ def _eligible_families(lane: dict, context: RunContext) -> list[str]:
     return families
 
 
-def _radar(assessments: list, lane: dict, context: RunContext) -> dict:
+def _radar(assessments: list, lane: dict, context: RunContext, keep=None) -> dict:
     """Risk families as spokes, split into the three severity bands.
 
     Spokes are labelled in DAYS OF DELAY, not abstract weights, so a planner
@@ -489,6 +509,8 @@ def _radar(assessments: list, lane: dict, context: RunContext) -> dict:
             var = variables.get(var_id)
             if var is None:
                 continue
+            if keep is not None and not keep(var):
+                continue
             totals[var.family][band] += days
             entry = subs[var.family].setdefault(
                 var_id,
@@ -498,7 +520,7 @@ def _radar(assessments: list, lane: dict, context: RunContext) -> dict:
             entry["days"] += days
             entry["severity"] = band
 
-    eligible = _eligible_families(lane, context)
+    eligible = _eligible_families(lane, context, keep)
     for family in eligible:
         totals[family]  # touch the defaultdict so quiet families get an axis
 
@@ -507,6 +529,8 @@ def _radar(assessments: list, lane: dict, context: RunContext) -> dict:
         totals, key=lambda f: (sum(totals[f].values()), f), reverse=True
     )
 
+    peak = max((sum(totals[f].values()) for f in families), default=0.0)
+
     return {
         "axes": [f.replace("_", " ").title() for f in families],
         "axis_keys": families,
@@ -514,9 +538,24 @@ def _radar(assessments: list, lane: dict, context: RunContext) -> dict:
             band: [round(totals[f][band], 2) for f in families]
             for band in ("severe", "moderate", "minor")
         },
-        "max": round(
-            max((sum(totals[f].values()) for f in families), default=0.0), 2
-        ),
+        "max": round(peak, 2),
+        # Per axis, 0..1 against the loudest family on THIS chart. The polygon
+        # already carries this as a shape; carried as a number too so the UI
+        # can fill a row of symbols to it, which is the reading a manager
+        # glancing at the screen actually gets — a shape has to be traced,
+        # a filled bar does not.
+        "intensity": [
+            round(sum(totals[f].values()) / peak, 3) if peak > 0 else 0.0
+            for f in families
+        ],
+        "days": [round(sum(totals[f].values()), 2) for f in families],
+        # The band that contributes most to each family, so the symbol can be
+        # coloured by what is actually driving it rather than by its total.
+        "dominant": [
+            max(("severe", "moderate", "minor"), key=lambda b: totals[f][b])
+            if sum(totals[f].values()) > 0 else None
+            for f in families
+        ],
         "subcategories": {
             f: sorted(
                 (

@@ -199,6 +199,11 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             1 for s in shipments if hits_by_shipment.get(s.shipment_id)
         ),
         "radar": route.get("radar"),
+        # Both cuts, because the page draws both. Carried through rather than
+        # recomputed: the board already did the split, and a second copy of
+        # that arithmetic is a second thing to keep in step.
+        "radar_measured": route.get("radar_measured"),
+        "radar_reported": route.get("radar_reported"),
         "matrix_grid": board.get("matrix_grid"),
         "events": events,
         "driving_event_id": (driving or {}).get("event_id"),

@@ -139,6 +139,61 @@ const Charts = (() => {
     ).join('') || '<span class="rl muted">no contribution</span>';
   }
 
+  /* ------------------------------------------------------------------
+   * Family gauges: the same numbers the polygon draws, read at a glance.
+   *
+   * A radar polygon has to be TRACED to be read — you follow the outline
+   * round and compare distances from a centre that is not marked. That is
+   * fine for shape ("this lane is weather-shaped") and poor for magnitude,
+   * which is the question actually being asked. So each family also gets a
+   * row of symbols filled to its intensity, which is read the way a battery
+   * icon is read: instantly, and without a legend.
+   *
+   * A family at zero still gets a row. An empty row says "checked,
+   * contributes nothing", which is a different and more useful statement
+   * than absence — absence would mean the family was never assessed.
+   * ------------------------------------------------------------------ */
+  const GAUGE_PIPS = 10;
+
+  const FAMILY_GLYPH = {
+    climate: '☁', waterway: '≋', port_ops: '⚓', geopolitical: '⚑',
+    labour: '✋', infrastructure: '⌂', force_majeure: '⚠',
+    mechanical: '⚙', capacity: '▤', cyber: '⌁',
+  };
+
+  function familyGauges(radar, opts = {}) {
+    const { empty = 'Nothing in this group is contributing delay.' } = opts;
+    const keys = radar.axis_keys || [];
+    if (!keys.length) return `<p class="gauge-none">${escC(empty)}</p>`;
+
+    const rows = keys.map((key, i) => {
+      const days = (radar.days || [])[i] || 0;
+      const level = (radar.intensity || [])[i] || 0;
+      const band = (radar.dominant || [])[i];
+      const lit = days > 0 ? Math.max(1, Math.round(level * GAUGE_PIPS)) : 0;
+
+      const pips = Array.from({ length: GAUGE_PIPS }, (_, k) =>
+        `<i class="pip${k < lit ? ' pip--on' : ''}"></i>`).join('');
+
+      return `
+        <div class="gauge${days > 0 ? '' : ' gauge--quiet'}"
+             style="${band ? `--pip: ${BAND_COLOR[band]};` : ''}">
+          <span class="gauge__icon" aria-hidden="true">${FAMILY_GLYPH[key] || '◆'}</span>
+          <span class="gauge__name">${escC((radar.axes || [])[i] || key)}</span>
+          <span class="gauge__pips" role="img"
+                aria-label="${days > 0 ? `${days} days of delay` : 'no contribution'}"
+                >${pips}</span>
+          <span class="gauge__val">${days > 0 ? `${days.toFixed(1)} d` : '—'}</span>
+        </div>`;
+    });
+
+    const quiet = keys.length - rows.filter((_, i) =>
+      ((radar.days || [])[i] || 0) > 0).length;
+    return rows.join('') + (quiet
+      ? `<p class="gauge-foot">${quiet} more checked, contributing nothing.</p>`
+      : '');
+  }
+
   function impactRows(grid) {
     // Declared most severe first; the grid draws worst at the top.
     return grid.impact_bands;
@@ -155,10 +210,51 @@ const Charts = (() => {
     return out;
   }
 
-  function cellTint(chf, worst) {
-    if (!chf || !worst) return '';
-    const t = Math.min(1, Math.sqrt(chf / worst));   // sqrt: small sums stay visible
-    return `background: color-mix(in srgb, var(--mx-heat) ${(t * 68).toFixed(0)}%, transparent);`;
+  /* A risk matrix's colour is its POSITION, not its contents.
+   *
+   * The old rule tinted every cell by the CHF sitting in it, on one pale
+   * hue. That fails in the case that matters most: the busiest cell on the
+   * board holds 193 consignments whose expected loss rounds to zero —
+   * small shipments, unsourced probability — so it rendered as an empty
+   * white box. A planner reading that sees nothing there. There is a great
+   * deal there.
+   *
+   * So the two questions are answered by two channels:
+   *
+   *   HUE     where the cell sits in the grid. Bottom-left green, top-right
+   *           red, exactly as a risk matrix has always been read. This is a
+   *           property of the cell and never changes, so an empty
+   *           high-impact cell still shows as the place you do not want
+   *           anything to appear.
+   *   FILL    how loaded the cell is, from both the count and the money —
+   *           whichever says more. An occupied cell is never invisible.
+   */
+  const MX_RAMP = ['--mx-low', '--mx-mid', '--mx-high', '--mx-top'];
+
+  function cellRisk(rowIndex, rowCount, colIndex, colCount) {
+    // Impact rows arrive worst-first, so invert to get "how bad" upward.
+    const impact = rowCount > 1 ? (rowCount - 1 - rowIndex) / (rowCount - 1) : 1;
+    const likelihood = colCount > 1 ? colIndex / (colCount - 1) : 0.5;
+    return (impact * 0.6) + (likelihood * 0.4);
+  }
+
+  function cellTint(chf, worst, opts = {}) {
+    const { n = 0, mostN = 0, risk = 0.5 } = opts;
+    if (!n) return '';
+
+    // Whichever channel is louder decides the weight. Money usually is; on a
+    // long tail of small consignments the count is the only thing there.
+    const byMoney = worst > 0 ? Math.sqrt(chf / worst) : 0;
+    const byCount = mostN > 0 ? Math.sqrt(n / mostN) : 0;
+    // Floored, because "occupied" is itself information. A cell with one
+    // consignment in it must not look like a cell with none.
+    const weight = Math.max(0.22, Math.min(1, Math.max(byMoney, byCount)));
+
+    const band = MX_RAMP[Math.min(
+      MX_RAMP.length - 1, Math.floor(risk * MX_RAMP.length)
+    )];
+    return `background: color-mix(in srgb, var(${band}) ` +
+           `${(weight * 82).toFixed(0)}%, transparent);`;
   }
 
   function buildMatrixGrid(event, board) {
@@ -175,24 +271,42 @@ const Charts = (() => {
       if (pt.ring === 'solid') solid.set(key, (solid.get(key) || 0) + 1);
     }
     const worst = Math.max(0, ...money.values());
+    const mostN = Math.max(0, ...count.values());
     const unsourced = m.points.filter((p) => p.p_late === null);
 
-    const cell = (rowId, colId, extraClass = '') => {
+    const cell = (rowId, rowIndex, colId, colIndex, opts = {}) => {
+      const { unsourced: isUnsourced = false } = opts;
       const key = `${rowId}|${colId}`;
       const n = count.get(key) || 0;
       const s = solid.get(key) || 0;
       const chf = money.get(key) || 0;
+      // The unsourced column is off the likelihood axis entirely — it is the
+      // gutter for events nobody can put a number on. It takes its rating
+      // from impact alone rather than borrowing a column position it does
+      // not have, but it is still tinted: on a lane where every event is
+      // unsourceable it holds the whole picture, and leaving it untinted was
+      // how the matrix came to show nothing at all.
+      const risk = isUnsourced
+        ? cellRisk(rowIndex, rows.length, 0, 1)
+        : cellRisk(rowIndex, rows.length, colIndex, cols.length);
       // A cell where options have ALREADY closed is outlined, whatever it is
       // worth. Money you can still act on and money you cannot are different
       // problems, and the ramp alone cannot say which this is.
       const lost = n > s;
-      return `<td class="mx-cell${n ? ' has' : ''}${lost ? ' mx-cell--lost' : ''} ${extraClass}"
-                  style="${cellTint(chf, worst)}"
-                  title="${n ? `${n} shipment(s) · CHF ${Math.round(chf).toLocaleString()} expected loss${lost ? ' · some options already closed' : ''}` : 'empty'}">
+      const why = n
+        ? `${n} shipment(s) · CHF ${Math.round(chf).toLocaleString()} expected loss`
+          + (lost ? ' · some options already closed' : '')
+          + (isUnsourced ? ' · probability not sourceable' : '')
+        : 'empty';
+      return `<td class="mx-cell${n ? ' has' : ''}${lost ? ' mx-cell--lost' : ''}${isUnsourced ? ' mx-unsourced' : ''}"
+                  style="${cellTint(chf, worst, { n, mostN, risk })}"
+                  title="${escC(why)}">
                 ${n ? dots(n, s) : ''}
                 ${chf ? `<span class="mx-chf">${shortChf(chf)}</span>` : ''}
               </td>`;
     };
+
+    const unsourcedId = grid.unsourced_band.id;
 
     return `
       <table class="mx-grid mx-grid--big">
@@ -204,15 +318,13 @@ const Charts = (() => {
           </tr>
         </thead>
         <tbody>
-          ${rows.map((r) => `
+          ${rows.map((r, ri) => `
             <tr>
               <th class="mx-row" title="${escC(r.action)}">${escC(r.label)}</th>
-              ${cols.map((c) => cell(r.id, c.id)).join('')}
-              ${unsourced.length ? (() => {
-                const n = unsourced.filter((p) => p.impact_band === r.id).length;
-                const s = unsourced.filter((p) => p.impact_band === r.id && p.ring === 'solid').length;
-                return `<td class="mx-cell mx-unsourced${n ? ' has' : ''}">${n ? dots(n, s) : ''}</td>`;
-              })() : ''}
+              ${cols.map((c, ci) => cell(r.id, ri, c.id, ci)).join('')}
+              ${unsourced.length
+                ? cell(r.id, ri, unsourcedId, 0, { unsourced: true })
+                : ''}
             </tr>`).join('')}
         </tbody>
         <tfoot>
@@ -230,5 +342,6 @@ const Charts = (() => {
     return String(Math.round(n));
   }
 
-  return { drawRadar, impactRows, dots, cellTint, buildMatrixGrid, shortChf };
+  return { drawRadar, familyGauges, impactRows, dots, cellTint,
+           buildMatrixGrid, shortChf };
 })();

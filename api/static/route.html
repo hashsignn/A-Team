@@ -57,24 +57,60 @@
     <section class="rt-block">
       <div class="rt-block-head">
         <h2>Risk matrix</h2>
-        <span class="block-note">shaded by CHF at stake</span>
+        <span class="block-note">colour = where it sits · depth = how loaded</span>
       </div>
       <div id="rt-matrix"></div>
       <div class="mx-legend">
         <span><i class="mx-dot mx-dot--solid"></i> options still open</span>
         <span><i class="mx-dot mx-dot--hollow"></i> too late to act</span>
-        <span><i class="mx-swatch"></i> deeper = more CHF</span>
+        <span class="mx-ramp-key">
+          <i class="mx-sw mx-sw--low"></i><i class="mx-sw mx-sw--mid"></i><i
+             class="mx-sw mx-sw--high"></i><i class="mx-sw mx-sw--top"></i>
+          monitor → escalate
+        </span>
       </div>
     </section>
 
+    <!--
+      TWO charts, not one. A measured variable has an instrument behind it —
+      a gauge, a forecast, a congestion feed — so it has a level you can read
+      now and watch move. A reported one does not: nobody publishes a number
+      for "will the dockers walk out". Putting a reading and a rumour on the
+      same spoke asks the planner to average two things that are not the
+      same kind of thing.
+    -->
     <section class="rt-block">
       <div class="rt-block-head">
         <h2>Risk in effect</h2>
         <span class="block-note">days of delay contributed</span>
       </div>
-      <div class="evm-radar">
-        <svg id="rt-radar" role="img" aria-label="Active risk families"></svg>
+
+      <div class="rt-radars">
+        <div class="rt-radar-pane">
+          <h3 class="rt-radar-h">
+            Measured
+            <em>gauges and forecasts — a level you can read today</em>
+          </h3>
+          <div class="evm-radar evm-radar--pane">
+            <svg id="rt-radar-measured" role="img"
+                 aria-label="Measured risk families"></svg>
+          </div>
+          <div class="gauges" id="rt-gauges-measured"></div>
+        </div>
+
+        <div class="rt-radar-pane">
+          <h3 class="rt-radar-h">
+            Reported
+            <em>strikes, closures, regulation — no gauge, only occurrence</em>
+          </h3>
+          <div class="evm-radar evm-radar--pane">
+            <svg id="rt-radar-reported" role="img"
+                 aria-label="Reported risk families"></svg>
+          </div>
+          <div class="gauges" id="rt-gauges-reported"></div>
+        </div>
       </div>
+
       <div class="radar-legend" id="rt-radar-legend"></div>
     </section>
   </div>

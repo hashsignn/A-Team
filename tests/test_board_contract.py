@@ -239,3 +239,58 @@ def test_an_option_says_whether_the_vehicles_exist(context):
     for note in notes:
         assert note.endswith("."), note
         assert len(note) < 160, "this renders on one row, not three"
+
+
+# =====================================================================
+# The two risk charts
+# =====================================================================
+def test_the_radar_is_split_into_measured_and_reported(board):
+    """A measured variable has an instrument behind it and a reported one
+    does not, and putting a reading and a rumour on the same spoke asks the
+    planner to average two things that are not the same kind of thing."""
+    for route in board["routes"]:
+        for key in ("radar", "radar_measured", "radar_reported"):
+            assert key in route, f"{route['route_id']} lost {key}"
+
+
+def test_each_chart_carries_what_its_gauges_render(board):
+    """The gauge row fills pips to `intensity` and prints `days`. A missing
+    array renders a row of dead pips rather than an error anyone would see."""
+    for route in board["routes"]:
+        for key in ("radar", "radar_measured", "radar_reported"):
+            radar = route[key]
+            n = len(radar["axes"])
+            for field in ("axis_keys", "intensity", "days", "dominant"):
+                assert field in radar, f"{key} lost {field}"
+                assert len(radar[field]) == n, (
+                    f"{key}.{field} has {len(radar[field])} entries "
+                    f"for {n} axes — the gauge rows would misalign"
+                )
+
+
+def test_intensity_is_a_share_of_the_loudest_family_on_its_own_chart(board):
+    """Not of the combined chart. A reported-only lane whose worst family
+    contributes 2 days should fill its bar, not a fifth of it because some
+    other chart happens to have a louder one."""
+    for route in board["routes"]:
+        for key in ("radar", "radar_measured", "radar_reported"):
+            radar = route[key]
+            for value in radar["intensity"]:
+                assert 0.0 <= value <= 1.0, f"{key}: {value}"
+            if any(d > 0 for d in radar["days"]):
+                assert max(radar["intensity"]) == pytest.approx(1.0), (
+                    f"{key}: something contributes delay but nothing fills"
+                )
+
+
+def test_the_two_cuts_account_for_the_whole_combined_chart(board):
+    """Every variable is either sourceable or it is not — nothing may fall
+    between the two charts and quietly stop being counted."""
+    for route in board["routes"]:
+        whole = sum(route["radar"]["days"])
+        parts = sum(route["radar_measured"]["days"]) + sum(
+            route["radar_reported"]["days"]
+        )
+        assert parts == pytest.approx(whole, abs=0.05), (
+            f"{route['route_id']}: {whole} days combined but {parts} split"
+        )

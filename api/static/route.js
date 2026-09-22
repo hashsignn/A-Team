@@ -248,8 +248,29 @@ async function boot() {
   // Drawn by charts.js, the same code the board uses. A second copy of this
   // arithmetic would drift, and the day the two disagree is the day a planner
   // stops believing either.
-  if (v.radar) {
-    Charts.drawRadar(v.radar, { svg: 'rt-radar', legend: 'rt-radar-legend', scale: 1.7 });
+  // Two panes. The legend is shared — the severity bands mean the same
+  // thing on both — so it is drawn once, from whichever pane has data.
+  const panes = [
+    ['measured', v.radar_measured],
+    ['reported', v.radar_reported],
+  ];
+  let legendDrawn = false;
+  for (const [name, radar] of panes) {
+    if (!radar) continue;
+    Charts.drawRadar(radar, {
+      svg: `rt-radar-${name}`,
+      legend: legendDrawn ? null : 'rt-radar-legend',
+      scale: 1.5,
+    });
+    if ((radar.max || 0) > 0) legendDrawn = true;
+    const host = $(`rt-gauges-${name}`);
+    if (host) {
+      host.innerHTML = Charts.familyGauges(radar, {
+        empty: name === 'measured'
+          ? 'Nothing measurable is contributing delay here.'
+          : 'Nothing reported is contributing delay here.',
+      });
+    }
   }
   const driving = (v.events || []).find((e) => e.event_id === v.driving_event_id)
                || (v.events || [])[0];
