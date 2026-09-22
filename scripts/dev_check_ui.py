@@ -75,8 +75,15 @@ def main() -> int:
             # is cleared once the frame is presented, so readPixels reports
             # zero on a perfectly good render. Screenshot the element instead
             # and look at what the user actually sees.
+            #
+            # A CLIPPED PAGE screenshot, not an element screenshot. An element
+            # screenshot first waits for the element to be "stable", and on a
+            # continuously animating canvas that wait can simply never finish —
+            # it times out after 20s and fails a check that has nothing wrong
+            # with it. Clipping to the same box captures exactly the same
+            # pixels and skips the wait entirely.
             shot = OUT / "_globe_probe.png"
-            canvas.first.screenshot(path=str(shot))
+            page.screenshot(path=str(shot), clip=box)
             lit = _lit_pixels(shot)
             if lit < 0.02:
                 errors.append(
