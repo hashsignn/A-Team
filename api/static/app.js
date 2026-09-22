@@ -996,6 +996,11 @@ function signalsHTML(data) {
         <span class="sig-src">triage ${esc(m.triage)} · extract ${esc(m.extract)}</span>`
         : `<span class="sig-src">The deterministic filter below still runs.
            It is arithmetic, not judgement, and costs nothing either way.</span>`}
+      ${m.recording && m.recording.available ? `
+        <span class="sig-replay">Replaying ${m.recording.entries} recorded
+          answer(s) from ${esc(m.recording.models.join(', '))}, recorded
+          ${esc(m.recording.recorded_at.slice(0, 10))}. Shown as recordings,
+          not as live reads.</span>` : ''}
     </div>
 
     <div class="sig-funnel">${funnel}</div>

@@ -2031,3 +2031,13 @@ body.has-modal { overflow: hidden; }
   padding: 12px 22px 16px; margin: 0;
   font-size: 11.5px; line-height: 1.55; color: var(--muted);
 }
+
+/* A recording is a THIRD state, between "a model is reading this" and
+   "nothing is". Given its own colour because a board running off a recording
+   and one running off a live model are different claims. */
+.sig-replay {
+  display: block; margin-top: 6px; padding: 7px 9px;
+  border-left: 3px solid var(--lvl-blue); border-radius: 0 6px 6px 0;
+  background: var(--surface-1);
+  font-size: 11.5px; line-height: 1.5; color: var(--text-secondary);
+}

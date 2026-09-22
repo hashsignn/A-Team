@@ -216,3 +216,63 @@ same thing.
 No social source is wired by default. The gate is built and tested; pointing
 it at a feed is a `sources.yaml` entry plus a normaliser that produces
 `Post(post_id, author, text, at, repost_of)`.
+
+---
+
+## 6. Record once, replay anywhere
+
+`engine/reason/cache.py`, `scripts/record_reasoning.py`
+
+**You do not need a model in the Codespace.** A model's answer to a fixed
+prompt about a fixed headline is a fact about that pair, not about the machine
+that asked — so record it once where a model exists, commit it, and every
+other machine replays it for free.
+
+```bash
+# on the laptop that has Ollama
+RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py --as-of 2026-09-16
+git add data/reasoning && git commit -m "Record the reasoning layer"
+git push
+
+# in the Codespace, on stage, on a train
+python run.py serve     # no model, no egress, same board
+```
+
+### The key is the question, not the machine
+
+Hashed from `(stage, system prompt, prompt)`. It deliberately does **not**
+include the model name — the replaying machine has no model, so a key naming
+one could never hit. The model name is recorded in the *value*, because
+*"qwen2.5:7b said this on the 14th"* and *"a frontier model said this"* are
+different claims and a planner is entitled to know which they are reading.
+
+### An edited prompt misses
+
+The system prompt is part of the key. Change it and every recorded answer
+becomes an answer to a different question, so it misses and says so. The
+alternative — silently replaying answers to the old prompt — is the worst
+failure available here, because it looks exactly like the new prompt working.
+
+### A replay is labelled as one
+
+Every hit comes back marked `replayed:recorded 2026-09-14 by qwen2.5:7b-instruct`,
+and the Signals panel shows it as its own state, in its own colour, between
+"a model is reading this" and "nothing is". An answer whose age is invisible
+is an answer nobody can check.
+
+### Recording is off by default
+
+`RADAR_RECORD_REASONING` must be set. A demo machine must never quietly write
+answers into the repository.
+
+### What it is not
+
+It is not a model in a file. A headline outside the recording misses, and with
+no model present the deterministic router handles it alone. This carries a
+rehearsed run, not a capability.
+
+### So: where do I install the models?
+
+**On your own machine, not in the Codespace.** Pull them once, record, commit,
+and the Codespace never needs them. Install in the Codespace only if you want
+to reason over *new* events there — and then mind the RAM note above.

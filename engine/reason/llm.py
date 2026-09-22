@@ -46,6 +46,8 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from engine.reason import cache
+
 log = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
@@ -223,7 +225,7 @@ def parse(
     status: BackendStatus | None = None,
     model_name: str = "",
 ) -> T | None:
-    """Ask the model for one object of type ``model``.
+    """Ask a model, now. One object of type ``model``, or None.
 
     Returns ``None`` when there is no backend, when the call fails, or when
     what came back does not validate. Every one of those is the same thing to
@@ -233,6 +235,11 @@ def parse(
     It deliberately does NOT retry a validation failure with a "try harder"
     prompt. That is how a model gets talked into inventing values to satisfy a
     schema, which is the exact failure the Abstention shape exists to avoid.
+
+    This is the LIVE call and nothing else. Recording and replay sit above it
+    in ``parse_with_provenance``, so that "ask the model" stays one small
+    function with one job — which is also what lets a test stub the model by
+    replacing this and nothing else.
     """
     status = status or detect()
     if not status.available:
@@ -253,6 +260,63 @@ def parse(
     except ValidationError as exc:
         log.warning("model returned something that does not validate: %s", exc)
         return None
+
+
+def parse_with_provenance(
+    model: type[T],
+    system: str,
+    prompt: str,
+    status: BackendStatus | None = None,
+    model_name: str = "",
+    stage: str = "",
+) -> tuple[T | None, str]:
+    """An answer, and where it came from.
+
+    Three origins, and the caller needs to tell them apart: ``live`` ran a
+    model now, ``replayed`` read an answer recorded earlier on a machine that
+    had one, and ``""`` means there was no answer at all. A replayed answer
+    presented as a live one is an answer whose age is invisible, which is the
+    one thing the provenance discipline here exists to prevent.
+    """
+    # The recording is checked BEFORE the backend, not as a fallback after it
+    # fails. A recorded answer to this exact question is the answer a live call
+    # would give, and paying for it twice is the point of having recorded it.
+    if stage:
+        hit = cache.lookup(stage, system, prompt)
+        if hit is not None:
+            try:
+                return model.model_validate(hit.payload), f"replayed:{hit.provenance}"
+            except ValidationError as exc:
+                # A recording that no longer fits the schema is stale, not
+                # authoritative. Fall through to a live call if one is possible.
+                log.warning("recorded answer no longer validates: %s", exc)
+
+    status = status or detect()
+    answer = parse(model, system, prompt, status=status, model_name=model_name)
+    if answer is None:
+        return None, ""
+
+    if stage and cache.recording():
+        cache.record(
+            stage, system, prompt, answer.model_dump(mode="json"),
+            model=model_name or status.model or "unnamed",
+            at=_stamp(),
+        )
+    return answer, "live"
+
+
+def _stamp() -> str:
+    """When a recording was made.
+
+    Through Clock.wall() rather than datetime.now, even though this stamps an
+    artefact on disk rather than a number on the board. The rule that the
+    engine reads the wall clock in exactly one place is worth more than the
+    one import it would save here, and a test enforces it — which is how this
+    line got written correctly on the second attempt rather than the fifth.
+    """
+    from engine.clock import Clock
+
+    return Clock.wall().as_of.isoformat()
 
 
 def ask_text(

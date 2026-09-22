@@ -613,6 +613,13 @@ def model_status() -> JSONResponse:
         },
     }
     payload["funnel"] = funnel_mod.report(funnel_mod.FunnelCost(), status)["note"]
+
+    # Recorded answers replay without a model. Reported here because a board
+    # running off a recording and one running off a live model are different
+    # claims, and the difference must not be invisible.
+    from engine.reason import cache as cache_mod  # noqa: PLC0415
+
+    payload["recording"] = cache_mod.report()
     return JSONResponse(payload)
 
 

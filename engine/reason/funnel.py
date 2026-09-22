@@ -75,7 +75,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from engine.reason import llm
+from engine.reason import cache, llm
 
 log = logging.getLogger(__name__)
 
@@ -145,6 +145,10 @@ class FunnelCost:
     triage_unavailable: int = 0
     over_triage_budget: int = 0
     over_extract_budget: int = 0
+    # Answers that came from a recording rather than a live call. Counted
+    # separately because "the model read 11 items" and "we replayed 11 answers
+    # a model gave in September" are different claims about the same board.
+    replayed: int = 0
     reasons: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -161,6 +165,7 @@ class FunnelCost:
             "triage_unavailable": self.triage_unavailable,
             "over_triage_budget": self.over_triage_budget,
             "over_extract_budget": self.over_extract_budget,
+            "replayed": self.replayed,
         }
 
     def sentence(self) -> str:
@@ -172,7 +177,10 @@ class FunnelCost:
             parts.append(f"{self.instruments} were measurements and skipped the model")
         if self.triaged:
             kept = self.passed_triage
-            parts.append(f"{self.triaged} triaged, {kept} worth a full read")
+            how = (f"{self.triaged} triaged" if not self.replayed
+                   else f"{self.triaged} triaged ({self.replayed} replayed "
+                        "from a recording)")
+            parts.append(f"{how}, {kept} worth a full read")
         if self.triage_unavailable:
             parts.append(
                 f"{self.triage_unavailable} passed through untriaged "
@@ -220,7 +228,10 @@ def triage(
     cost.instruments = len(measured)
 
     status = status or llm.detect()
-    if not status.available:
+    # A recording answers the same questions a live model would, so the stage
+    # runs when either is available. Without both, it fails open.
+    replay = cache.report()["available"]
+    if not status.available and not replay:
         # Fail open, loudly in the counts. The board is complete without a
         # model — that is a supported state here, not a degraded one.
         cost.triage_unavailable = len(needs_reading)
@@ -233,14 +244,17 @@ def triage(
             kept.append(item)          # over budget means UNFILTERED, not dropped
             continue
 
-        verdict = llm.parse(
+        verdict, origin = llm.parse_with_provenance(
             Triage,
             TRIAGE_SYSTEM,
             _triage_prompt(item),
             status=status,
             model_name=model_name or llm.TRIAGE_MODEL,
+            stage="triage",
         )
         cost.triaged += 1
+        if origin.startswith("replayed"):
+            cost.replayed += 1
 
         if verdict is None:
             cost.triage_unavailable += 1
@@ -248,6 +262,9 @@ def triage(
             continue
 
         item["triage"] = verdict.model_dump()
+        # Carried so the board can say "recorded on the 14th" rather than
+        # presenting a replay as a live read.
+        item["triage_origin"] = origin
         if verdict.relevant:
             cost.passed_triage += 1
             kept.append(item)

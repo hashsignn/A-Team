@@ -313,6 +313,7 @@ def signals(
     unauditable from the screen. This is that layer, made lookable-at.
     """
     from engine.ingest.sources import catalog as catalog_mod
+    from engine.reason import cache as cache_mod
     from engine.reason import funnel as funnel_mod
     from engine.reason import llm as llm_mod
 
@@ -390,6 +391,10 @@ def signals(
             "extract": llm_mod.EXTRACT_MODEL if status.available else None,
             "funnel_note": funnel_mod.report(
                 funnel_mod.FunnelCost(), status)["note"],
+            # A recording is a third state between "a model is reading this"
+            # and "nothing is". It has to be visible as its own thing, or a
+            # replayed board looks like a live one.
+            "recording": cache_mod.report(),
         },
         "counts": {
             "events": len(context.events),

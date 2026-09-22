@@ -47,7 +47,7 @@ import logging
 
 from engine.clock import Clock
 from engine.config import Config
-from engine.reason import llm
+from engine.reason import cache, llm
 from engine.schemas import Extraction
 
 log = logging.getLogger(__name__)
@@ -149,15 +149,26 @@ def extract(
     counted is recoverable. A dropped item that is silent is not.
     """
     status = status or llm.detect()
-    if not status.available:
+    prompt = build_prompt(item, config, clock)
+
+    # A recording answers this exact question, so the stage runs on a machine
+    # with no model at all — which is the whole point of having recorded it.
+    if not status.available and cache.lookup("extract", EXTRACT_SYSTEM, prompt) is None:
         return None
-    return llm.parse(
+
+    extraction, origin = llm.parse_with_provenance(
         Extraction,
         EXTRACT_SYSTEM,
-        build_prompt(item, config, clock),
+        prompt,
         status=status,
         model_name=model_name or llm.EXTRACT_MODEL,
+        stage="extract",
     )
+    if extraction is not None and origin:
+        # Stamped on the item rather than the model, because the Extraction
+        # schema describes what was read and this describes who read it.
+        item["extract_origin"] = origin
+    return extraction
 
 
 def to_item_fields(extraction: Extraction, item: dict, clock: Clock) -> dict:
