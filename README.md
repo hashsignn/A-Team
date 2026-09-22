@@ -1163,6 +1163,16 @@ What the chain does, with everything deterministic:
 | Gate | window widened from the ledger's 60 days, strikes 3 Gulf shipments |
 | Board | `LANE_GULF_01` raised to **yellow, 20 h to act, CHF 16,101** |
 
+Those figures are **at the pinned as-of `2026-09-18T06:00Z`**, which is the
+instant the fixture was written for. Open the board on today's wall clock and
+the same item is several days old, so the lane reads lower — correctly, since
+the ladder measures *time to act*, not how dramatic the event is. Pin the
+as-of to reproduce the numbers above:
+
+```
+http://localhost:8000/?as_of=2026-09-18T06:00:00%2B00:00
+```
+
 ### Why a second Hormuz headline needs the model
 
 ```
