@@ -215,13 +215,19 @@ function applyBoard(board) {
   refreshPaths();
   renderTable();
 
-  const first = visibleRoutes()[0];
-  if (first) {
-    select(first.route_id, { fly: true });
-  } else {
-    $('panel-body').hidden = true;
-    $('panel-empty').hidden = false;
-  }
+  /* No auto-selection. The board used to open on its worst lane, which
+   * meant the right column showed one route and the other sixteen were
+   * somewhere else entirely. Opening on the LIST answers "what is affected"
+   * before being asked, and picking a lane is one click from there. */
+  $('panel-body').hidden = true;
+  $('panel-list').hidden = false;
+
+  /* Re-measure now that the ladder has rendered. The first measurement runs
+   * before the level chips exist, so it reads a header one row shorter than
+   * the one that ends up on screen — and the stage is then that much too
+   * tall, which is the whole bug this measurement exists to avoid. */
+  sizeStage();
+  sizeGlobe();
 }
 
 // ===============================================================
@@ -392,8 +398,17 @@ function initGlobe(countries, board) {
   globe.pointOfView({ lat: 34, lng: 12, altitude: 2.35 }, 0);
 
   state.globe = globe;
+  sizeStage();
   sizeGlobe();
-  window.addEventListener('resize', sizeGlobe);
+  window.addEventListener('resize', () => { sizeStage(); sizeGlobe(); });
+
+  /* The header changes height without the window changing size: the ladder
+   * wraps, a theme swaps a font, a long as-of label pushes a row. A resize
+   * listener never fires for any of those. */
+  const header = document.querySelector('.topbar');
+  if (header && 'ResizeObserver' in window) {
+    new ResizeObserver(() => { sizeStage(); sizeGlobe(); }).observe(header);
+  }
 
   el.addEventListener('mousemove', (e) => {
     const tip = $('globe-tooltip');
@@ -437,6 +452,20 @@ function initGlobe(countries, board) {
   $('btn-reset').addEventListener('click', () => {
     globe.pointOfView({ lat: 34, lng: 12, altitude: 2.35 }, 900);
   });
+}
+
+/* How much room is left under the header.
+ *
+ * Read rather than assumed: the header is two bars, and its height moves with
+ * the theme, the browser zoom and whether the ladder wraps onto a second row.
+ * A hardcoded offset is right until one of those changes, and then the globe
+ * is a few pixels too tall for the screen forever. */
+function sizeStage() {
+  const stage = document.querySelector('.stage');
+  if (!stage) return;
+  const top = stage.getBoundingClientRect().top + window.scrollY;
+  document.documentElement.style.setProperty(
+    '--stage-h', `${Math.max(460, window.innerHeight - top)}px`);
 }
 
 function sizeGlobe() {
@@ -646,7 +675,7 @@ function linkOps(routeId) {
 }
 
 function renderDetail(r) {
-  $('panel-empty').hidden = true;
+  $('panel-list').hidden = true;
   $('panel-body').hidden = false;
 
   const c = LEVEL_COLOR[r.level];
@@ -708,13 +737,11 @@ function renderDetail(r) {
  * its own pane beside the ranked table rather than a footnote under the map.
  */
 function renderResponse(r) {
-  const c = LEVEL_COLOR[r.level];
-  const chip = $('r-chip');
-  chip.textContent = r.level_label;
-  chip.style.color = c;
-  $('r-name').textContent = r.name;
-  $('r-directive').textContent = r.directive;
-
+  /* No header of its own any more. It used to repeat the level chip, the
+   * route name and the directive — which were already three lines higher up
+   * the same column, in the panel head. Two copies of the same three facts,
+   * a hand-span apart, was the clearest case of the "everything shows twice"
+   * complaint on this board. */
   renderRActions(r);
   renderRContacts(r);
   renderREscalate(r);
@@ -854,6 +881,9 @@ async function primeCompose(r) {
 }
 
 function initResponseTabs() {
+  const back = $('d-back');
+  if (back) back.addEventListener('click', showRouteList);
+
   document.querySelectorAll('.rtab').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.rtab').forEach((t) => t.classList.remove('is-on'));
@@ -882,9 +912,9 @@ function initResponseTabs() {
 // Ranked routes
 // ===============================================================
 function renderFilters() {
-  $('ranked-filters').innerHTML =
-    `<button type="button" class="ctl" id="f-all">Show all levels</button>`;
-  $('f-all').addEventListener('click', () => {
+  const all = $('f-all');
+  if (!all) return;
+  all.addEventListener('click', () => {
     state.hidden.clear();
     $('ladder').querySelectorAll('.rung').forEach((b) => b.classList.remove('is-off'));
     refreshPaths();
@@ -892,42 +922,68 @@ function renderFilters() {
   });
 }
 
+/* The affected routes, as the right column's default state.
+ *
+ * A list rather than the seven-column table it replaces. The table was a
+ * fine table and the wrong shape for a column beside a globe: at that width
+ * every row wrapped, and the two columns anybody actually scans — how long
+ * is left, and what is hitting it — were the two that wrapped worst. Each
+ * row here carries the same facts in reading order.
+ */
 function renderTable() {
   const rows = visibleRoutes();
-  $('rtable-body').innerHTML = rows.map((r) => `
-    <tr data-route="${esc(r.route_id)}" class="${state.selected === r.route_id ? 'is-selected' : ''}">
-      <td class="num r-score" style="color:${LEVEL_COLOR[r.level]}">${r.severity_score.toFixed(3)}</td>
-      <td><span class="level-chip" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span></td>
-      <td>
-        <div class="r-route">${esc(r.name)}</div>
-        <div class="r-focus">${esc(r.focus.replace(/_/g, ' '))} · ${r.legs.length} legs</div>
-      </td>
-      <td class="r-when" style="color:${LEVEL_COLOR[r.level]}">${hours(r.lead_time_hours)}</td>
-      <td class="num">${r.shipments_at_risk}<span class="r-dash"> / ${r.shipments}</span></td>
-      <td class="num">${r.exposure_chf > 0 ? chf(r.exposure_chf) : '<span class="r-dash">—</span>'}</td>
-      <td class="r-driver">${esc(r.events[0] ? r.events[0].title : '—')}</td>
-    </tr>`).join('');
+  const list = $('rlist');
+  if (!list) return;
 
-  $('rtable-body').querySelectorAll('tr').forEach((tr) => {
-    // Selecting from the table opens the response beside it. It deliberately
-    // does NOT scroll back to the globe: you came down here to act on a route,
-    // and yanking the page away from the response pane would undo that.
-    tr.addEventListener('click', () => select(tr.dataset.route, { fly: true }));
+  list.innerHTML = rows.map((r) => `
+    <button type="button" role="listitem" class="rli${state.selected === r.route_id ? ' is-selected' : ''}"
+            data-route="${esc(r.route_id)}" style="--lvl:${LEVEL_COLOR[r.level]}">
+      <span class="rli-top">
+        <span class="level-chip" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span>
+        <span class="rli-when" style="color:${LEVEL_COLOR[r.level]}">${hours(r.lead_time_hours)}</span>
+      </span>
+      <span class="rli-name">${esc(r.name)}</span>
+      <span class="rli-driver">${esc(r.events[0] ? r.events[0].title : 'no event recorded')}</span>
+      <span class="rli-foot">
+        <span>${r.shipments_at_risk} of ${r.shipments} shipments</span>
+        <span>${r.exposure_chf > 0 ? chf(r.exposure_chf) : '—'}</span>
+      </span>
+    </button>`).join('');
+
+  list.querySelectorAll('.rli').forEach((li) => {
+    li.addEventListener('click', () => select(li.dataset.route, { fly: true }));
   });
+
+  const count = $('panel-list-count');
+  if (count) {
+    count.textContent =
+      `${rows.length} of ${state.board.routes.length} routes · ranked by level, ` +
+      `then CHF within the level`;
+  }
 
   const f = state.board.funnel;
   $('ranked-foot').innerHTML =
-    `${rows.length} of ${state.board.routes.length} routes shown. ` +
-    `Measured this run: ${f.raw_observations} raw observations → ${f.after_resolution} distinct events → ` +
-    `${f.gated_hits} gate hits across ${f.shipments_touched} of ${state.board.shipments_total} shipments. ` +
-    `Severity ranks by level first, then CHF exposure within the level — no weighted blend, ` +
-    `so a Bias route can never outrank a Watch one however much money is on it.`;
+    `Measured this run: ${f.raw_observations} raw observations → ` +
+    `${f.after_resolution} distinct events → ${f.gated_hits} gate hits across ` +
+    `${f.shipments_touched} of ${state.board.shipments_total} shipments.`;
 }
 
 function markTableRow(routeId) {
-  $('rtable-body').querySelectorAll('tr').forEach((tr) => {
-    tr.classList.toggle('is-selected', tr.dataset.route === routeId);
+  const list = $('rlist');
+  if (!list) return;
+  list.querySelectorAll('.rli').forEach((li) => {
+    li.classList.toggle('is-selected', li.dataset.route === routeId);
   });
+}
+
+/* Back to the list. The selection is KEPT — the lane stays lit on the globe
+ * and its row stays marked — because "show me the others" is not "I have
+ * finished with this one", and clearing it would drop the highlight the
+ * planner is using to keep their place. */
+function showRouteList() {
+  $('panel-body').hidden = true;
+  $('panel-list').hidden = false;
+  $('panel').scrollTop = 0;
 }
 
 boot().catch((err) => {

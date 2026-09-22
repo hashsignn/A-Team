@@ -731,20 +731,16 @@ def _page(filename: str) -> Response:
 # it, and a 404 from a health probe on the app's own front page is a false
 # alarm somebody has to chase.
 #
-# The front page is the DECISION surface, not the analytical one. A planner
-# opening the tool during an incident is asking "what do I press", and making
-# them find a second page to ask it was the whole complaint. The globe board
-# is still here, one click away at /board, because "why is this lane bad" is
-# a real question — just not the first one.
+# The board is the front page. It was briefly moved aside for the fast
+# surface, which put the globe somewhere nobody looked for it — and the globe
+# is what people mean when they say "the radar". Both are reachable from each
+# other's header; /board is kept as an alias so links made in between still
+# resolve.
 @app.get("/")
 @app.head("/")
-def index() -> Response:
-    return _page("fast.html")
-
-
 @app.get("/board")
 @app.head("/board")
-def board_page() -> Response:
+def index() -> Response:
     return _page("index.html")
 
 

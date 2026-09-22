@@ -71,9 +71,12 @@ def test_the_headline_carries_a_sentence_anyone_can_read():
     assert "lane" in payload["sentence"] or "Nothing" in payload["sentence"]
 
 
-def test_no_risk_matrix_or_radar_reaches_the_fast_payload():
-    """Removed deliberately. If either comes back, the declutter has been
-    undone by a well-meaning merge."""
+def test_the_fast_payload_is_a_summary_not_the_whole_board():
+    """NOT a claim that the matrix and the radar were deleted — they are alive
+    on /route/<id>, at a size somebody can read. This only pins that the
+    one-decision summary stays a summary: if the full board's payload starts
+    arriving here too, the screen it feeds goes back to being the thing it
+    replaced."""
     payload = body(fast_routes.now(as_of=AS_OF, shipments=SHIPMENTS))
     blob = json.dumps(payload)
     for gone in ("matrix_grid", '"radar"', "probability_band", "impact_band"):

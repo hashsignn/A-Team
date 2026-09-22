@@ -59,7 +59,7 @@
     <!-- The delivery-first surface. Linked rather than replacing this one:
          the analytical board still answers "why", and this answers "what do I
          press". A planner in an incident wants the second. -->
-    <a class="ctl" id="link-fast" href="/">&larr; What needs a decision</a>
+    <a class="ctl" id="link-fast" href="/fast">Act fast</a>
     <a class="ctl" id="link-profile" href="/profile">Risk profile</a>
 
     <!-- Four themes. The swatches preview the theme they switch to. -->
@@ -108,16 +108,40 @@
       <div class="globe-tooltip" id="globe-tooltip" hidden></div>
     </div>
 
-    <!-- ---------- detail panel ---------- -->
+    <!-- ---------- right panel ----------
+
+         Two states in one column, the same height as the globe beside it.
+
+         DEFAULT is the full list of affected routes. It used to say "select a
+         route on the globe" and then sit empty next to a globe that filled
+         the screen, while the list of routes lived a scroll away below. A
+         planner opening the board wants to see what is affected, not be asked
+         to go and find it — so the list is what is there when you arrive, and
+         picking a lane anywhere (globe, marker or list) swaps this column to
+         that lane's detail.
+         ---------------------------------------------------------------- -->
     <aside class="panel" id="panel" aria-live="polite">
-      <div class="panel-empty" id="panel-empty">
-        <p>Select a route on the globe.</p>
-        <p class="muted">Lines are coloured by how soon a decision is needed, not by how dramatic the event is.</p>
+
+      <!-- STATE 1 — every affected route, ranked -->
+      <div class="panel-list" id="panel-list">
+        <div class="panel-list-head">
+          <div>
+            <h2>Affected routes</h2>
+            <p class="muted" id="panel-list-count"></p>
+          </div>
+          <button type="button" class="ctl ctl--mini" id="f-all">All levels</button>
+        </div>
+        <div class="rlist" id="rlist" role="list"></div>
+        <p class="panel-list-foot" id="ranked-foot"></p>
       </div>
 
+      <!-- STATE 2 — one route: what it is, what to do, who to call -->
       <div class="panel-body" id="panel-body" hidden>
 
         <div class="panel-head">
+          <button type="button" class="ctl ctl--ghost ctl--mini" id="d-back">
+            &larr; All routes
+          </button>
           <span class="level-chip" id="d-chip"></span>
           <h2 id="d-name"></h2>
           <p class="directive" id="d-directive"></p>
@@ -126,27 +150,82 @@
 
         <div class="stat-row" id="d-stats"></div>
 
-        <!-- Into the operational surfaces: the playbook (what to do, in
-             order, and what is locked), the consignment list (every shipment
-             on this lane with its OWN deadline) and the execute view. -->
+        <!-- Onward to the route's own page, which is where the risk matrix,
+             the radar and the per-consignment grid live at a size somebody
+             can actually read them. -->
         <div class="d-ops">
           <a class="ctl ctl--primary ctl--wide" id="link-route" href="#">
-            Open this route
+            Open this route &mdash; matrix, charts and every consignment
           </a>
         </div>
 
-        <!-- The radar, the event list and the matrix are NOT here.
-             They were on this panel AND on the route page AND in a modal —
-             three copies of the same three charts, none of them big enough
-             to read. They live on /route/<id> now, which is a page you can
-             send somebody. This panel is the summary and the way in. -->
+        <!-- Two tabs, not three. Escalation used to be its own tab, which
+             meant deciding what to do and telling people about it were two
+             different places — and the second one was the one people forgot.
+             They are the same job, so they are the same tab. -->
+        <nav class="rtabs" id="rtabs" role="tablist">
+          <button type="button" class="rtab is-on" data-tab="actions" role="tab">
+            Act &amp; escalate
+          </button>
+          <button type="button" class="rtab" data-tab="contacts" role="tab">
+            Who to contact
+          </button>
+        </nav>
 
-        <!-- "What to do" is NOT here any more. It was rendered twice —
-             once in this panel and again in the response workspace — from
-             the same data, and two lists of actions that can drift apart is
-             worse than one that is a click away. It lives on the Affected
-             routes view, next to the contacts and the escalation, which is
-             where somebody acting on it already is. -->
+        <div class="rtab-panels">
+
+          <!-- ACT & ESCALATE -->
+          <div class="rpanel is-on" data-panel="actions">
+            <p class="rpanel-note">Only options worth more than they cost.</p>
+            <div id="r-actions"></div>
+
+            <div class="rsplit">
+              <h4>Escalate and report</h4>
+            </div>
+            <div id="r-escalate"></div>
+
+            <div class="compose">
+              <h4>Send a summary</h4>
+              <label class="fld">
+                <span>To</span>
+                <input type="text" id="send-to" placeholder="name@example.com, …">
+              </label>
+              <label class="fld">
+                <span>Subject</span>
+                <input type="text" id="send-subject">
+              </label>
+              <label class="fld">
+                <span>Summary</span>
+                <textarea id="send-body" rows="10" spellcheck="false"></textarea>
+              </label>
+
+              <div class="compose-actions">
+                <a class="ctl ctl--primary" id="send-mail" href="#">Open in mail client</a>
+                <button type="button" class="ctl" id="send-copy">Copy</button>
+                <a class="ctl" id="send-pdf" href="#" download>Download PDF pack</a>
+              </div>
+
+              <!-- BRIEF §8.2: the surface is real and says plainly what is not
+                   connected, rather than faking a delivery that never happened. -->
+              <p class="socket">
+                <b>Not connected.</b> The app composes; it does not send. No mail
+                path is wired, so &ldquo;Open in mail client&rdquo; hands the draft
+                to yours. Wiring a mail relay or the Teams/Slack webhook would make
+                this a one-click send and record who was told, and when.
+              </p>
+            </div>
+          </div>
+
+          <!-- WHO TO CONTACT -->
+          <div class="rpanel" data-panel="contacts">
+            <p class="rpanel-note">
+              Filtered to this route: the vendors are at nodes this lane passes
+              through, the carriers run the modes it uses.
+            </p>
+            <div id="r-contacts"></div>
+          </div>
+
+        </div>
 
         <p class="advisory">
           Advisory. The tool proposes; the planner decides.
@@ -159,117 +238,29 @@
 
 
 <!-- ============================================================
-     SECTION 2 — affected routes (left) + response workspace (right)
+     SECTION 2 — reserved
 
-     The split mirrors the stage above deliberately: diagnosis on the left,
-     response on the right. Section 1 answers "what is happening"; this one
-     answers "what do I do and who do I call", which is the third failure the
-     client named and the one they said is most often skipped.
+     This is where the affected-routes table used to be. The table moved up
+     beside the globe, where it is visible on arrival instead of a scroll
+     away, and this band is deliberately left empty rather than filled with
+     something to justify it.
+
+     It is kept because the space below the fold is the right home for the
+     thing the board still cannot show: how any of this is MOVING. Every
+     number on this page is a snapshot at one instant — nothing says whether
+     the Rhine is falling or recovering, whether today is worse than
+     yesterday, or how long the last five disruptions took to clear. That is
+     a different question from "what is wrong now", and it needs its own
+     band rather than a corner of one.
      ============================================================ -->
-<section class="ranked" id="ranked">
-
-  <div class="ranked-head">
-    <div>
-      <h2>Affected routes</h2>
-      <p class="muted">
-        Ranked by the severity of the effect on the line — level first, then
-        CHF exposure within the level. Select a route to open its response.
-      </p>
-    </div>
-    <div class="ranked-filters" id="ranked-filters"></div>
-  </div>
-
-  <div class="ranked-body">
-
-    <!-- ---------- left: the ranked table ---------- -->
-    <div class="table-wrap">
-      <table class="rtable">
-        <thead>
-          <tr>
-            <th class="num">SEV</th>
-            <th>LEVEL</th>
-            <th>ROUTE</th>
-            <th>ACTION BY</th>
-            <th class="num">SHIPMENTS</th>
-            <th class="num">EXPOSURE</th>
-            <th>DRIVER</th>
-          </tr>
-        </thead>
-        <tbody id="rtable-body"></tbody>
-      </table>
-      <p class="ranked-foot" id="ranked-foot"></p>
-    </div>
-
-    <!-- ---------- right: the response workspace ---------- -->
-    <aside class="response" id="response" aria-live="polite">
-
-      <div class="response-head">
-        <span class="level-chip" id="r-chip"></span>
-        <h3 id="r-name">—</h3>
-        <p class="directive" id="r-directive"></p>
-      </div>
-
-      <nav class="rtabs" id="rtabs" role="tablist">
-        <button type="button" class="rtab is-on" data-tab="actions" role="tab">Actions</button>
-        <button type="button" class="rtab" data-tab="contacts" role="tab">Who to contact</button>
-        <button type="button" class="rtab" data-tab="escalate" role="tab">Escalate &amp; report</button>
-      </nav>
-
-      <div class="rtab-panels">
-
-        <!-- ACTIONS -->
-        <div class="rpanel is-on" data-panel="actions">
-          <p class="rpanel-note">Only options worth more than they cost.</p>
-          <div id="r-actions"></div>
-        </div>
-
-        <!-- CONTACTS -->
-        <div class="rpanel" data-panel="contacts">
-          <p class="rpanel-note">
-            Filtered to this route: the vendors are at nodes this lane passes
-            through, the carriers run the modes it uses.
-          </p>
-          <div id="r-contacts"></div>
-        </div>
-
-        <!-- ESCALATE & REPORT -->
-        <div class="rpanel" data-panel="escalate">
-          <div id="r-escalate"></div>
-
-          <div class="compose">
-            <h4>Send a summary</h4>
-            <label class="fld">
-              <span>To</span>
-              <input type="text" id="send-to" placeholder="name@example.com, …">
-            </label>
-            <label class="fld">
-              <span>Subject</span>
-              <input type="text" id="send-subject">
-            </label>
-            <label class="fld">
-              <span>Summary</span>
-              <textarea id="send-body" rows="12" spellcheck="false"></textarea>
-            </label>
-
-            <div class="compose-actions">
-              <a class="ctl ctl--primary" id="send-mail" href="#">Open in mail client</a>
-              <button type="button" class="ctl" id="send-copy">Copy</button>
-              <a class="ctl" id="send-pdf" href="#" download>Download PDF pack</a>
-            </div>
-
-            <!-- BRIEF §8.2: the surface is real and says plainly what is not
-                 connected, rather than faking a delivery that never happened. -->
-            <p class="socket">
-              <b>Not connected.</b> The app composes; it does not send. No mail
-              path is wired, so “Open in mail client” hands the draft to yours.
-              Wiring a mail relay or the Teams/Slack webhook would make this a
-              one-click send and record who was told, and when.
-            </p>
-          </div>
-        </div>
-
-      </div>
-    </aside>
+<section class="reserved" id="reserved" aria-label="Reserved">
+  <div class="reserved-inner">
+    <p class="reserved-title">Reserved</p>
+    <p class="reserved-note">
+      The affected routes moved up beside the globe. This band is kept for
+      what the board cannot say yet — how things are trending, not just how
+      they stand.
+    </p>
   </div>
 </section>
 

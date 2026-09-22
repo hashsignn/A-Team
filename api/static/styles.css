@@ -285,7 +285,11 @@ p { margin: 0; }
    SECTION 1 — stage
    ============================================================ */
 .stage {
-  min-height: 100vh;
+  /* NOT min-height: 100vh. That is a floor, not a cap — and once the right
+     column held every affected route, the stage grew past the screen, taking
+     the globe with it. The height now comes from .stage-body, which is
+     measured against the real header. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -358,9 +362,20 @@ p { margin: 0; }
 
 /* ---- body split ---- */
 .stage-body {
-  flex: 1;
+  /* flex: 0 0 auto, not flex: 1. `flex: 1` sets flex-basis to 0 and lets the
+     flex algorithm size the item, which silently discards the height below —
+     the item then grew to its content and the cap never applied. */
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(400px, 0.95fr);
+  /* The row must be told to be exactly the stage's height. An implicit grid
+   * row is `auto`, which sizes to its tallest child — so once the right
+   * column held a list of seventeen routes instead of a short summary, the
+   * row grew to fit it and the globe stretched to match. Both columns then
+   * ran past the fold and neither scrolled, because the scroll container was
+   * the page rather than the list. minmax(0, 1fr) pins the row to the stage
+   * and hands the overflow back to .rlist, where it belongs. */
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -425,14 +440,119 @@ p { margin: 0; }
 
 /* ---- detail panel ---- */
 .panel {
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid var(--border);
   background: var(--surface-1);
   overflow-y: auto;
   min-height: 0;
 }
-.panel-empty { padding: 60px 28px; display: grid; gap: 9px; }
-.panel-empty p:first-child { font-size: 15px; color: var(--text-secondary); }
-.panel-empty .muted { font-size: 12.5px; line-height: 1.55; }
+/* ---- right column, state 1: every affected route ----
+ *
+ * A flex column inside a grid cell that is already the globe's height, so
+ * the list scrolls and the head and foot stay put. Without the explicit
+ * height the column grows to its content and the two halves of the stage
+ * stop lining up, which is the thing this layout exists to fix.
+ */
+.panel-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel-list-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.panel-list-head h2 { font-size: 16px; margin: 0; }
+.panel-list-head .muted { font-size: 11.5px; margin-top: 5px; line-height: 1.5; }
+
+.panel-list-foot {
+  flex: 0 0 auto;
+  padding: 11px 22px 14px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10.5px; line-height: 1.6; color: var(--muted);
+}
+
+/* The scrolling part. Only this scrolls — not the whole column — so the
+ * heading stays readable while a planner works down the list. */
+.rlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+.rli {
+  display: grid; gap: 6px;
+  width: 100%; text-align: left;
+  padding: 13px 22px;
+  border: 0; border-bottom: 1px solid var(--grid);
+  border-left: 3px solid transparent;
+  background: transparent;
+  font: inherit; color: inherit;
+  cursor: pointer;
+  transition: background .12s, border-left-color .12s;
+}
+.rli:hover { background: var(--surface-2); }
+.rli:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rli.is-selected {
+  background: var(--surface-2);
+  border-left-color: var(--lvl);
+}
+
+.rli-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rli-when { font-family: var(--mono); font-size: 11.5px; font-weight: 700; }
+.rli-name { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.rli-driver {
+  font-size: 11.5px; color: var(--text-secondary); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rli-foot {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+}
+
+/* ---- right column, state 2: one route ---- */
+.panel-body { display: block; }
+
+.ctl--mini { font-size: 11.5px; padding: 4px 9px; }
+.panel-head #d-back { margin-bottom: 12px; }
+
+/* The rule between deciding and telling people. They are one tab now, and
+ * this is what keeps them from reading as one undifferentiated column. */
+.rsplit {
+  margin: 22px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.rsplit h4 {
+  margin: 0; font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+/* ---- the band below the stage, held open on purpose ---- */
+.reserved {
+  min-height: 190px;
+  display: grid; place-items: center;
+  padding: 44px 26px;
+  background: var(--plane);
+  border-top: 1px solid var(--border);
+}
+.reserved-inner {
+  max-width: 560px; text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 26px 30px;
+}
+.reserved-title {
+  margin: 0 0 7px; font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+}
+.reserved-note {
+  margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary);
+}
 
 .panel-head { padding: 22px 24px 18px; border-bottom: 1px solid var(--border); }
 .panel-head h2 { font-size: 17px; margin: 9px 0 0; line-height: 1.32; }
@@ -1616,12 +1736,28 @@ body.has-modal { overflow: hidden; }
    the two bars above it rather than the whole screen. */
 .view { display: block; }
 .view[hidden] { display: none; }
-#view-map .stage-body { height: calc(100vh - 118px); min-height: 460px; }
-#view-routes { padding: 0; }
-#view-routes .ranked { min-height: calc(100vh - 118px); }
+/* The stage is exactly the screen below the header, and nothing more.
+ *
+ * It used to be `min-height: 100vh`, which is not a cap: once the right
+ * column held a list of every affected route, the column grew to its content,
+ * the row grew with it, the globe stretched to match, and the list's own
+ * footer ended up below the fold with the PAGE scrolling instead of the list.
+ *
+ * --stage-h is measured in app.js rather than hardcoded, because the header
+ * is two bars whose height changes with the theme, the zoom and whether the
+ * ladder wraps. The calc() is the fallback for the moment before the first
+ * measurement lands. */
+.stage-body {
+  height: var(--stage-h, calc(100vh - 118px));
+  min-height: 460px;
+}
 
 @media (max-width: 900px) {
-  #view-map .stage-body { height: auto; min-height: 0; }
+  /* On a phone the two columns are stacked, so pinning them to the viewport
+     would make each one a tiny scroller. Let the page scroll instead. */
+  .stage-body { height: auto; min-height: 0; }
+  .panel-list { height: auto; }
+  .rlist { overflow-y: visible; }
   .views { padding: 0 12px; overflow-x: auto; }
 }
 
