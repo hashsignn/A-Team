@@ -306,3 +306,77 @@ model is called anywhere in this path.
 ```bash
 pytest tests/test_fast_options.py tests/test_fast_pipeline.py tests/test_fast_api.py
 ```
+
+---
+
+## 6. The operations console
+
+`engine/act/console.py`, `api/static/ops.html`, `console.js`, `console.css`
+
+The playbook was a to-do list. "Read the event and what it touches" was a
+checkbox, and ticking it did not show you the event — you ticked a box
+asserting you had read something the page never offered to open. Everything
+after it had the same shape: a sentence, an owner, a square.
+
+A step is no longer a claim. It is a control.
+
+| | |
+|---|---|
+| **step** | what has to be true |
+| **evidence** | what already makes it true, found rather than asserted |
+| **tools** | the controls that make it true if nothing has yet |
+
+### Where the ticks come from
+
+Three places, and only one of them is a person:
+
+- **automatic** — two tier-1 sources agree, a driver filed a position, a
+  revised ETA arrived. These land as evidence and the step goes **amber**:
+  satisfied, awaiting a look. Not green, because somebody should *see* what
+  was decided for them, and an amber marker is how they find it.
+- **executed** — a tool ran. The reroute was dispatched, the notice was
+  drafted, the call was logged. Green, because the system watched it happen.
+- **reviewed** — the planner acknowledged an amber step. One click, and it is
+  the only click the flow asks for.
+
+### The toolbox
+
+| step | what its buttons actually do |
+|---|---|
+| Read the event | opens every event with provenance, tier, verbatim quote, window and exposure |
+| Check the scope | the full consignment table — customer, value, committed date, own deadline |
+| Confirm with the carrier | shows the sources that already agree; logs a call; pushes a request to the road |
+| Confirm position | last seen per consignment, with who said so and whether they were verified; dispatches a position request |
+| Record the ETA | revised arrivals already filed; a field to enter one that was not |
+| Take the mitigation | **runs the contingency search** and returns ranked options, each with an Execute button wired to `/api/v2/act` |
+| Secure capacity | **finds local 3PLs** within reach, with distance, readiness, cost and a phone link |
+| Tell the customer | **drafts the notice from the board's own numbers** — on time, late by how much, or nothing worth doing |
+| Record what was done | **assembles the close-out** from the execution ledger, the report log and the hand-logged decisions. Nothing is retyped |
+
+### The gate is gone
+
+Rerouting is no longer locked behind Confirm. What survives is a **warning
+with the evidence attached**, so a planner acting on a single unconfirmed
+signal is told what they are acting on rather than stopped — the same trade
+`engine/fast/execute.py` makes, for the same reason. The undo window is the
+safety net, not the checklist.
+
+### The rail
+
+Four segments across the full width, each filled by its own progress, with an
+amber count on any stage holding something to review. "How far into this am I"
+is answered by the shape of the bar rather than by counting ticks down a page.
+
+### What happened to the three tabs
+
+Playbook / Consignments / Execute became one console.
+
+- the **consignment table** is inside the step that asks which consignments
+  are affected, which is where somebody looking at that step already is
+- **executing** is inside the step that chooses what to do, next to the
+  options it executes
+- the **per-consignment view** is unchanged on `/route/<id>`, where the
+  vehicle grid, the risk matrix and the radar live at a readable size
+
+Splitting them into tabs meant a step and the thing it needed were never on
+screen together.

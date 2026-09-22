@@ -1,0 +1,251 @@
+/* The operations console.
+ *
+ * The page this replaces read as a printed procedure with a cursor: a column
+ * of sentences, each with an owner and a square. The visual job here is to
+ * make it read as a machine — a rail that shows where you are, and steps that
+ * are obviously controls rather than statements.
+ */
+
+.cons-main { max-width: 1180px; margin: 0 auto; padding: 26px 22px 90px; }
+.cons-loading { color: var(--muted); font-size: 14px; padding: 40px 0; }
+
+/* ------------------------------------------------------------------ rail */
+.rail {
+  position: sticky; top: 0; z-index: 20;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 0;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.rail-seg {
+  position: relative;
+  padding: 13px 18px 15px;
+  background: var(--surface-1);
+  overflow: hidden;
+}
+/* The fill is a pseudo-element behind the text rather than a nested div, so
+   a stage that is half done reads as half full without the label moving. */
+.rail-seg::before {
+  content: ''; position: absolute; inset: 0;
+  width: var(--fill, 0%);
+  background: color-mix(in srgb, var(--seg, var(--accent)) 16%, transparent);
+  transition: width .35s ease;
+}
+.rail-seg > * { position: relative; }
+
+.rail-seg-top {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .02em;
+}
+.rail-seg-num {
+  display: inline-grid; place-items: center;
+  width: 19px; height: 19px; border-radius: 50%;
+  font-size: 10.5px; font-weight: 700;
+  border: 1.5px solid var(--border-strong); color: var(--muted);
+}
+.rail-seg-sub {
+  margin-top: 3px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+}
+
+.rail-seg.is-current { --seg: var(--accent); }
+.rail-seg.is-current .rail-seg-num {
+  border-color: var(--accent); color: var(--accent-contrast);
+  background: var(--accent);
+}
+.rail-seg.is-settled { --seg: var(--lvl-green); }
+.rail-seg.is-settled .rail-seg-num {
+  border-color: var(--lvl-green); background: var(--lvl-green); color: #fff;
+}
+.rail-seg.has-evidence { --seg: var(--lvl-yellow); }
+
+.rail-amber {
+  display: inline-block; margin-left: 6px;
+  padding: 1px 7px; border-radius: 999px;
+  font-family: var(--sans); font-size: 10px; font-weight: 700;
+  color: var(--lvl-yellow); border: 1px solid currentColor;
+}
+
+/* --------------------------------------------------------------- heading */
+.cons-head { margin: 22px 0 8px; }
+.cons-head h2 { font-size: 24px; margin: 9px 0 5px; letter-spacing: -0.02em; }
+.cons-head .cause { margin: 0; color: var(--text-secondary); font-size: 14.5px; }
+
+.cons-facts {
+  display: flex; flex-wrap: wrap; gap: 26px;
+  margin: 16px 0 6px; padding: 14px 0;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.cons-fact dt {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.cons-fact dd { margin: 3px 0 0; font-family: var(--mono); font-size: 19px; }
+
+.cons-caution {
+  display: flex; gap: 11px; align-items: flex-start;
+  margin: 16px 0 0; padding: 13px 16px;
+  border: 1px solid var(--lvl-yellow); border-radius: 10px;
+  background: color-mix(in srgb, var(--lvl-yellow) 8%, var(--surface-1));
+  font-size: 13.5px; line-height: 1.55;
+}
+.cons-caution b { color: var(--lvl-yellow); }
+
+/* ---------------------------------------------------------------- stages */
+.stage-block { margin-top: 34px; }
+.stage-title {
+  display: flex; align-items: baseline; gap: 12px;
+  font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 12px;
+}
+.stage-title .count { font-family: var(--mono); letter-spacing: 0; }
+
+/* ----------------------------------------------------------------- steps */
+.step {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 11px;
+  background: var(--surface-1);
+  margin-bottom: 11px;
+  overflow: hidden;
+}
+.step.is-evidence { border-left-color: var(--lvl-yellow); }
+.step.is-done     { border-left-color: var(--lvl-green); }
+
+.step-head {
+  display: grid; grid-template-columns: 22px 1fr auto;
+  gap: 13px; align-items: start;
+  padding: 15px 18px 13px;
+}
+
+/* The marker. NOT a checkbox: a checkbox invites a click that asserts
+   something, and nothing on this page wants an assertion. */
+.step-mark {
+  width: 19px; height: 19px; border-radius: 50%; margin-top: 2px;
+  border: 2px solid var(--border-strong);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
+.step.is-evidence .step-mark {
+  border-color: var(--lvl-yellow); background: var(--lvl-yellow); color: #14140f;
+}
+.step.is-done .step-mark {
+  border-color: var(--lvl-green); background: var(--lvl-green);
+}
+
+.step-label { font-size: 15.5px; font-weight: 650; letter-spacing: -0.01em; }
+.step-note  { margin-top: 4px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.step-owner {
+  margin-top: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+}
+
+.step-state {
+  font-size: 10px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; white-space: nowrap; padding-top: 3px;
+  color: var(--muted);
+}
+.step.is-evidence .step-state { color: var(--lvl-yellow); }
+.step.is-done .step-state { color: var(--lvl-green); }
+
+/* --------------------------------------------------------------- evidence */
+.ev {
+  margin: 0 18px 12px; padding: 10px 13px;
+  border-radius: 8px; background: var(--surface-2);
+  font-size: 12.5px; line-height: 1.55;
+}
+.ev-row { display: flex; gap: 9px; align-items: baseline; padding: 3px 0; }
+.ev-tag {
+  flex: 0 0 auto;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+}
+.ev-tag--official, .ev-tag--first-hand { color: var(--lvl-green); border-color: currentColor; }
+.ev-tag--executed { color: var(--accent); border-color: currentColor; }
+
+/* ----------------------------------------------------------------- tools */
+.tools {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 0 18px 15px;
+}
+.tool {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: inherit; cursor: pointer; text-decoration: none;
+  transition: background .12s, border-color .12s, transform .06s;
+}
+.tool:hover  { background: var(--surface-2); border-color: var(--text-primary); }
+.tool:active { transform: translateY(1px); }
+.tool[disabled] { opacity: .55; cursor: progress; }
+.tool--primary {
+  background: var(--text-primary); border-color: var(--text-primary);
+  color: var(--plane);
+}
+.tool--primary:hover { background: var(--text-primary); filter: brightness(1.14); }
+.tool--review {
+  border-style: dashed; border-color: var(--lvl-yellow); color: var(--lvl-yellow);
+}
+.tool-hint {
+  width: 100%; margin: -2px 0 0;
+  font-size: 11.5px; color: var(--muted);
+}
+
+/* ------------------------------------------------------------ tool output */
+.out {
+  margin: 0 18px 16px; padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface-2);
+}
+.out-title {
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 10px;
+}
+.out[hidden] { display: none; }
+
+.dtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.dtable th {
+  text-align: left; font-weight: 600; color: var(--muted);
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  padding: 4px 10px 6px 0; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.dtable td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+.dtable td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.dtable tr.is-risk td:first-child { font-weight: 700; }
+.dtable .wrap { max-width: 420px; }
+
+/* An option found by the search, with the button that runs it. */
+.opt {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 14px; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid var(--grid);
+}
+.opt:last-child { border-bottom: 0; }
+.opt-label { font-size: 14px; font-weight: 650; }
+.opt-meta  { margin-top: 3px; font-family: var(--mono); font-size: 11.5px; color: var(--text-secondary); }
+.opt-why   { margin-top: 3px; font-size: 12px; color: var(--muted); }
+
+.fieldset { display: grid; gap: 10px; max-width: 520px; }
+.fieldset label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.fieldset input, .fieldset select, .fieldset textarea {
+  font: inherit; font-size: 13px;
+  padding: 8px 10px; border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1); color: var(--text-primary);
+}
+.fieldset textarea { min-height: 150px; font-family: var(--mono); font-size: 12px; }
+
+.note-line { font-size: 12px; color: var(--muted); margin: 10px 0 0; line-height: 1.55; }
+.good { color: var(--lvl-green); }
+.bad  { color: var(--lvl-red); }
+
+@media (max-width: 820px) {
+  .rail { grid-template-columns: repeat(2, 1fr); }
+  .step-head { grid-template-columns: 22px 1fr; }
+  .step-state { grid-column: 2; padding-top: 0; }
+  .opt { grid-template-columns: 1fr; }
+}

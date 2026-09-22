@@ -5,22 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Operations — Supply Chain Risk Radar</title>
 <link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="stylesheet" href="/console.css?v=__ASSETV__">
 <link rel="icon" href="data:,">
 <script src="/theme.js?v=__ASSETV__"></script>
 </head>
 <body class="ops-page">
 
 <!-- ============================================================
-     THREE SURFACES OVER ONE ENGINE
+     ONE CONSOLE, NOT THREE TABS
 
-     Playbook   what to do first, and what is not allowed yet
-     Consignments  every shipment on this lane, each with its own answer
-     Execute    one shipment, for whoever is moving it
+     It was Playbook / Consignments / Execute: a checklist, a table, and a
+     third surface for one shipment. The consignments belong to the step that
+     asks which consignments are affected, and executing belongs to the step
+     that chooses what to do — splitting them into tabs meant the step and
+     the thing it needed were never on screen together.
 
-     None of them recomputes anything. Every figure shown here was computed
-     once for the planner's board — a second calculation would eventually
-     disagree with the first, and a planner contradicted by their own tool
-     stops using it.
+     Every step below carries its own controls. Nothing here is a box you
+     tick to assert you did something elsewhere.
      ============================================================ -->
 
 <header class="topbar">
@@ -33,28 +34,20 @@
   </div>
   <div class="prof-head-right">
     <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+    <a class="ctl" id="link-lane" href="#">Lane page</a>
     <a class="ctl" href="/">&larr; Back to the radar</a>
   </div>
 </header>
 
-<nav class="ops-tabs" id="ops-tabs" aria-label="Operations views">
-  <button type="button" class="ops-tab is-on" data-view="playbook">
-    <b>Playbook</b><span>what to do, in order</span>
-  </button>
-  <button type="button" class="ops-tab" data-view="cargo">
-    <b>Consignments</b><span>each with its own deadline</span>
-  </button>
-  <button type="button" class="ops-tab" data-view="execute">
-    <b>Execute</b><span>for whoever is moving it</span>
-  </button>
-</nav>
+<!-- The rail. Full width, four segments, one per stage, each filling with
+     its own progress — so "where am I in this" is answered by the shape of
+     the bar rather than by counting ticks down the page. -->
+<div class="rail" id="rail" aria-label="Progress through the response"></div>
 
-<main class="ops-main">
-  <section class="ops-view is-on" id="view-playbook"></section>
-  <section class="ops-view" id="view-cargo"></section>
-  <section class="ops-view" id="view-execute"></section>
+<main class="cons-main" id="console">
+  <p class="cons-loading">Opening the lane…</p>
 </main>
 
-<script src="/ops.js?v=__ASSETV__"></script>
+<script src="/console.js?v=__ASSETV__"></script>
 </body>
 </html>

@@ -36,12 +36,14 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from engine.act import console as console_mod
 from engine.fast import dispatch as dispatch_mod
 from engine.fast import execute as execute_mod
 from engine.fast import view
 from engine.fast.bus import BUS, TOPICS
 from engine.fast.execute import LEDGER
 from engine.fast.watch import WATCHER
+from engine.ingest import reports as reports_mod
 
 # Set this to require a token on the inbound hook. Unset, the hook still
 # works — it is the only way to demo an integration offline — but everything
@@ -295,6 +297,286 @@ def hook_incident(
             ),
         }
     )
+
+
+# --------------------------------------------------------------- console
+# Per-planner working state. "Has Maria acknowledged the amber on this step"
+# is not a fact about the world, so it never reaches the engine and never
+# changes what another planner's board says.
+_REVIEWED: dict[str, set[str]] = {}
+_LOGGED: dict[str, dict[str, dict]] = {}
+
+
+def _lane_reports(context, route_id: str) -> list:
+    """Field reports for this lane, filtered to the board's as-of.
+
+    The as-of filter is what keeps a live feed compatible with a pinned
+    board: replaying an earlier day gives that day's answer even though the
+    log has grown since.
+    """
+    on_lane = {s.shipment_id for s in context.shipments if s.lane_id == route_id}
+    return [
+        r for r in reports_mod.as_of(context.clock.as_of)
+        if r.shipment_id in on_lane
+    ]
+
+
+def _route_of(context, route_id: str) -> dict:
+    from engine.export.board import build_board
+
+    board = build_board(context)
+    for row in board["routes"]:
+        if row["route_id"] == route_id:
+            return row
+    raise HTTPException(404, f"no route {route_id!r}")
+
+
+def _console(context, route_id: str) -> dict:
+    route = _route_of(context, route_id)
+    lane_shipments = {
+        s.shipment_id for s in context.shipments if s.lane_id == route_id
+    }
+    executions = [
+        e.as_dict(_now()) for e in LEDGER.recent(100)
+        if e.shipment_id in lane_shipments
+    ]
+    payload = console_mod.build(
+        context,
+        route,
+        reports=_lane_reports(context, route_id),
+        executions=executions,
+        reviewed=_REVIEWED.get(route_id, set()),
+        logged=_LOGGED.get(route_id, {}),
+    )
+    payload["executions"] = executions
+    payload["server_time"] = _now().isoformat()
+    return payload
+
+
+@router.get("/console/{route_id}")
+def console(
+    route_id: str,
+    as_of: str = Query(...),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """One lane's operations console: stages, steps, evidence and tools."""
+    return JSONResponse(_console(_ctx(as_of, shipments), route_id))
+
+
+@router.post("/console/{route_id}/tool")
+def run_tool(
+    route_id: str,
+    payload: Annotated[dict, Body()],
+    as_of: str = Query(...),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Press a control. Every branch returns a RESULT, never just an ack.
+
+    A tool that answers "ok" has done the same thing a checkbox did. Each one
+    here comes back with the thing it produced — the options it found, the
+    vendors it reached, the record it wrote — so the step fills in rather
+    than ticking.
+    """
+    tool_id = str(payload.get("tool_id", "")).strip()
+    step_id = str(payload.get("step_id", "")).strip()
+    context = _ctx(as_of, shipments)
+    moment = _now()
+
+    reviewed = _REVIEWED.setdefault(route_id, set())
+    logged = _LOGGED.setdefault(route_id, {})
+
+    if tool_id == "review":
+        # Acknowledging an amber step. The one click the flow asks for.
+        reviewed.add(step_id)
+        return JSONResponse({"ok": True, "kind": "review", "step_id": step_id,
+                             "console": _console(context, route_id)})
+
+    if tool_id.startswith("log."):
+        entry = {"at": moment.isoformat(), "by": payload.get("by", "planner"),
+                 "fields": payload.get("fields", {})}
+        logged[step_id] = entry
+        return JSONResponse({"ok": True, "kind": "log", "step_id": step_id,
+                             "entry": entry,
+                             "console": _console(context, route_id)})
+
+    if tool_id == "find.alternates":
+        detail = view.route_detail(context, route_id, ledger=LEDGER)
+        options = detail["options"] if detail else []
+        return JSONResponse({
+            "ok": True, "kind": "options", "step_id": step_id,
+            "options": options,
+            "vetoed": detail["vetoed"] if detail else [],
+            "sentence": (
+                f"{len(options)} option(s) hold the date and pay for themselves, "
+                "fastest first."
+                if options else
+                "Nothing on this lane both holds the date and pays for itself."
+            ),
+        })
+
+    if tool_id == "find.vendors":
+        return JSONResponse({
+            "ok": True, "kind": "vendors", "step_id": step_id,
+            "vendors": _vendors_near(context, route_id),
+        })
+
+    if tool_id in ("request.position", "request.confirmation"):
+        what = ("a position" if tool_id == "request.position"
+                else "confirmation of the disruption")
+        body = {
+            "type": "request.field",
+            "at": moment.isoformat(),
+            "route_id": route_id,
+            "asking_for": what,
+            "shipments": sorted(
+                s.shipment_id for s in context.shipments if s.lane_id == route_id
+            )[:40],
+        }
+        receipts = dispatch_mod.fan_out(
+            context.config, body, audiences={"driver", "site_agent", "ground_ops"}
+        )
+        return JSONResponse({
+            "ok": True, "kind": "dispatch", "step_id": step_id,
+            "dispatch": dispatch_mod.summarise(receipts),
+        })
+
+    if tool_id == "compose.customer":
+        return JSONResponse({
+            "ok": True, "kind": "draft", "step_id": step_id,
+            "draft": _customer_draft(context, route_id),
+        })
+
+    if tool_id == "build.record":
+        record = _record(context, route_id, logged, moment)
+        logged["close.record"] = {"at": moment.isoformat(), "fields": {}}
+        return JSONResponse({"ok": True, "kind": "record", "step_id": step_id,
+                             "record": record,
+                             "console": _console(context, route_id)})
+
+    raise HTTPException(400, f"unknown tool {tool_id!r}")
+
+
+def _vendors_near(context, route_id: str) -> list[dict]:
+    """3PLs within reach of the freight on this lane."""
+    from engine.fast import contingency
+
+    route = _route_of(context, route_id)
+    seen: dict[str, dict] = {}
+    for node_id in route.get("node_ids", []):
+        if node_id not in context.network.nodes:
+            continue
+        value = max(
+            (s.value_chf for s in context.shipments if s.lane_id == route_id),
+            default=0.0,
+        )
+        for vendor in contingency.local_options(
+            context.config, context.network, context.network.point(node_id), value
+        ):
+            key = f"{vendor.vendor}@{vendor.at_node}"
+            seen.setdefault(key, {
+                "vendor": vendor.vendor,
+                "service": vendor.service,
+                "phone": vendor.phone,
+                "at": vendor.at_node_name,
+                "distance_km": vendor.distance_km,
+                "ready_in_hours": vendor.handover_hours,
+                "cost_chf": vendor.cost_chf,
+            })
+    return sorted(seen.values(), key=lambda v: v["distance_km"])
+
+
+def _customer_draft(context, route_id: str) -> dict:
+    """A notice written from the board's own numbers, not from a template."""
+    route = _route_of(context, route_id)
+    detail = view.route_detail(context, route_id, ledger=LEDGER)
+    best = detail["best"] if detail else None
+    customers = sorted({
+        a["customer"] for a in route.get("actions", []) if a.get("customer")
+    })
+
+    if best and best.get("on_time"):
+        outcome = (
+            f"We are moving it: {best['label']}. On the current plan the "
+            "delivery date still holds."
+        )
+    elif best:
+        outcome = (
+            f"The fastest option left is {best['label']}, which still lands "
+            f"{best['days_late_after']:.1f} day(s) late. We would like to "
+            "re-agree the date."
+        )
+    else:
+        outcome = (
+            "No reroute on this lane both holds the date and pays for itself, "
+            "so we would like to re-agree the date."
+        )
+
+    return {
+        "to": customers,
+        "subject": f"{route['level_label']} — {route['name']}",
+        "body": (
+            f"{route['reason']}\n\n{outcome}\n\n"
+            f"Affected: {route.get('shipments_at_risk')} of "
+            f"{route.get('shipments')} consignments on this lane.\n"
+            "We will come back to you as soon as anything changes."
+        ),
+    }
+
+
+def _record(context, route_id: str, logged: dict, moment) -> dict:
+    """The close-out, assembled rather than typed.
+
+    Everything in it already happened somewhere this server can see: what ran
+    is in the ledger, what was seen is in the report log, what was decided by
+    hand is in the log entries. Asking a planner to retype any of it is how a
+    record ends up written a week later from memory, or not at all.
+    """
+    route = _route_of(context, route_id)
+    lane_shipments = {
+        s.shipment_id for s in context.shipments if s.lane_id == route_id
+    }
+    executed = [
+        e.as_dict(moment) for e in LEDGER.recent(200)
+        if e.shipment_id in lane_shipments
+    ]
+    live = [e for e in executed if not e["undone"]]
+    spend = round(sum(e["cost_chf"] for e in live), 2)
+    reports = _lane_reports(context, route_id)
+
+    return {
+        "written_at": moment.isoformat(),
+        "route_id": route_id,
+        "route_name": route["name"],
+        "level": route["level_label"],
+        "cause": route["reason"],
+        "actions_taken": [
+            {"action": e["label"], "shipment_id": e["shipment_id"],
+             "cost_chf": e["cost_chf"], "at": e["executed_at"],
+             "confidence": e["confidence"]}
+            for e in live
+        ],
+        "actions_pulled_back": [
+            {"action": e["label"], "shipment_id": e["shipment_id"],
+             "at": e["undone_at"], "reason": e["undo_reason"]}
+            for e in executed if e["undone"]
+        ],
+        "total_spend_chf": spend,
+        "evidence_from_the_road": [
+            {"shipment_id": r.shipment_id, "at": r.observed_at.isoformat(),
+             "status": r.status, "by": r.reported_by,
+             "first_hand": r.first_hand, "authenticated": r.authenticated}
+            for r in sorted(reports, key=lambda r: r.observed_at)[-10:]
+        ],
+        "decisions_logged_by_hand": [
+            {"step": step_id, **entry} for step_id, entry in logged.items()
+        ],
+        "consignments_at_risk": route.get("shipments_at_risk"),
+        "exposure_chf": route.get("exposure_chf"),
+        "note": (
+            "Assembled from the execution ledger, the field-report log and "
+            "the decisions logged on this page. Nothing here was retyped."
+        ),
+    }
 
 
 # ---------------------------------------------------------------- stream
