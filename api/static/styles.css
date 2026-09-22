@@ -1556,3 +1556,32 @@ body.has-modal { overflow: hidden; }
   .evm-pane + .evm-pane { border-left: 0; border-top: 1px solid var(--border); }
   .evm-scrim { padding: 12px; }
 }
+
+/* ---- who is reporting (driver app) ----------------------------------
+   Same 48px target rule as every other control here: one hand, bad light,
+   a cracked screen. Four options across two rows rather than a dropdown,
+   because a dropdown on a phone is two taps and a scroll. */
+.dv-role { border: 0; padding: 0; margin: 0 0 18px; }
+.dv-role legend {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  padding: 0; margin-bottom: 8px;
+}
+.dv-role-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.dv-role-btn {
+  min-height: 48px; padding: 10px 12px;
+  font: inherit; font-size: 15px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-1); color: var(--text-primary);
+  cursor: pointer;
+}
+.dv-role-btn.is-on {
+  border-color: var(--accent); border-width: 2px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
+  font-weight: 650;
+}
+.dv-role-note {
+  margin: 8px 2px 0; font-size: 12.5px; color: var(--text-secondary);
+  min-height: 2.6em;   /* reserve the space so the form does not jump */
+}

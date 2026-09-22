@@ -264,3 +264,96 @@ def test_summarise_counts_what_the_field_has_said(log):
     assert out["shipments_reporting"] == 2
     assert out["confirmations"] == 1
     assert out["damaged"] == 1
+
+
+# =====================================================================
+# WHO IS REPORTING
+#
+# Shanshan's question — whether "transport manager" meant the drivers or the
+# on-site agents — was answered: both, and anyone else on site with the
+# freight. That makes the app broader, and it makes one distinction matter
+# that did not before.
+# =====================================================================
+def test_everyone_on_site_is_tier_one():
+    """Driver, agent, terminal — they are all LOOKING AT IT, and that is the
+    whole reason a field report beats every feed here. Every other input
+    describes a region and infers your consignment; this one observes it."""
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    for role in ("driver", "site_agent", "terminal", "other"):
+        report = R.validate(
+            {"shipment_id": "S1", "status": "held", "role": role}, now
+        )
+        assert report.source_tier == 1, role
+        assert report.first_hand is True, role
+
+
+def test_a_relayed_account_is_kept_but_demoted():
+    """Still stored, still shown — it is worth having. Tier 2, because
+    somebody passing on what they were told is not looking at the freight,
+    and 'the lock is shut' reads identically either way."""
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    report = R.validate(
+        {"shipment_id": "S1", "status": "held", "role": "relayed"}, now
+    )
+    assert report.source_tier == 2
+    assert report.first_hand is False
+
+
+def test_only_a_first_hand_confirmation_can_release_a_reroute():
+    """The one place the distinction has teeth. A reroute sends freight the
+    long way round at somebody's expense, and it should not turn on hearsay."""
+    from engine.act.flow import REPORT_SATISFIES
+
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    payload = {"shipment_id": "S1", "status": "held", "confirms_disruption": True}
+
+    on_site = R.validate({**payload, "role": "driver"}, now)
+    relayed = R.validate({**payload, "role": "relayed"}, now)
+
+    assert REPORT_SATISFIES["confirm.carrier"](on_site) is True
+    assert REPORT_SATISFIES["confirm.carrier"](relayed) is False
+
+    # Both still answer where the freight is — a relayed position is a fact
+    # about the world, not a judgement about it.
+    assert REPORT_SATISFIES["confirm.position"](relayed) is True
+
+
+def test_an_unknown_role_is_refused_rather_than_defaulted():
+    """Defaulting to 'driver' would promote a relayed account to tier 1 on a
+    typo, which is the exact mistake this field exists to prevent."""
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    with pytest.raises(R.ReportError, match="role must be one of"):
+        R.validate({"shipment_id": "S1", "status": "held", "role": "drivr"}, now)
+
+
+def test_a_report_with_no_role_is_a_driver():
+    """What every report written before the field existed actually was: the
+    app had no other kind of user."""
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    report = R.validate({"shipment_id": "S1", "status": "held"}, now)
+    assert report.role == R.DEFAULT_ROLE
+    assert report.source_tier == 1
+
+
+def test_the_role_survives_a_round_trip_through_the_log(tmp_path):
+    """A reloaded log must not silently re-promote every relayed report."""
+    log = tmp_path / "reports.jsonl"
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    R.append(R.validate(
+        {"shipment_id": "S1", "status": "held", "role": "relayed"}, now), log)
+
+    back = R.as_of(now + timedelta(hours=1), log)
+    assert len(back) == 1
+    assert back[0].role == "relayed"
+    assert back[0].source_tier == 2, "a reload must not promote a relayed report"
+
+
+def test_the_role_is_visible_to_the_planner():
+    """A tier alone does not say why. The planner sees the words."""
+    now = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    blob = R.validate(
+        {"shipment_id": "S1", "status": "held", "role": "terminal"}, now
+    ).as_dict()
+    assert blob["role"] == "terminal"
+    assert blob["role_label"] == "Terminal / depot staff"
+    assert blob["first_hand"] is True

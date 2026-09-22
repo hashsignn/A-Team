@@ -343,10 +343,24 @@ REPORT_SATISFIES = {
     ),
     # A revised ETA is exactly what this task asks for.
     "confirm.eta": lambda r: r.revised_eta is not None,
-    # Only an explicit confirmation counts here. A driver saying "moving"
-    # does not confirm a disruption — it is evidence AGAINST one, and
-    # treating it as confirmation would unlock a reroute on good news.
-    "confirm.carrier": lambda r: r.confirms_disruption,
+    # Only an explicit confirmation counts here, and only from somebody who
+    # could SEE it.
+    #
+    # Two separate guards, for two separate mistakes:
+    #
+    # A driver saying "moving" does not confirm a disruption — it is evidence
+    # AGAINST one, and treating a status as a confirmation would unlock a
+    # reroute on good news.
+    #
+    # And a relayed account does not confirm one either. The app is for
+    # anyone on site, which is right — the driver in the cab, the agent at the
+    # quay, the person at the terminal gate are all looking at the freight.
+    # But somebody passing on what they were told is not, and this gate is the
+    # one place in the system where that distinction has teeth: it is what
+    # sends freight the long way round at somebody's expense. The report is
+    # still stored, still shown, still tier 2. It just cannot move the money
+    # on its own.
+    "confirm.carrier": lambda r: r.confirms_disruption and r.first_hand,
 }
 
 
