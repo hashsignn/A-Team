@@ -45,10 +45,38 @@ safe for real drivers:
 number plate or a loading bay, and none of that belongs in a public history
 where it can never be redacted.
 
-**Before real drivers:** per-driver credentials, a virus scan on upload, and
-EXIF stripping — a phone photo carries the GPS of whoever took it, which is
-not always the same thing as the freight's position and is not always theirs
-to publish.
+### Metadata is stripped on upload
+
+A phone photo carries the GPS of whoever took it, the camera's serial number
+and, on some devices, the owner's name. That is the *photographer's* location,
+which is not always the freight's and is never ours to publish. It is removed
+**before the file is written**, because "we will strip it later" is a promise
+nobody keeps.
+
+* **JPEG** — every APP segment (APP1 is EXIF and XMP, APP2 is ICC and MPF,
+  APP13 is Photoshop IRB and so IPTC) and every COM comment.
+* **PNG** — `eXIf`, `tEXt`, `iTXt`, `zTXt`, `tIME`.
+* **WebP** — `EXIF`, `XMP `, `ICCP`.
+
+**The container is rewritten; the image data is copied through untouched.**
+Not re-encoded. These photos are evidence — a driver photographs a shifted
+pallet and a planner acts on it, and later somebody may need to show the
+picture is what the camera produced. Re-encoding a JPEG recompresses it: the
+bytes change, the artefacts change, and it stops being the file that was
+taken. It also avoids a large native dependency for a job that is, in all
+three formats, walking a list of chunks and not copying some of them.
+
+The id is the hash of the **clean** bytes, so it identifies what is actually
+held rather than a file that no longer exists anywhere.
+
+**One tag is kept, as a number.** EXIF orientation — phones routinely store
+landscape pixels plus a "rotate 90°" tag, and stripping it naively lays a
+whole class of photos on their side. It is read before the metadata is
+discarded and stored in a sidecar, so the rotation survives as a value we
+control rather than as camera metadata we cannot audit. The page applies it
+as a CSS transform.
+
+**Before real drivers:** per-driver credentials and a virus scan on upload.
 
 ## How each external dependency is stubbed
 

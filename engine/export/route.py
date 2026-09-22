@@ -55,7 +55,23 @@ def _reports_for(shipment_id: str, context: RunContext) -> list[dict]:
         found = reports_mod.as_of(context.clock.as_of)
     except OSError:
         return []
-    return [r.as_dict() for r in found if r.shipment_id == shipment_id]
+    from engine.ingest import photos as photos_mod  # noqa: PLC0415
+
+    out = []
+    for report in found:
+        if report.shipment_id != shipment_id:
+            continue
+        blob = report.as_dict()
+        # The log stores ids; the rotation lives beside the file. Decorating
+        # here keeps the append-only record free of anything derived — a log
+        # that carries computed fields is a log that can disagree with the
+        # thing it describes.
+        blob["photos"] = [
+            {"id": pid, "orientation": photos_mod.orientation_for(pid)}
+            for pid in blob.get("photos", [])
+        ]
+        out.append(blob)
+    return out
 
 
 def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
