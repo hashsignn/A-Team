@@ -212,6 +212,7 @@ function applyBoard(board) {
 
   renderPosture(board.posture);
   renderLadder(board.levels);
+  initPanelTabs();
   refreshPaths();
   renderTable();
 
@@ -911,6 +912,104 @@ function initResponseTabs() {
 // ===============================================================
 // Ranked routes
 // ===============================================================
+/* The signals panel.
+ *
+ * Everything the filter layer did this run, in the order it did it, with the
+ * rule beside each count. A number with no rule next to it is a number
+ * nobody can argue with, which is the same as one nobody believes.
+ */
+let signalsLoaded = false;
+
+function initPanelTabs() {
+  const tabs = $('ptabs');
+  if (!tabs) return;
+  tabs.addEventListener('click', (event) => {
+    const tab = event.target.closest('.ptab');
+    if (!tab) return;
+    tabs.querySelectorAll('.ptab').forEach((t) => t.classList.remove('is-on'));
+    tab.classList.add('is-on');
+    const signals = tab.dataset.ptab === 'signals';
+    $('rlist').hidden = signals;
+    $('siglist').hidden = !signals;
+    $('f-all').hidden = signals;
+    // The subtitle belongs to the routes list. Leaving "17 of 17 routes"
+    // above a funnel is the kind of stale line that makes a planner distrust
+    // every other number on the page.
+    $('panel-list-count').textContent = signals
+      ? 'What arrived, what the filter removed, and what read the rest'
+      : state.listSubtitle || '';
+    if (signals && !signalsLoaded) loadSignals();
+  });
+}
+
+async function loadSignals() {
+  signalsLoaded = true;
+  const host = $('siglist');
+  host.innerHTML = '<p class="sig-note">Reading the filter layer…</p>';
+  try {
+    const p = state.params || {};
+    const query = new URLSearchParams({
+      as_of: p.as_of || DEFAULT_AS_OF,
+      shipments: String(p.shipments || 150),
+    });
+    const data = await (await fetch(`/api/v2/signals?${query}`)).json();
+    host.innerHTML = signalsHTML(data);
+  } catch (err) {
+    host.innerHTML = `<p class="sig-note">Could not read it — ${esc(err.message)}</p>`;
+  }
+}
+
+function signalsHTML(data) {
+  const m = data.model;
+  const widest = Math.max(...data.stages.map((s) => s.count), 1);
+
+  const funnel = data.stages.map((s) => `
+    <div class="sig-stage">
+      <div class="sig-stage-top">
+        <span>${esc(s.label)}</span>
+        <span class="sig-count">${s.count}${
+          s.removed ? `<i>−${s.removed}</i>` : ''}</span>
+      </div>
+      <div class="sig-bar"><span style="width:${Math.round(s.count / widest * 100)}%"></span></div>
+      <div class="sig-rule">${esc(s.note)}</div>
+    </div>`).join('');
+
+  const rows = data.signals.slice(0, 40).map((row) => `
+    <div class="sig-row sig-row--${esc(row.state)}">
+      <span class="sig-state">${esc(row.state)}</span>
+      <span>
+        <span class="sig-title">${esc(row.title)}</span>
+        <span class="sig-why">${esc(row.why || '')}</span>
+        ${row.source ? `<span class="sig-src">${esc(row.source)}${
+          row.tier ? ` · tier ${row.tier}` : ''}${
+          row.inferred ? ' · inferred' : ''}</span>` : ''}
+      </span>
+    </div>`).join('');
+
+  return `
+    <div class="sig-model ${m.status === 'connected' ? 'is-on' : ''}">
+      <b>${m.status === 'connected'
+        ? `Reading: ${esc(m.model)}`
+        : 'No model connected'}</b>
+      <span>${esc(m.detail)}</span>
+      ${m.status === 'connected' ? `
+        <span class="sig-src">triage ${esc(m.triage)} · extract ${esc(m.extract)}</span>`
+        : `<span class="sig-src">The deterministic filter below still runs.
+           It is arithmetic, not judgement, and costs nothing either way.</span>`}
+    </div>
+
+    <div class="sig-funnel">${funnel}</div>
+
+    <div class="sig-rows">
+      <p class="sig-head">${data.counts.events} event(s) survived ·
+        ${data.counts.dropped} dropped by the filter ·
+        ${data.counts.unpromoted} seen but not trusted</p>
+      ${rows}
+    </div>
+
+    <p class="sig-note">${esc(m.funnel_note || '')}</p>`;
+}
+
 function renderFilters() {
   const all = $('f-all');
   if (!all) return;
@@ -954,12 +1053,12 @@ function renderTable() {
     li.addEventListener('click', () => select(li.dataset.route, { fly: true }));
   });
 
+  state.listSubtitle =
+    `${rows.length} of ${state.board.routes.length} routes · ranked by level, ` +
+    `then CHF within the level`;
   const count = $('panel-list-count');
-  if (count) {
-    count.textContent =
-      `${rows.length} of ${state.board.routes.length} routes · ranked by level, ` +
-      `then CHF within the level`;
-  }
+  const onSignals = $('siglist') && !$('siglist').hidden;
+  if (count && !onSignals) count.textContent = state.listSubtitle;
 
   const f = state.board.funnel;
   $('ranked-foot').innerHTML =

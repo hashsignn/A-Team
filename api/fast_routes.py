@@ -299,6 +299,108 @@ def hook_incident(
     )
 
 
+# --------------------------------------------------------------- signals
+@router.get("/signals")
+def signals(
+    as_of: str = Query(...),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """What came in, what the filter did with it, and what is reading it.
+
+    The funnel was one line of small print under a table. Its whole argument —
+    that a deterministic gate does the bulk of the work and a model only reads
+    the survivors — was invisible, which meant the cost claim behind it was
+    unauditable from the screen. This is that layer, made lookable-at.
+    """
+    from engine.ingest.sources import catalog as catalog_mod
+    from engine.reason import funnel as funnel_mod
+    from engine.reason import llm as llm_mod
+
+    context = _ctx(as_of, shipments)
+    result = context.result
+    f = result.funnel
+    status = llm_mod.detect()
+
+    # The funnel as it actually ran, each stage saying what it removed and by
+    # what rule. A count with no rule beside it is a number nobody can argue
+    # with, which is the same as a number nobody believes.
+    stages = [
+        {"key": "raw", "label": "Arrived", "count": f.raw_observations,
+         "note": "Everything every connected source returned this run."},
+        {"key": "geographic", "label": "Near our freight",
+         "count": f.after_geographic,
+         "removed": f.raw_observations - f.after_geographic,
+         "note": "Outside the bounding box of every node we touch. Geometry, "
+                 "not judgement."},
+        {"key": "type", "label": "A kind that can hurt us",
+         "count": f.after_type,
+         "removed": f.after_geographic - f.after_type,
+         "note": "No risk vocabulary matched. A named variable family or it "
+                 "does not pass."},
+        {"key": "temporal", "label": "While we are there",
+         "count": f.after_temporal,
+         "removed": f.after_type - f.after_temporal,
+         "note": "The window does not overlap any leg's transit through the "
+                 "node."},
+        {"key": "resolution", "label": "Distinct events",
+         "count": f.after_resolution,
+         "removed": f.after_temporal - f.after_resolution,
+         "note": "Many reports, one event. Clustered by place, kind and "
+                 "window."},
+        {"key": "reasoned", "label": "Read by a model", "count": f.reasoned,
+         "note": ("Only these cost anything. The three filters above are "
+                  "arithmetic and run whether or not a model is installed.")},
+    ]
+
+    rows: list[dict] = []
+    for event in context.events:
+        rows.append({
+            "id": event.event_id,
+            "title": event.title,
+            "state": "event",
+            "source": event.provenance.source,
+            "tier": event.provenance.source_tier,
+            "at": event.starts_at.isoformat(),
+            "why": f"{event.event_class} · severity {event.severity.value}",
+            "inferred": event.provenance.inferred,
+        })
+    for item_id, why in list(context.unpromoted.items())[:20]:
+        rows.append({"id": item_id, "title": item_id, "state": "unpromoted",
+                     "source": None, "tier": 3, "at": None, "why": why})
+    for item_id, why in list(context.router_notes.items())[:20]:
+        rows.append({"id": item_id, "title": item_id, "state": "dropped",
+                     "source": None, "tier": None, "at": None, "why": why})
+
+    sources = []
+    for spec in catalog_mod.CATALOG:
+        sources.append({
+            "key": spec.key, "label": spec.label,
+            "nature": spec.nature.value, "tier": spec.source_tier,
+            "cost": spec.cost.value, "enabled": spec.enabled,
+        })
+
+    return JSONResponse({
+        "as_of": result.as_of.isoformat(),
+        "stages": stages,
+        "signals": rows,
+        "sources": sources,
+        "model": {
+            **llm_mod.report(status),
+            "triage": llm_mod.TRIAGE_MODEL if status.available else None,
+            "extract": llm_mod.EXTRACT_MODEL if status.available else None,
+            "funnel_note": funnel_mod.report(
+                funnel_mod.FunnelCost(), status)["note"],
+        },
+        "counts": {
+            "events": len(context.events),
+            "unpromoted": len(context.unpromoted),
+            "dropped": len(context.router_notes),
+            "shipments_touched": f.shipments_touched,
+            "gated_hits": f.gated_hits,
+        },
+    })
+
+
 # --------------------------------------------------------------- console
 # Per-planner working state. "Has Maria acknowledged the amber on this step"
 # is not a fact about the world, so it never reaches the engine and never

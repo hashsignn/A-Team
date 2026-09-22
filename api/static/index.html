@@ -126,12 +126,24 @@
       <div class="panel-list" id="panel-list">
         <div class="panel-list-head">
           <div>
-            <h2>Affected routes</h2>
+            <nav class="ptabs" id="ptabs" role="tablist">
+              <button type="button" class="ptab is-on" data-ptab="routes" role="tab">
+                Affected routes
+              </button>
+              <!-- The filter layer, which was one line of small print under a
+                   table. Its argument — arithmetic does the bulk, a model
+                   reads the survivors — was invisible, so the cost claim
+                   behind it could not be checked from the screen. -->
+              <button type="button" class="ptab" data-ptab="signals" role="tab">
+                Signals
+              </button>
+            </nav>
             <p class="muted" id="panel-list-count"></p>
           </div>
           <button type="button" class="ctl ctl--mini" id="f-all">All levels</button>
         </div>
         <div class="rlist" id="rlist" role="list"></div>
+        <div class="rlist" id="siglist" hidden></div>
         <p class="panel-list-foot" id="ranked-foot"></p>
       </div>
 
