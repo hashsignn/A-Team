@@ -131,3 +131,77 @@ dispatch:
       enabled: false
       url_env: RADAR_AUTHORITY_WEBHOOK_URL
       audience: [authority]
+
+# -------------------------------------------------------------------
+# SUBSTITUTE CAPACITY — the constraint that makes a reroute real
+# -------------------------------------------------------------------
+# The contingency search finds a PATH. It says nothing about whether the
+# vehicles to run it exist, and on a waterway derate that is the whole
+# problem: 4flow's 2026 note puts a reference push barge at 2,450 t against
+# 24 t a truck, so one barge is ~102 trucks, into a European market with
+# roughly 500,000 unfilled driver positions (IRU 2026).
+#
+# An option that needs more units than the corridor has is not a fast option.
+# It is a plan that does not happen.
+#
+# SCALE, STATED HONESTLY: Sika's intercompany export totals 775 t across
+# eighteen months, so at THOSE volumes none of this binds — one barge could
+# carry four years of it. It binds on their bulk admixture flows, which are
+# not in the export. The numbers below are therefore declared, not derived,
+# and `source:` says which is which.
+capacity:
+  # What one consignment weighs. Not from the export: its median document is
+  # 3.7 kg, which describes samples and specialist product rather than the
+  # bulk movements a barge carries. Replaceable the moment a bulk book exists.
+  tonnes_per_consignment:
+    default: {value: 22, source: assumed}
+    by_product_family:
+      concrete_admixtures: {value: 26, source: assumed}
+      mortars:             {value: 28, source: assumed}
+      waterproofing:       {value: 18, source: assumed}
+      sealants:            {value: 12, source: assumed}
+      adhesives:           {value: 12, source: assumed}
+      flooring_resins:     {value: 16, source: assumed}
+      roofing_membranes:   {value: 20, source: assumed}
+      structural_bonding:  {value: 10, source: assumed}
+
+  # Per corridor, per week. `units` is vehicles or sailings, not tonnes.
+  modes:
+    barge:
+      tonnes_per_unit:   {value: 2450, source: "4flow 2026 — reference push barge"}
+      units_per_week:    {value: 6,    source: assumed}
+      hours_to_ready:    {value: 48,   source: assumed}
+      cost_chf_per_tonne: {value: 34,  source: assumed}
+      carries: [liquids, bulk, industrial, packaged]
+    rail:
+      # ~20 wagons at 68 t. Slots are the constraint, not wagons.
+      tonnes_per_unit:   {value: 1360, source: assumed}
+      units_per_week:    {value: 4,    source: assumed}
+      hours_to_ready:    {value: 72,   source: assumed}
+      cost_chf_per_tonne: {value: 58,  source: assumed}
+      carries: [bulk, industrial, packaged]
+    road:
+      tonnes_per_unit:   {value: 24,   source: "4flow 2026 — 24 t per truck"}
+      units_per_week:    {value: 210,  source: assumed}
+      hours_to_ready:    {value: 12,   source: assumed}
+      cost_chf_per_tonne: {value: 145, source: assumed}
+      carries: [liquids, bulk, industrial, packaged]
+      note: >
+        The ceiling is the honest part. Europe had ~500,000 unfilled driver
+        positions in 2026 (IRU), and every shipper on the corridor reaches for
+        road at the same moment, so a derate does not release 210 trucks to
+        whoever asks first.
+
+  # Which product families need equipment a given mode may not have. 4flow's
+  # point: "not every truck can move every load" — liquids want tank trailers,
+  # bulk wants walking-floor or tipping equipment.
+  equipment:
+    liquids:   [sealants, adhesives, flooring_resins, structural_bonding]
+    bulk:      [concrete_admixtures, mortars]
+    industrial: [waterproofing, roofing_membranes]
+
+  # Volume that can wait. Not everything displaced has to move now, and a
+  # planner who triages is not failing — deferring the consignments with
+  # slack is how the ones without it get capacity.
+  defer:
+    max_share: {value: 0.35, source: assumed}

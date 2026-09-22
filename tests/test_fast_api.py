@@ -51,10 +51,26 @@ def body(response):
 
 
 def first_executable(payload):
-    for option in payload["headline"]["options"]:
-        if option["executable"]:
-            return payload["headline"]["route_id"], option["option_id"]
-    raise AssertionError("no executable option on the headline lane")
+    """The first lane on the board with a lever we can pull ourselves.
+
+    Deliberately NOT "the headline lane's first option". The headline is the
+    most urgent lane, and the most urgent lane is often the one where every
+    option has already expired and the only thing left is a vendor handover
+    somebody has to be rung about. That is a real state and the board is right
+    to lead with it — it is just not a state these tests are about, which is
+    what ``/act`` does once there IS something to press.
+    """
+    lanes = [payload["headline"], *payload["queue"]]
+    for lane in lanes:
+        if lane is None:
+            continue
+        for option in lane["options"]:
+            if option["executable"]:
+                return lane["route_id"], option["option_id"]
+    raise AssertionError(
+        "nothing on the whole board is ours to execute — every lane is "
+        "waiting on a carrier, a vendor or the customer"
+    )
 
 
 # ------------------------------------------------------------------ /now
@@ -164,6 +180,21 @@ def test_every_execution_reports_what_dispatch_actually_did():
     dispatch = result["executed"][0]["dispatch"]
     assert dispatch["sentence"]
     assert dispatch["delivered"] + dispatch["recorded"] + dispatch["failed"] > 0
+
+
+def test_a_lane_with_nothing_left_still_comes_back_with_something_to_do():
+    """The worst case has to be answerable, not empty.
+
+    When every template has expired and every reroute has been vetoed for
+    losing money, what survives is a vendor handover — not ours to execute,
+    still the thing to do. A board that returned an empty option list here
+    would be telling a planner with a burning lane that there is nothing to
+    be done, which is both false and the moment they stop trusting it.
+    """
+    payload = body(fast_routes.now(as_of=AS_OF, shipments=SHIPMENTS))
+    for lane in [payload["headline"], *payload["queue"]]:
+        assert lane["options"], f"{lane['route_id']} came back with no options"
+        assert lane["best"], f"{lane['route_id']} came back with no lead option"
 
 
 def test_an_option_that_is_no_longer_offered_is_refused_by_name():

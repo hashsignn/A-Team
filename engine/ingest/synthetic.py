@@ -88,18 +88,61 @@ def generate_shipments(
     # earns its share back through the through-lanes, from real volume.
     weights = flows_mod.lane_weights(config)
 
+    # When the book moves. Sika's export is strongly seasonal — April runs at
+    # 1.52x the mean and August at 0.56x, so nearly threefold between peak and
+    # trough — and a uniform spread of departure dates throws that away. A
+    # disruption in a quiet month and the same disruption in a busy one are
+    # different events, and the whole point of the board is to say which.
+    season = flows_mod.month_weights(flows_mod.load())
+
     for i in range(count):
         lane = rng.choices(lanes, weights=weights, k=1)[0]
-        shipment = _build_one(lane, rng, clock, index=i)
+        shipment = _build_one(lane, rng, clock, index=i, season=season)
         shipments.append(shipment)
 
     return shipments
 
 
-def _build_one(lane: dict, rng: random.Random, clock: Clock, index: int) -> Shipment:
-    # Departure spread across the window.
-    offset_hours = rng.uniform(-20 * 24, 35 * 24)
-    depart = clock.as_of + timedelta(hours=offset_hours)
+# How many times to redraw a departure date before accepting whatever came
+# up. Rejection sampling is the right shape here — it needs no inverse of the
+# monthly distribution and stays correct if the shape changes — but it must
+# not be able to spin, so it gives up and takes the last draw.
+SEASON_TRIES = 12
+
+
+def _departure(
+    rng: random.Random,
+    clock: Clock,
+    season: dict[str, float],
+) -> timedelta:
+    """An offset into the planning window, weighted by month if we know it.
+
+    The window is 20 days behind to 35 ahead, so it spans at most three
+    calendar months. Seasonality within it is a nudge, not a cliff — which is
+    correct: a book is not emptied because August is quiet.
+    """
+    low, high = -20 * 24, 35 * 24
+    if not season:
+        return timedelta(hours=rng.uniform(low, high))
+
+    ceiling = max(season.values())
+    offset = rng.uniform(low, high)
+    for _ in range(SEASON_TRIES):
+        month = (clock.as_of + timedelta(hours=offset)).strftime("%m")
+        if rng.random() <= season.get(month, 1.0) / ceiling:
+            break
+        offset = rng.uniform(low, high)
+    return timedelta(hours=offset)
+
+
+def _build_one(
+    lane: dict,
+    rng: random.Random,
+    clock: Clock,
+    index: int,
+    season: dict[str, float] | None = None,
+) -> Shipment:
+    depart = clock.as_of + _departure(rng, clock, season or {})
 
     legs: list[Leg] = []
     cursor = depart

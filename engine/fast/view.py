@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from engine.act import playbook
 from engine.clock import Clock
 from engine.config import Config
+from engine.fast import capacity, contingency
 from engine.fast import options as fast
 from engine.fast.execute import LEDGER, Ledger
 from engine.network.graph import Network
@@ -470,3 +471,165 @@ def config_of(context: RunContext) -> Config:
 
 def clock_of(context: RunContext) -> Clock:
     return context.clock
+
+
+# ---------------------------------------------------------------------
+# The solution board: mixed-capacity plans for a whole lane.
+# ---------------------------------------------------------------------
+# How many 3PL rows to offer beside the plans. Capacity you buy in is the
+# escape hatch when the corridor's own ceilings do not add up, and three is
+# enough to ring round in the time this screen exists to save.
+VENDOR_LIMIT = 3
+
+
+def _blocked_modes(context: RunContext, shipment_ids: set[str]) -> set[str]:
+    """Which modes the disruption has taken away from the WHOLE lane.
+
+    Read off the gate hits, because the gate is where "this event touches this
+    leg by this mode" was already decided and deciding it twice is how the two
+    answers drift apart. But a hit is per leg, and a mode is corridor-wide, so
+    the two are not the same question: one consignment stopped on its road leg
+    at Basel does not mean the European road market has closed.
+
+    So a mode counts as gone only when EVERY displaced consignment has lost
+    it. That is strict on purpose. Taking road off the board is the single
+    most consequential thing this function can do — it is the fallback every
+    plan leans on — and doing it because one leg of one consignment was
+    touched would manufacture an impossibility the corridor does not have.
+    """
+    if not shipment_ids:
+        return set()
+    per_shipment: dict[str, set[str]] = {sid: set() for sid in shipment_ids}
+    for hit in context.hits:
+        if hit.shipment_id in per_shipment:
+            mode = hit.mode.value if hasattr(hit.mode, "value") else str(hit.mode)
+            per_shipment[hit.shipment_id].add(mode)
+    return set.intersection(*per_shipment.values())
+
+
+def _vendor_rows(context: RunContext, shipments: list[Shipment]) -> list[dict]:
+    """Third-party capacity near the freight, priced.
+
+    Offered alongside the plans and not inside them: a 3PL is capacity you do
+    not own, so it cannot be allocated against a declared corridor ceiling.
+    It is what a planner reaches for when the ceilings do not add up, which is
+    exactly the case the board is built to make visible.
+    """
+    if not shipments:
+        return []
+    anchor = max(shipments, key=lambda s: s.value_chf)
+    origin = fast._divert_from(anchor, _hits_for(context, anchor.shipment_id),
+                              context.clock)
+    rows: list[dict] = []
+    for local in contingency.local_options(
+        context.config, context.network, context.network.point(origin),
+        anchor.value_chf,
+    )[:VENDOR_LIMIT]:
+        rows.append(
+            {
+                "vendor": local.vendor,
+                "service": local.service.replace("_", " "),
+                "phone": local.phone,
+                "at": local.at_node_name,
+                "distance_km": round(local.distance_km, 0),
+                "hours_to_handover": round(local.handover_hours, 1),
+                "cost_chf": round(local.cost_chf, 2),
+            }
+        )
+    return rows
+
+
+def solution_board(
+    context: RunContext,
+    route_id: str,
+    ledger: Ledger | None = None,
+) -> dict | None:
+    """Three or four ways to move a lane's displaced freight, side by side.
+
+    The options view answers "what do I do about THIS consignment". This
+    answers the question a lane manager actually has when a corridor closes,
+    which is "there are four hundred of them and one river — what is the
+    mix?". Same delivery-first rule, same margin veto, different unit of
+    decision.
+    """
+    ships = {s.shipment_id: s for s in context.shipments}
+    at_risk: dict[str, Shipment] = {}
+    for assessment in context.result.assessments:
+        for risk in assessment.shipment_risks:
+            shipment = ships.get(risk.shipment_id)
+            if shipment is not None and shipment.lane_id == route_id:
+                at_risk[shipment.shipment_id] = shipment
+
+    lanes = {lane["id"]: lane for lane in context.config.lanes}
+    lane = lanes.get(route_id)
+    if lane is None:
+        return None
+
+    shipments = list(at_risk.values())
+    if not shipments:
+        return {
+            "route_id": route_id,
+            "name": lane["name"],
+            "quiet": True,
+            "plans": [],
+            "vendors": [],
+            "sentence": "Nothing on this lane is displaced.",
+        }
+
+    config = context.config
+    displaced = capacity.displaced_from(shipments, config, context.clock)
+    blocked = _blocked_modes(context, set(at_risk))
+    capacities = capacity.modes(config)
+
+    built = [
+        capacity.price(plan, at_risk, config, capacities)
+        for plan in capacity.plans(displaced, config, blocked_modes=blocked)
+    ]
+    built.sort(key=lambda p: p.rank_key)
+
+    return {
+        "route_id": route_id,
+        "name": lane["name"],
+        "quiet": False,
+        "displaced_shipments": len(displaced),
+        "displaced_tonnes": round(sum(d.tonnes for d in displaced), 1),
+        "blocked_modes": sorted(blocked),
+        "horizon_hours": round(built[0].horizon_hours, 1) if built else None,
+        "plans": [p.as_dict(capacities) for p in built],
+        "vendors": _vendor_rows(context, shipments),
+        "replacement": _replacement_note(capacities, blocked, displaced),
+        "sentence": (
+            built[0].sentence() if built
+            else "No mode on this corridor carries this freight."
+        ),
+    }
+
+
+def _replacement_note(
+    capacities: dict[str, capacity.ModeCapacity],
+    blocked: set[str],
+    displaced: list[capacity.Displaced],
+) -> str | None:
+    """"One sailing is a hundred and three drivers", said in numbers.
+
+    The sentence the whole capacity model exists to let the board say, and it
+    is only sayable when a high-capacity mode is the thing that has gone —
+    which is why it is computed here rather than printed unconditionally.
+    """
+    road = capacities.get("road")
+    if road is None:
+        return None
+    lost = [
+        capacities[m] for m in blocked
+        if m in capacities and capacities[m].tonnes_per_unit > road.tonnes_per_unit
+    ]
+    if not lost:
+        return None
+    biggest = max(lost, key=lambda c: c.tonnes_per_unit)
+    per_unit = road.units_to_replace(biggest.tonnes_per_unit)
+    tonnes = sum(d.tonnes for d in displaced)
+    return (
+        f"One {biggest.name} unit carries {biggest.tonnes_per_unit:,.0f} t — "
+        f"{per_unit} trucks. The {tonnes:,.0f} t displaced here needs "
+        f"{road.units_to_replace(tonnes)} of them if it all goes by road."
+    )
