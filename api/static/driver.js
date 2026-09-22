@@ -339,6 +339,25 @@ $('f-load').addEventListener('click', (e) => {
  * Now both travel. The numbers put a pin on the planner's map; the words say
  * what the pin cannot. */
 $('f-gps').addEventListener('click', () => {
+  /* An insecure origin is the likeliest reason this fails, and the least
+   * obvious.
+   *
+   * Browsers only hand out a position on HTTPS or localhost. Over plain HTTP
+   * — which is what a phone hitting http://<laptop-ip>:8000 gets —
+   * navigator.geolocation still EXISTS, so the old check passed and
+   * getCurrentPosition then failed straight into "could not locate". That
+   * blames the GPS for something the page did, and somebody would spend an
+   * hour walking outside to get a better signal.
+   *
+   * The words the driver still can type are unaffected; only the pin is. */
+  if (!window.isSecureContext) {
+    $('f-gps').textContent = 'needs https — type where you are instead';
+    $('f-gps').title =
+      'Browsers only give a position on https or localhost. The forwarded '
+      + 'Codespaces URL is https and works; a plain http://<ip>:8000 address '
+      + 'does not.';
+    return;
+  }
   if (!navigator.geolocation) { $('f-gps').textContent = 'not available'; return; }
   $('f-gps').textContent = 'locating…';
   navigator.geolocation.getCurrentPosition(
