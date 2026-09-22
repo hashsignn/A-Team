@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What needs a decision — Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="stylesheet" href="/fast.css?v=__ASSETV__">
+<link rel="icon" href="data:,">
+<!-- Not deferred: it sets data-theme before the first paint, so the page
+     never flashes the previous theme. -->
+<script src="/theme.js?v=__ASSETV__"></script>
+</head>
+<body class="fast-body">
+
+<header class="fast-bar">
+  <div>
+    <h1>Supply Chain Risk Radar</h1>
+    <div class="sub" id="counts">loading…</div>
+  </div>
+  <span class="spacer"></span>
+  <span class="sub" id="asof"></span>
+  <a class="back" href="/" style="margin:0">the analytical board →</a>
+  <span class="live" id="live"><span class="dot"></span><span>connecting</span></span>
+  <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+</header>
+
+<main class="fast-wrap">
+  <!-- One sentence. A dashboard that cannot say "nothing is wrong" is a
+       dashboard nobody trusts when it says something is. -->
+  <p class="fast-sentence" id="sentence">Reading the board…</p>
+
+  <section class="headline" id="headline"
+           aria-label="The decision that needs making first"></section>
+
+  <section class="queue" id="queue" aria-label="Other lanes off plan"></section>
+
+  <section id="folds" aria-label="Detail, folded away"></section>
+
+  <p class="note-row">
+    Advisory. The tool proposes and carries out what you choose; it does not
+    decide. Every option shown both holds the customer's date and leaves the
+    consignment profitable — the ones that do not are listed above, with the
+    arithmetic.
+  </p>
+</main>
+
+<script src="/fastui.js?v=__ASSETV__" defer></script>
+<script src="/fast.js?v=__ASSETV__" defer></script>
+</body>
+</html>

@@ -20,6 +20,7 @@ from fastapi import Body, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from api import fast_routes
 from engine.act import flow as flow_mod
 from engine.clock import Clock
 from engine.config import load_config
@@ -28,6 +29,7 @@ from engine.export import profile as profile_mod
 from engine.export import report as report_mod
 from engine.export import tms as tms_mod
 from engine.export.board import build_board
+from engine.fast.watch import WATCHER
 from engine.ingest import reports as reports_mod
 from engine.pipeline import RunContext, RunOptions, run
 from engine.reason import ask as ask_mod
@@ -87,6 +89,12 @@ def _invalidate() -> None:
     """
     _RUNS.clear()
     _BOARDS.clear()
+
+
+# The v2 surface shares this cache rather than keeping its own: two caches of
+# the same pipeline drift, and the one that drifts is the one on screen.
+fast_routes.bind(_context)
+app.include_router(fast_routes.router)
 
 
 @app.get("/api/board")
@@ -501,8 +509,17 @@ def submit_report(
         raise HTTPException(422, str(exc)) from exc
 
     reports_mod.append(report)
-    _REPORT_FEED.append(report.as_dict())
-    return JSONResponse(report.as_dict(), status_code=201)
+    row = report.as_dict()
+    _REPORT_FEED.append(row)
+
+    # Straight onto the spine, before the response is even written. This is
+    # the lowest-latency signal in the system — somebody standing next to the
+    # problem — and making it wait for a batch was the thing worth fixing.
+    incident = WATCHER.saw_report(row, Clock.wall().as_of)
+    if incident is not None:
+        row = {**row, "incident": incident.as_dict()}
+
+    return JSONResponse(row, status_code=201)
 
 
 @app.get("/api/v1/reports")
@@ -743,6 +760,20 @@ def route_page(route_id: str) -> Response:
 @app.head("/driver")
 def driver_page() -> Response:
     return _page("driver.html")
+
+
+# Solution A. The decluttered surface: one decision at a time, and the button
+# that carries it out.
+@app.get("/fast")
+@app.head("/fast")
+def fast_page() -> Response:
+    return _page("fast.html")
+
+
+@app.get("/fast/{route_id}")
+@app.head("/fast/{route_id}")
+def fast_route_page(route_id: str) -> Response:
+    return _page("fast-route.html")
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")

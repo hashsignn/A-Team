@@ -155,11 +155,12 @@ _FILES = (
     "thresholds",
     "contacts",
     "sources",
+    "fast",
 )
 
 # sources.yaml is optional: with no file, the built-in free catalogue is
 # the configuration, and that is complete and runnable on its own.
-_OPTIONAL = {"company_profile", "sources"}
+_OPTIONAL = {"company_profile", "sources", "fast"}
 
 
 def load_config(

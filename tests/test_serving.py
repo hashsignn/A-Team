@@ -23,7 +23,7 @@ import pytest
 from api.main import _asset_version, _page
 
 STATIC = Path(__file__).resolve().parent.parent / "api" / "static"
-PAGES = ("index.html", "profile.html")
+PAGES = ("index.html", "profile.html", "fast.html", "fast-route.html")
 
 
 # =====================================================================

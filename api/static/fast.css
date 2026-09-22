@@ -1,0 +1,305 @@
+/* Solution A — the decluttered surface.
+ *
+ * One rule governs every choice here: the planner gets ONE decision on screen
+ * at a time, and the button that carries it out is the largest thing on the
+ * page. Everything that is not that decision is either one line long or
+ * behind a disclosure triangle.
+ *
+ * It reuses the token set in styles.css rather than redefining colours, so
+ * the four themes keep working and a Sika-branded install needs no changes
+ * here. Only the layout is new.
+ */
+
+.fast-body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--text-primary);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.fast-wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px 72px; }
+
+/* ------------------------------------------------------------------ bar */
+.fast-bar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+}
+.fast-bar h1 { font-size: 15px; margin: 0; letter-spacing: -0.01em; }
+.fast-bar .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.fast-bar .spacer { flex: 1; }
+
+.live {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-family: var(--mono); color: var(--muted);
+}
+.live .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); transition: background .2s;
+}
+.live.is-on .dot { background: var(--lvl-green); }
+/* The pulse fires on a message, not on a timer: a heartbeat that animates
+ * whether or not anything arrived is decoration pretending to be status. */
+.live.is-hit .dot { animation: ping .6s ease-out; }
+@keyframes ping {
+  0%   { transform: scale(1);   box-shadow: 0 0 0 0 rgba(21,128,61,.45); }
+  100% { transform: scale(1);   box-shadow: 0 0 0 9px rgba(21,128,61,0); }
+}
+
+/* --------------------------------------------------------------- summary */
+.fast-sentence {
+  margin: 22px 0 18px;
+  font-size: 19px; line-height: 1.45; letter-spacing: -0.01em;
+  max-width: 62ch;
+}
+
+/* --------------------------------------------------------------- headline */
+.headline {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.headline__top {
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.headline__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.headline h2 {
+  margin: 10px 0 4px; font-size: 27px; line-height: 1.2; letter-spacing: -0.02em;
+}
+.headline .cause { margin: 0; color: var(--text-secondary); font-size: 15px; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+.chip--now       { color: var(--lvl-red); }
+.chip--today     { color: var(--lvl-yellow); }
+.chip--soon      { color: var(--lvl-blue); }
+.chip--scheduled { color: var(--muted); }
+.chip--unknown   { color: var(--muted); }
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* Three numbers, never more. Delay, how many, how long left — the questions
+ * a planner asks in that order. The old board answered eleven. */
+.facts {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--border);
+}
+.fact { padding: 14px 22px; border-right: 1px solid var(--border); }
+.fact:last-child { border-right: 0; }
+.fact dt {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 4px;
+}
+.fact dd {
+  margin: 0; font-family: var(--mono); font-size: 25px; letter-spacing: -0.02em;
+}
+.fact .note { display: block; font-family: var(--sans); font-size: 12px; color: var(--muted); }
+.fact--urgent dd { color: var(--lvl-red); }
+
+/* ----------------------------------------------------------- action tabs */
+/* The point of the rebuild. These are not a menu that opens a wizard; each
+ * one is the action, and clicking it does the thing. */
+.actions { padding: 18px 22px 22px; }
+.actions__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.actions__head h3 { margin: 0; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.actions__head .hint { font-size: 12px; color: var(--muted); }
+
+.act-list { display: grid; gap: 10px; }
+
+.act {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px; align-items: center;
+  width: 100%; text-align: left;
+  padding: 15px 17px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  font: inherit; color: inherit;
+  cursor: pointer;
+  transition: border-color .12s, transform .06s, background .12s;
+}
+.act:hover  { border-color: var(--border-strong); background: var(--surface-1); }
+.act:active { transform: translateY(1px); }
+.act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.act[disabled] { cursor: not-allowed; opacity: .6; }
+
+.act--primary {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--plane);
+}
+.act--primary:hover { background: var(--text-primary); filter: brightness(1.12); }
+.act--primary .act__meta { color: rgba(255,255,255,.72); }
+.act--primary .act__go   { background: var(--sika-yellow, var(--accent)); color: #14140f; }
+
+/* Spans, because a button may not contain block elements — but they have to
+ * stack, so they are made block here rather than being divs in the markup. */
+.act > span { min-width: 0; }
+.act__label, .act__meta, .act__why { display: block; }
+.act__label {
+  font-size: 16px; font-weight: 650; letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.act__meta  { margin-top: 4px; font-size: 12.5px; color: var(--text-secondary); font-family: var(--mono); }
+.act__why   { margin-top: 5px; font-size: 12.5px; color: var(--muted); }
+.act--primary .act__why { color: rgba(255,255,255,.62); }
+
+.act__go {
+  padding: 9px 16px; border-radius: 8px;
+  background: var(--text-primary); color: var(--plane);
+  font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+
+/* An option somebody else owns is not a button. Making it look like one and
+ * then explaining it cannot be pressed is worse than not offering it. */
+.act--ask { cursor: default; }
+.act--ask:hover { background: var(--surface-2); border-color: var(--border); }
+.act--ask .act__go { background: transparent; color: var(--muted); border: 1px dashed var(--border-strong); font-weight: 600; }
+
+/* --------------------------------------------------------------- undo bar */
+.undo {
+  display: flex; align-items: center; gap: 14px;
+  margin-top: 14px; padding: 13px 16px;
+  border: 1px solid var(--lvl-green);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--lvl-green) 8%, var(--surface-1));
+  font-size: 14px;
+}
+.undo strong { font-weight: 650; }
+.undo .spacer { flex: 1; }
+.undo__count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.undo button {
+  padding: 7px 14px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface-1);
+  font: inherit; font-size: 13px; font-weight: 600; color: inherit;
+}
+.undo--failed { border-color: var(--lvl-red); background: color-mix(in srgb, var(--lvl-red) 7%, var(--surface-1)); }
+
+/* ----------------------------------------------------------------- queue */
+.queue { margin-top: 30px; }
+.queue h3 {
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 10px;
+}
+.qrow {
+  display: grid;
+  grid-template-columns: 56px 1fr 74px 168px 16px;
+  gap: 12px; align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  margin-bottom: 7px;
+  text-decoration: none; color: inherit;
+}
+.qrow:hover { border-color: var(--border-strong); }
+.qrow__when {
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  white-space: nowrap;
+}
+.qrow__name { font-size: 14.5px; }
+.qrow__sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.qrow__count{ font-family: var(--mono); font-size: 12px; color: var(--text-secondary); }
+.qrow__best { font-size: 12.5px; color: var(--text-secondary); }
+.qrow__arrow{ color: var(--muted); }
+.qrow--now .qrow__when   { color: var(--lvl-red); }
+.qrow--today .qrow__when { color: var(--lvl-yellow); }
+
+/* ------------------------------------------------------------- disclosure */
+/* Everything that is not the decision lives in here, shut. */
+details.fold {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+details.fold > summary {
+  cursor: pointer; padding: 12px 15px;
+  font-size: 13px; color: var(--text-secondary);
+  list-style: none;
+}
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: '▸ '; color: var(--muted); }
+details.fold[open] > summary::before { content: '▾ '; }
+details.fold .fold__body { padding: 0 15px 15px; font-size: 13px; }
+
+.mini { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mini th {
+  text-align: left; font-weight: 600; color: var(--muted);
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  padding: 5px 8px 5px 0; border-bottom: 1px solid var(--border);
+}
+.mini td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+.mini td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+
+.feed { list-style: none; margin: 0; padding: 0; }
+.feed li { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.feed li:last-child { border-bottom: 0; }
+.feed .when { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.feed .tag {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  border: 1px solid var(--border-strong); color: var(--text-secondary);
+  margin-right: 7px;
+}
+.feed .tag--observed { color: var(--lvl-green); border-color: currentColor; }
+.feed .tag--relayed  { color: var(--muted); }
+
+/* ----------------------------------------------------------------- quiet */
+.quiet {
+  padding: 46px 24px; text-align: center;
+  border: 1px dashed var(--border-strong); border-radius: 14px;
+  color: var(--text-secondary);
+}
+.quiet strong { display: block; font-size: 21px; margin-bottom: 7px; color: var(--text-primary); }
+
+/* ------------------------------------------------------------------ misc */
+.back {
+  display: inline-block; margin: 18px 0 4px;
+  font-size: 13px; color: var(--text-secondary); text-decoration: none;
+}
+.back:hover { color: var(--text-primary); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  padding: 12px 20px; border-radius: 10px;
+  background: var(--text-primary); color: var(--plane);
+  font-size: 14px; box-shadow: var(--shadow-2);
+  z-index: 60; max-width: 86vw;
+}
+.toast--bad { background: var(--lvl-red); color: #fff; }
+
+.note-row { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+
+@media (max-width: 720px) {
+  .facts { grid-template-columns: 1fr; }
+  .fact  { border-right: 0; border-bottom: 1px solid var(--border); }
+  .qrow  { grid-template-columns: 62px 1fr; }
+  .qrow__count, .qrow__best, .qrow__arrow { display: none; }
+  .headline h2 { font-size: 22px; }
+  .act { grid-template-columns: 1fr; }
+  .act__go { justify-self: start; }
+}
+
+/* The Sika theme paints a two-tone rule under its header. The fast bar is a
+ * different element from the v1 topbar, so it opts in explicitly rather than
+ * inheriting a selector that does not match it. */
+:root[data-theme="sika"] .fast-bar { position: sticky; }
+:root[data-theme="sika"] .fast-bar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+  background: linear-gradient(90deg,
+    var(--sika-yellow) 0 42%, var(--sika-red) 42% 100%);
+}

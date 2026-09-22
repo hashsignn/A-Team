@@ -1,0 +1,133 @@
+# Solution A — fast action. The delivery-first parameters.
+#
+# Everything the optimiser needs that cannot be derived from the shipment
+# record lives here, so the pivot from "cheapest" to "fastest that still pays"
+# is a file a planner can read and argue with rather than a constant in code.
+#
+# PROVENANCE: every rate carries `source`. `assumed` means we made it up to
+# have something runnable; it must be shown as an assumption, not a fact.
+
+# -------------------------------------------------------------------
+# THE PROFITABILITY VETO
+# -------------------------------------------------------------------
+# Contribution = shipment value x rate. An option that would leave less than
+# `margin_floor_chf` behind is discarded before ranking — never ranked lower,
+# because a loss-making option is not a slow option, it is not an option.
+margin_floor_chf: 0
+
+gross_margin:
+  default: {rate: 0.18, source: assumed}
+  by_product_family:
+    concrete_admixtures: {rate: 0.22, source: assumed}
+    mortars:             {rate: 0.16, source: assumed}
+    sealants_adhesives:  {rate: 0.28, source: assumed}
+    roofing:             {rate: 0.19, source: assumed}
+    flooring:            {rate: 0.24, source: assumed}
+    waterproofing:       {rate: 0.21, source: assumed}
+
+# -------------------------------------------------------------------
+# HOW FAST THE NETWORK MOVES
+# -------------------------------------------------------------------
+# Door-to-door averages including the stops freight actually makes, not
+# vehicle top speeds. Used by the contingency engine to cost an alternative
+# path in HOURS, which is the currency the whole package ranks in.
+transit:
+  speed_kph:
+    road:  {value: 62,  source: assumed}
+    rail:  {value: 45,  source: assumed}
+    barge: {value: 13,  source: assumed}
+    sea:   {value: 31,  source: assumed}   # ~17 kn
+  # Fixed time lost at each intermediate node: handling, documents, waiting
+  # for a slot. Charged once per node passed through, not per leg.
+  # What a kilometre costs by mode, for a consignment of typical size. Used
+  # only to price a GENERATED alternative against the planned path; the
+  # difference between the two is what the margin veto charges. Absolute
+  # accuracy matters less than the ratios between modes, which are the thing
+  # that decides whether trucking a barge load is affordable.
+  cost_chf_per_km:
+    road:  {value: 1.85, source: assumed}
+    rail:  {value: 0.95, source: assumed}
+    barge: {value: 0.42, source: assumed}
+    sea:   {value: 0.11, source: assumed}
+  # Charged once per intermediate node on a generated path: lift, storage,
+  # documents. A path with more transfers is more expensive as well as slower.
+  transfer_chf:
+    default: {value: 420, source: assumed}
+
+  # Keys are node kinds as network.yaml declares them.
+  handling_hours:
+    plant:        {value: 4,  source: assumed}
+    distribution: {value: 3,  source: assumed}
+    seaport:      {value: 18, source: assumed}
+    inland_port:  {value: 10, source: assumed}
+    customer:     {value: 2,  source: assumed}
+    chokepoint:   {value: 0,  source: assumed}   # transited, not worked
+    gauge:        {value: 0,  source: assumed}   # a measurement point
+    default:      {value: 6,  source: assumed}
+
+# -------------------------------------------------------------------
+# THE CONTINGENCY SEARCH
+# -------------------------------------------------------------------
+contingency:
+  # Stop expanding the graph past this; a path with more hops than this is
+  # not something a planner will execute inside a disruption window.
+  max_hops: 6
+  # How many distinct alternatives to return. More than a handful is a menu,
+  # and a menu is the clutter this rebuild exists to remove.
+  max_paths: 3
+  # A local vendor or 3PL is only worth calling if they are near enough to
+  # reach the freight the same day.
+  vendor_radius_km: 250
+  # Assumed time for a local operator to take over: find them, agree terms,
+  # get a vehicle to the load.
+  vendor_handover_hours: {value: 6, source: assumed}
+  # What a 3PL emergency takeover costs, as a fraction of consignment value,
+  # plus a call-out fee. Deliberately expensive — it is a last resort, and the
+  # margin veto should be the thing that decides, not an optimistic price.
+  vendor_cost:
+    callout_chf: {value: 2400, source: assumed}
+    fraction_of_value: {value: 0.06, source: assumed}
+
+# -------------------------------------------------------------------
+# WHAT COUNTS AS FAST
+# -------------------------------------------------------------------
+# Bands for the single headline number on the dashboard. These are about the
+# DECISION, not the delay: how long the planner has before the fastest
+# surviving option stops being available.
+urgency_bands:
+  now:    2     # under 2 h of decision time left
+  today:  12
+  soon:   48
+  # above soon: scheduled
+
+# -------------------------------------------------------------------
+# DISPATCH
+# -------------------------------------------------------------------
+# Where an executed action is announced. Nothing here is wired by default:
+# every channel is disabled, and a disabled channel RECORDS the message it
+# would have sent rather than pretending it went out.
+dispatch:
+  # Seconds before an executed action can no longer be pulled back. Instant
+  # execution without a confirmation checklist is the mandate; this is what
+  # makes that safe rather than reckless.
+  undo_window_seconds: 900
+  channels:
+    - id: ops_webhook
+      kind: webhook
+      enabled: false
+      url_env: RADAR_OPS_WEBHOOK_URL     # the NAME of the variable, never a value
+      audience: [planner, ground_ops]
+    - id: driver_socket
+      kind: socket
+      enabled: true                       # in-process fan-out, no egress
+      audience: [driver, site_agent]
+    - id: carrier_api
+      kind: api
+      enabled: false
+      url_env: RADAR_CARRIER_API_URL
+      audience: [carrier]
+    - id: authority_notice
+      kind: webhook
+      enabled: false
+      url_env: RADAR_AUTHORITY_WEBHOOK_URL
+      audience: [authority]
