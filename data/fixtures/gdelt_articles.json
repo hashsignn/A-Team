@@ -1,0 +1,68 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "articles": [
+  {
+   "url": "https://www.reuters.com/world/middle-east/hormuz-closure-2026-09-18/",
+   "title": "Iran announces closure of Strait of Hormuz to commercial shipping",
+   "seendate": "20260918T041500Z",
+   "domain": "reuters.com",
+   "language": "English",
+   "sourcecountry": "United Kingdom",
+   "socialimage": ""
+  },
+  {
+   "url": "https://www.lloydslist.com/LL1234567/hormuz-war-risk-premium",
+   "title": "War risk premiums for Hormuz transits triple overnight as underwriters withdraw cover",
+   "seendate": "20260918T051000Z",
+   "domain": "lloydslist.com",
+   "language": "English",
+   "sourcecountry": "United Kingdom",
+   "socialimage": ""
+  },
+  {
+   "url": "https://www.tradewindsnews.com/gulf-interdiction-regime",
+   "title": "Unprecedented maritime interdiction regime declared across Hormuz approaches",
+   "seendate": "20260918T052000Z",
+   "domain": "tradewindsnews.com",
+   "language": "English",
+   "sourcecountry": "Norway",
+   "socialimage": ""
+  },
+  {
+   "url": "https://www.portstrategy.com/antwerp-gate-blockade",
+   "title": "Hauliers blockade Antwerp terminal gates over tariff dispute",
+   "seendate": "20260918T033000Z",
+   "domain": "portstrategy.com",
+   "language": "English",
+   "sourcecountry": "United Kingdom",
+   "socialimage": ""
+  },
+  {
+   "url": "https://www.example-sport.ch/basel-transfer",
+   "title": "FC Basel complete signing of Rotterdam striker for record fee",
+   "seendate": "20260918T020000Z",
+   "domain": "example-sport.ch",
+   "language": "English",
+   "sourcecountry": "Switzerland",
+   "socialimage": ""
+  },
+  {
+   "url": "https://www.example-markets.com/shipping-equities",
+   "title": "Shipping equities rally as analysts upgrade sector outlook",
+   "seendate": "20260918T010000Z",
+   "domain": "example-markets.com",
+   "language": "English",
+   "sourcecountry": "United States",
+   "socialimage": ""
+  },
+  {
+   "url": "https://www.example-travel.com/singapore-guide",
+   "title": "Singapore named best port city for a weekend break",
+   "seendate": "20260917T220000Z",
+   "domain": "example-travel.com",
+   "language": "English",
+   "sourcecountry": "Singapore",
+   "socialimage": ""
+  }
+ ]
+}

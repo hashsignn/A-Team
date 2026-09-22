@@ -1,0 +1,25 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "us7000abcd",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     56.31,
+     26.94,
+     10.0
+    ]
+   },
+   "properties": {
+    "mag": 6.1,
+    "place": "62 km SSW of Bandar Abbas, Iran",
+    "time": 1758168000000,
+    "title": "M 6.1 - 62 km SSW of Bandar Abbas, Iran",
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000abcd"
+   }
+  }
+ ]
+}

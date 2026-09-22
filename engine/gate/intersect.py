@@ -33,10 +33,22 @@ from engine.variables.mask import mode_applies
 # arrival.
 NODE_DWELL_HOURS = 24.0
 
-# An unknown event end is widened by this much rather than treated as
-# instantaneous. Under-merging costs a row a planner dismisses; missing a live
-# disruption costs the thing the tool exists to prevent.
+# An unknown event end is widened rather than treated as instantaneous.
+# Under-merging costs a row a planner dismisses; missing a live disruption
+# costs the thing the tool exists to prevent.
+#
+# THIS IS ONLY THE FLOOR. The real figure comes from the ledger, because the
+# ledger already knows: a haulier strike is declared as lasting days and a
+# closed strait as lasting months, and treating both as three days is how a
+# strait closure silently expires before any ship reaches it. That was a real
+# bug — the Hormuz scenario produced an event, matched it to a lane, and then
+# gated it out because the freight arrived three weeks after the event was
+# assumed to have ended.
 UNKNOWN_DURATION_FALLBACK_DAYS = 3.0
+
+# A ceiling, so a mis-keyed ledger entry cannot widen one event across the
+# whole book. 120 days is longer than any variable in the shipped ledger.
+MAX_FALLBACK_DAYS = 120.0
 
 
 @dataclass
@@ -75,7 +87,7 @@ def gate(
     hits: list[GateHit] = []
 
     for event in events:
-        ev_start, ev_end = event.window(UNKNOWN_DURATION_FALLBACK_DAYS)
+        ev_start, ev_end = event.window(_fallback_days(event, variables))
         event_point = (
             Point(lat=event.lat, lon=event.lon)
             if event.lat is not None and event.lon is not None
@@ -223,3 +235,23 @@ def exposure_ranking(
         if shipment is not None:
             totals[hit.event_id] = totals.get(hit.event_id, 0.0) + shipment.value_chf
     return sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
+
+
+def _fallback_days(event: Event, variables: dict) -> float:
+    """How long to assume an open-ended event lasts, from the ledger.
+
+    The LONGEST of the variables the event activates, because an event that is
+    both a one-day stoppage and a two-month conflict has the footprint of the
+    conflict — the short one finishes inside the long one, never the reverse.
+
+    Floored at UNKNOWN_DURATION_FALLBACK_DAYS so a variable with no declared
+    duration still gets a real window, and capped at MAX_FALLBACK_DAYS so one
+    mistyped ledger entry cannot smear a single event across the whole book.
+    """
+    declared = [
+        float(getattr(variables[v], "typical_duration_days", 0) or 0)
+        for v in event.active_variables
+        if v in variables
+    ]
+    longest = max(declared) if declared else 0.0
+    return min(max(longest, UNKNOWN_DURATION_FALLBACK_DAYS), MAX_FALLBACK_DAYS)

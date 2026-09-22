@@ -60,7 +60,20 @@ PATTERNS: dict[str, list[str]] = {
     "CLI_FOG": [r"\bfog\b", r"visibility"],
     "CLI_ICE": [r"\bice\b", r"freezing", r"frost"],
     "CLI_EXTREME_HEAT": [r"heatwave", r"extreme heat", r"track buckl"],
-    "GEO_CONFLICT": [r"attack", r"missile", r"conflict", r"war risk", r"hostilit"],
+    "GEO_CONFLICT": [
+        r"attack", r"missile", r"conflict", r"war risk", r"hostilit",
+        # Chokepoint closure by announcement rather than by damage. Added
+        # because the common cases should not cost a model call — but note
+        # that a keyword list can only ever catch the phrasings somebody has
+        # already thought of, which is why an abstention here is RESCUED to
+        # the funnel rather than dropped (see pipeline._to_events).
+        r"strait[^.]{0,40}(clos|blockad|restrict|shut)",
+        r"(clos|blockad|shut)[^.]{0,40}strait",
+        r"blockad", r"seizure", r"seized[^.]{0,30}(vessel|tanker|ship)",
+        r"(vessel|tanker|ship)[^.]{0,30}(seized|detained|boarded)",
+        r"naval[^.]{0,20}(exercise|escort|blockade)",
+        r"freedom of navigation",
+    ],
     "GEO_SANCTIONS": [r"sanction", r"embargo", r"designated (entity|vessel)"],
     "GEO_BORDER_CLOSURE": [r"border (closed|closure|control)", r"frontier"],
     "GEO_REGULATORY": [r"regulation", r"directive", r"compliance requirement", r"reach\b"],

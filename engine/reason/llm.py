@@ -61,6 +61,17 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 # in the ~5 GB a planner's laptop can spare beside everything else they run.
 LOCAL_MODEL = os.environ.get("RADAR_LOCAL_MODEL", "qwen2.5:7b-instruct")
 
+# The triage model. Deliberately small: stage 1 answers one yes/no question
+# over hundreds of headlines, and a 7B reading each of them is most of the
+# cost of the funnel for none of the judgement. Falls back to LOCAL_MODEL
+# when unset, so a single-model install still works.
+TRIAGE_MODEL = os.environ.get("RADAR_TRIAGE_MODEL", "") or LOCAL_MODEL
+
+# The extraction model. Where the hard reading happens: a conditional
+# ("unless talks resume"), a second-order effect, a stated duration that
+# contradicts the headline.
+EXTRACT_MODEL = os.environ.get("RADAR_EXTRACT_MODEL", "") or LOCAL_MODEL
+
 # The API path, if a key is present. Opus 5 is the default because this is the
 # judgement-heavy end of the pipeline, not the bulk end.
 API_MODEL = os.environ.get("RADAR_API_MODEL", "claude-opus-5")
@@ -153,14 +164,14 @@ def detect(override: str | None = None) -> BackendStatus:
 # ---------------------------------------------------------------------
 # Calling
 # ---------------------------------------------------------------------
-def _call_local(system: str, prompt: str, schema: dict) -> str:
+def _call_local(system: str, prompt: str, schema: dict, model: str = "") -> str:
     """Ollama's /api/chat with structured output.
 
     Plain urllib: this is one POST to localhost, and a dependency for that is
     a dependency the planner has to install to run the demo.
     """
     body = json.dumps({
-        "model": LOCAL_MODEL,
+        "model": model or LOCAL_MODEL,
         "stream": False,
         "format": schema,
         "options": {"temperature": 0},
@@ -178,7 +189,7 @@ def _call_local(system: str, prompt: str, schema: dict) -> str:
     return payload["message"]["content"]
 
 
-def _call_api(system: str, prompt: str, schema: dict) -> str:
+def _call_api(system: str, prompt: str, schema: dict, model: str = "") -> str:
     """The Anthropic SDK, imported lazily.
 
     Lazily because `anthropic` is in requirements-optional.txt: the base
@@ -189,7 +200,7 @@ def _call_api(system: str, prompt: str, schema: dict) -> str:
 
     client = anthropic.Anthropic()
     response = client.messages.create(
-        model=API_MODEL,
+        model=model or API_MODEL,
         max_tokens=16000,
         system=system,
         thinking={"type": "adaptive"},
@@ -210,6 +221,7 @@ def parse(
     system: str,
     prompt: str,
     status: BackendStatus | None = None,
+    model_name: str = "",
 ) -> T | None:
     """Ask the model for one object of type ``model``.
 
@@ -229,9 +241,9 @@ def parse(
     schema = model.model_json_schema()
     try:
         if status.backend is Backend.LOCAL:
-            raw = _call_local(system, prompt, schema)
+            raw = _call_local(system, prompt, schema, model_name)
         else:
-            raw = _call_api(system, prompt, schema)
+            raw = _call_api(system, prompt, schema, model_name)
     except Exception as exc:  # noqa: BLE001 — any failure is "no answer"
         log.warning("model call failed (%s): %s", status.backend.value, exc)
         return None
@@ -247,6 +259,7 @@ def ask_text(
     system: str,
     prompt: str,
     status: BackendStatus | None = None,
+    model: str = "",
 ) -> str | None:
     """Free-text answer, for the assistant. ``None`` when nothing is running."""
     status = status or detect()
@@ -255,7 +268,7 @@ def ask_text(
     try:
         if status.backend is Backend.LOCAL:
             body = json.dumps({
-                "model": LOCAL_MODEL,
+                "model": model or LOCAL_MODEL,
                 "stream": False,
                 "options": {"temperature": 0.1},
                 "messages": [
@@ -273,7 +286,7 @@ def ask_text(
         import anthropic  # noqa: PLC0415
 
         response = anthropic.Anthropic().messages.create(
-            model=API_MODEL,
+            model=model or API_MODEL,
             max_tokens=16000,
             system=system,
             thinking={"type": "adaptive"},

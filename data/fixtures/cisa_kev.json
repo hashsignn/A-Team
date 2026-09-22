@@ -1,0 +1,14 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "catalogVersion": "2026.09.18",
+ "vulnerabilities": [
+  {
+   "cveID": "CVE-2026-21001",
+   "vulnerabilityName": "Terminal operating system authentication bypass",
+   "shortDescription": "An authentication bypass in a widely deployed terminal operating system permits remote takeover of gate and yard scheduling.",
+   "dateAdded": "20260916",
+   "vendorProject": "ExampleTOS",
+   "product": "YardManager"
+  }
+ ]
+}

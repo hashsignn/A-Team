@@ -33,12 +33,14 @@ from engine.ingest.watergauge import assess_kaub
 from engine.network.geo import Point, in_bounding_box
 from engine.network.graph import Network
 from engine.portfolio import convene
+from engine.reason import funnel as reason_funnel
 from engine.reason import llm as llm_mod
 from engine.schemas import (
     Event,
     EventAssessment,
     FunnelCounts,
     GateHit,
+    Mode,
     PipelineResult,
     Provenance,
     Severity,
@@ -58,6 +60,20 @@ class RunOptions:
     seed: int | None = None
     max_reasoned_events: int = 40
     include_delivered: bool = False
+
+    # The rescue path (see _to_events). On by default, but it is inert without
+    # a model — every call inside it checks for a backend first, so the default
+    # costs nothing on a machine with no Ollama and changes no existing output.
+    rescue_unmatched: bool = True
+
+    # Bounded hard. Rescue runs the STRONG model once per survivor, which is
+    # the most expensive thing in this pipeline. Six is a demo; a deployment
+    # with a real GDELT sweep would raise it and watch the funnel counts.
+    max_rescued_events: int = 6
+
+    # External sources. Inert without RADAR_ALLOW_NETWORK — each one falls back
+    # to its fixture — so leaving this on costs nothing offline.
+    use_external_sources: bool = True
 
 
 @dataclass
@@ -116,6 +132,18 @@ def run(
 
     feed_items, feed_report = load_feed_items(clock)
     bundle.add(feed_report)
+
+    # Real external sources, on top of the synthetic corpus. Every one is free
+    # and keyless; none of them reaches the network unless RADAR_ALLOW_NETWORK
+    # is set, and each falls back to a recorded fixture and says so. The items
+    # they produce are the same shape as the corpus, so the deterministic
+    # funnel below treats a live GDELT article exactly as it treats a written
+    # one — there is no "live mode" with different rules.
+    source_items, source_reports = _collect_sources(config, clock, options)
+    for report in source_reports:
+        bundle.add(report)
+    feed_items.extend(source_items)
+
     bundle.raw_count = len(gauge_obs) + len(feed_items)
 
     _add_absent_sockets(bundle, clock)
@@ -186,6 +214,65 @@ def run(
 # =====================================================================
 
 
+def _collect_sources(
+    config: Config, clock: Clock, options: RunOptions
+) -> tuple[list[dict], list[FeedReport]]:
+    """Every configured external source, fetched or faithfully reported absent.
+
+    Never raises. A source whose spec is malformed is a configuration error and
+    would normally be loud, but taking the whole board down because somebody
+    mistyped a URL in a feed nobody is watching is the wrong trade at RUN time
+    — so the error becomes one ABSENT row carrying the message, which is both
+    visible and survivable. ``sources.load`` still raises for the CLI, where
+    the person who made the typo is standing right there.
+    """
+    if not options.use_external_sources:
+        return [], []
+
+    from engine.ingest import sources as source_pkg  # noqa: PLC0415
+
+    loaded = config.files.get("sources")
+    try:
+        specs = source_pkg.load_sources(loaded.path if loaded else None)
+    except source_pkg.SourceConfigError as exc:
+        return [], [
+            FeedReport(
+                key="sources_config",
+                label="External sources (sources.yaml)",
+                status=FeedStatus.ABSENT,
+                detail=f"configuration rejected: {exc}",
+                unlocks_if_connected="Fix sources.yaml and every feed below returns.",
+            )
+        ]
+
+    runnable = [s for s in specs if s.runnable]
+    items, reports = source_pkg.collect_all(runnable, clock.as_of)
+
+    # Text sources carry no coordinates — a wire story says "the Strait of
+    # Hormuz", never a UN/LOCODE. Without this every one of them would be
+    # dropped by the geographic filter for having no position, and the whole
+    # news path would be rejected as noise. String search, not a model: free,
+    # instant, reproducible, and auditable.
+    source_pkg.places.enrich(items, config)
+
+    # Sources that are off still get a row. A feed that is absent and says why
+    # is information; a feed that is absent and silent is a hole in the board.
+    for spec in specs:
+        if spec.runnable:
+            continue
+        reports.append(
+            FeedReport(
+                key=spec.key,
+                label=spec.label,
+                status=FeedStatus.ABSENT,
+                detail=spec.why_not_runnable(),
+                unlocks_if_connected=spec.unlocks_if_connected,
+                source_tier=spec.source_tier,
+            )
+        )
+    return items, reports
+
+
 def _to_events(
     gauge_obs: list[dict],
     feed_items: list[dict],
@@ -205,7 +292,11 @@ def _to_events(
         "after_type": 0,
         "after_temporal": 0,
         "reasoned": 0,
+        "rescued": 0,
+        "rescue_considered": 0,
     }
+    # Items the deterministic router could not name. See the rescue note below.
+    rescue_candidates: list[dict] = []
 
     # --- numeric observations: already structured, already ours ---------
     for obs in gauge_obs:
@@ -235,9 +326,25 @@ def _to_events(
         counts["after_geographic"] += 1
 
         # Layer 2: type. Does this even look like a disruption?
+        #
+        # An abstention here is NOT automatically a drop. The router is a list
+        # of patterns, so it can only recognise the phrasings somebody already
+        # wrote down — and a shock event is by definition the one nobody wrote
+        # down. "Maritime interdiction regime declared across the Gulf" means a
+        # blockade and shares no vocabulary with the word "blockade".
+        #
+        # So an item that passed the GEOGRAPHIC filter but that the router
+        # cannot name is held as a RESCUE candidate: it goes to the funnel,
+        # where a small model asks only "could this affect freight". That is
+        # the one question a keyword list structurally cannot answer, and it is
+        # the whole reason a model is in this system at all.
+        #
+        # With no model running, rescue does nothing and these drop exactly as
+        # they did before. No model is a supported state, not a degraded one.
         routed = routed_by_item[item["item_id"]]
         if routed.abstained:
             router_notes[item["item_id"]] = routed.abstain_reason or "no match"
+            rescue_candidates.append(item)
             continue
         counts["after_type"] += 1
 
@@ -258,6 +365,25 @@ def _to_events(
             break
 
         events.append(_event_from_item(item, routed, config, network, clock))
+
+    # --- RESCUE: the shock path -----------------------------------------
+    # Only runs when a model is available, and only over items that already
+    # cleared the geographic filter. The budget is the funnel's, not ours.
+    if rescue_candidates and options.rescue_unmatched:
+        counts["rescue_considered"] = len(rescue_candidates)
+        kept, funnel_cost = reason_funnel.triage(rescue_candidates)
+        counts["funnel"] = funnel_cost.as_dict()
+        counts["funnel_sentence"] = funnel_cost.sentence()
+        for item in kept[: options.max_rescued_events]:
+            event = _rescue_event(item, config, network, clock)
+            if event is None:
+                continue
+            counts["rescued"] += 1
+            events.append(event)
+            router_notes[item["item_id"]] = (
+                "the keyword router could not name this; a model read it and "
+                "the deterministic challenger passed the reading"
+            )
 
     return _cluster(events), counts, router_notes, unpromoted
 
@@ -294,6 +420,97 @@ def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:
     )
 
 
+def _restrict_modes(modes: list[Mode], item: dict) -> list[Mode]:
+    """Intersect a variable's modes with what the SOURCE could possibly know.
+
+    A variable is written generically on purpose — a fire can stop a road, a
+    rail line, a terminal or a ship, and FOR_FIRE says so. But a feed of German
+    motorway closures cannot be telling you about a barge, whatever words the
+    headline happens to contain, and "A5 closed after HGV fire" landing on a
+    Rhine barge leg is a wrong event with a plausible explanation attached,
+    which is the worst kind.
+
+    The source narrows the variable; it never widens it. An empty restriction —
+    a news index, which really can be about anything — changes nothing. An
+    intersection that comes out empty is ignored rather than obeyed: that means
+    the two disagree, and silently producing an event with no modes would
+    remove it from the gate entirely, which is a drop disguised as a filter.
+    """
+    declared = item.get("source_modes") or []
+    if not declared:
+        return modes
+    allowed = {m.lower() for m in declared}
+    narrowed = [m for m in modes if m.value in allowed]
+    return narrowed or modes
+
+
+def _rescue_event(
+    item: dict,
+    config: Config,
+    network: Network,
+    clock: Clock,
+) -> Event | None:
+    """Stage 2 + the challenger, for one item the keyword router could not name.
+
+    Returns None — silently to the caller, but always counted — when the model
+    is unavailable, when the reading does not validate, or when the
+    deterministic challenger rejects it. That last case is the important one:
+    a model that invents a quote, cites a variable that is not in the ledger or
+    resolves a node that does not exist produces NOTHING here, rather than
+    producing a plausible-looking event nobody can check.
+
+    A rescued event is marked ``inferred`` in its provenance, so the board can
+    say which events are here because a model read them. A planner should never
+    have to guess which parts of a screen were computed and which were written.
+    """
+    from engine.reason import challenge  # noqa: PLC0415
+    from engine.reason import extract as reason_extract  # noqa: PLC0415
+
+    reading = reason_extract.extract(item, config, clock)
+    if reading is None:
+        return None
+
+    verdict = challenge.review(reading, item.get("text", ""), config)
+    if not verdict.accepted:
+        return None
+
+    merged = reason_extract.to_item_fields(reading, item, clock)
+    known = [v for v in reading.active_variables if v in config.variables]
+    if not known:
+        return None
+
+    nodes = [n for n in merged["node_hint"] if n in config.nodes]
+    if not nodes:
+        return None
+    anchor_node = config.nodes[nodes[0]]
+    primary = config.variables[known[0]]
+
+    return Event(
+        event_id=item["item_id"],
+        title=reading.what_happened[:180],
+        node_ids=nodes,
+        lat=item.get("lat") if item.get("lat") is not None else anchor_node.lat,
+        lon=item.get("lon") if item.get("lon") is not None else anchor_node.lon,
+        starts_at=reading.starts_at,
+        ends_at=reading.ends_at,
+        duration_confidence=reading.duration_confidence,
+        event_class=primary.family,
+        active_variables=known,
+        severity=Severity(challenge.extraction_severity(reading)),
+        modes_affected=primary.modes_affected,
+        realized=reading.realized,
+        probability=reading.probability,
+        probability_basis=reading.probability_basis,
+        provenance=Provenance(
+            source=item.get("source", "unknown"),
+            source_tier=int(item.get("source_tier", 3)),
+            verbatim_quote=reading.verbatim_quote,
+            inferred=True,
+            retrieved_at=clock.as_of,
+        ),
+    )
+
+
 def _event_from_item(
     item: dict,
     routed: rules_router.RouterResult,
@@ -321,7 +538,7 @@ def _event_from_item(
         event_class=family,
         active_variables=routed.active_variables,
         severity=routed.severity,
-        modes_affected=routed.modes_affected,
+        modes_affected=_restrict_modes(routed.modes_affected, item),
         realized=item["realized"],
         probability=item["probability"],
         probability_basis=item["probability_basis"],

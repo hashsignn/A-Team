@@ -90,6 +90,39 @@ lanes:
         transit_hours: 130
         buffer_hours: 48
 
+  # Gulf service. Exists so a Hormuz event has something real to strand:
+  # Jebel Ali sits BEHIND the strait, so freight routed here is trapped on
+  # the wrong side of a closure rather than merely delayed by it.
+  - id: LANE_GULF_01
+    name: Düdingen → Genoa → Jebel Ali
+    focus: eu_gulf
+    legs:
+      - from: SIKA_DUD
+        to: ITGOA
+        mode: road
+        transit_hours: 13
+        buffer_hours: 12
+      - from: ITGOA
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 150
+        buffer_hours: 24
+      - from: CHOKE_SUEZ
+        to: CHOKE_BAB
+        mode: sea
+        transit_hours: 60
+        buffer_hours: 12
+      - from: CHOKE_BAB
+        to: CHOKE_HORMUZ
+        mode: sea
+        transit_hours: 96
+        buffer_hours: 24
+      - from: CHOKE_HORMUZ
+        to: AEJEA
+        mode: sea
+        transit_hours: 14
+        buffer_hours: 8
+
   - id: LANE_ASIA_02
     name: Stuttgart → Hamburg → Shanghai
     focus: eu_asia
