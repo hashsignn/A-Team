@@ -137,6 +137,25 @@ async function fetchBoard({ as_of, shipments }) {
 // ===============================================================
 // Boot
 // ===============================================================
+/* ?event=… reopens the modal after the board paints.
+ *
+ * Deferred to the end of boot rather than done eagerly: the modal reads
+ * state.board, and a link that opened an empty dialog and then filled it in
+ * would flash. If the id is not on this board — a stale link, or a different
+ * as-of — nothing happens and the parameter is dropped, which is the honest
+ * outcome. A dialog saying "event not found" helps nobody. */
+function restoreDeepLinkedEvent() {
+  const id = new URLSearchParams(location.search).get('event');
+  if (!id) return;
+  if (findEvent(id)) {
+    openEventModal(id);
+  } else {
+    const url = new URL(location.href);
+    url.searchParams.delete('event');
+    history.replaceState(null, '', url);
+  }
+}
+
 async function boot() {
   const params = readParams();
   state.params = params;
@@ -164,6 +183,8 @@ async function boot() {
     $('asof-input').value = isoToInput(DEFAULT_AS_OF);
     reload(DEFAULT_AS_OF);
   });
+
+  restoreDeepLinkedEvent();
 }
 
 /* Re-run at a different instant WITHOUT rebuilding the globe.
@@ -330,7 +351,18 @@ function initGlobe(countries, board) {
     .pointRadius((n) => n.chokepoint ? 0.16 : 0.22)
     .pointColor((n) => n.chokepoint ? token('--globe-choke') : token('--globe-port'))
     .pointsMerge(false)
-    .onPointHover((n) => n ? showTip(nodeTip(n)) : hideTip());
+    /* A port is a legitimate way in. Clicking one selects the busiest route
+     * through it, because "what is happening at Antwerp" is a question a
+     * planner asks by pointing at Antwerp, not by reading a table of lanes
+     * and working out which ones call there. */
+    .onPointClick((n) => {
+      const route = busiestRouteThrough(n.id);
+      if (route) select(route.route_id, { fly: true });
+    })
+    .onPointHover((n) => {
+      el.style.cursor = n ? 'pointer' : '';
+      n ? showTip(nodeTip(n)) : hideTip();
+    });
 
   // --- routes ----------------------------------------------------------
   globe
@@ -344,7 +376,17 @@ function initGlobe(countries, board) {
     .pathTransitionDuration(0)
     .pathDashLength(1)
     .pathDashGap(0)
-    .onPathClick((d) => select(d.route_id, { fly: false }))
+    /* Single click selects without moving the camera — the planner is
+     * already looking at the thing they clicked, and flying the view to it
+     * would throw away the spatial context that made them click. Double
+     * click is the explicit "take me there". */
+    .onPathClick((d) => {
+      const now = Date.now();
+      const same = state.lastPathClick?.id === d.route_id;
+      const quick = now - (state.lastPathClick?.at || 0) < 350;
+      state.lastPathClick = { id: d.route_id, at: now };
+      select(d.route_id, { fly: same && quick });
+    })
     .onPathHover((d) => {
       el.style.cursor = d ? 'pointer' : '';
       d ? showTip(routeTip(d)) : hideTip();
@@ -372,6 +414,36 @@ function initGlobe(countries, board) {
     tip.style.left = Math.min(e.clientX - r.left + 16, r.width - 296) + 'px';
     tip.style.top = Math.min(e.clientY - r.top + 16, r.height - 90) + 'px';
   });
+
+  /* THE GLOBE STOPS THE MOMENT YOU TOUCH IT.
+   *
+   * A drag is a deliberate act — somebody has decided where they want to
+   * look. Continuing to rotate under their hand, or resuming seven seconds
+   * later while they are still reading, is the single most irritating thing
+   * a globe can do. So a pointerdown on the canvas is a STOP, not a pause:
+   * it flips the control to Paused and stays there until the person presses
+   * Rotating again.
+   *
+   * That is different from holdRotation(), which is a temporary courtesy
+   * while a hover tooltip is open. A hover is not a decision; a grab is.
+   *
+   * pointerdown, not mousedown: it is one event for mouse, pen and touch,
+   * which is what "the moment we touch it" means on a laptop with a
+   * touchscreen — and this demo will be shown on one. */
+  el.addEventListener('pointerdown', () => {
+    el.classList.add('is-grabbing');
+    if (state.spinning) toggleSpin();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((evt) =>
+    el.addEventListener(evt, () => el.classList.remove('is-grabbing')));
+
+  /* Scrolling to zoom is also a decision, and OrbitControls handles the zoom
+   * itself — this only has to notice it happened. Passive: we never call
+   * preventDefault, so the browser is free to scroll the page when the
+   * pointer is outside the canvas. */
+  el.addEventListener('wheel', () => {
+    if (state.spinning) toggleSpin();
+  }, { passive: true });
 
   $('btn-spin').addEventListener('click', toggleSpin);
   $('btn-reset').addEventListener('click', () => {
@@ -527,6 +599,19 @@ function renderLadder(levels) {
   });
 }
 
+/* Which lane to open when somebody clicks a port.
+ *
+ * The one where the most is at stake, among the lanes still visible under the
+ * current level filters. A port sits on several lanes and only one panel can
+ * open; picking the worst is the only choice that is never surprising —
+ * anything else means clicking a red port can open a green lane. */
+function busiestRouteThrough(nodeId) {
+  const through = visibleRoutes().filter((r) => (r.node_ids || []).includes(nodeId));
+  if (!through.length) return null;
+  return through.reduce((worst, r) =>
+    (r.severity_score || 0) > (worst.severity_score || 0) ? r : worst);
+}
+
 function visibleRoutes() {
   return state.board.routes.filter((r) => !state.hidden.has(r.level));
 }
@@ -614,16 +699,28 @@ function renderDetail(r) {
  * Spokes are labelled in DAYS OF DELAY, not abstract weights, so a planner
  * reads "low water 4 days" rather than "variable 47: 0.63".
  */
-function drawRadar(radar) {
-  const svg = $('radar');
-  const W = 340, H = 300, cx = W / 2, cy = H / 2 + 6, R = 96;
+/* Parameterised so the same chart can be drawn small in the side panel and
+ * large in the event modal. The panel version is a glance; the modal version
+ * is the one somebody actually reads a ten-spoke polygon off, and at 340px
+ * wide that is not possible. Same data, same code, two sizes. */
+function drawRadar(radar, opts = {}) {
+  const svg = typeof opts.svg === 'string' ? $(opts.svg) : (opts.svg || $('radar'));
+  const legendEl = opts.legend === null
+    ? null
+    : (typeof opts.legend === 'string' ? $(opts.legend) : (opts.legend || $('radar-legend')));
+  const scale = opts.scale || 1;
+  const W = 340 * scale, H = 300 * scale, cx = W / 2, cy = H / 2 + 6 * scale, R = 96 * scale;
+  // Geometry scales; font sizes below do not. That is the point of drawing it
+  // bigger — the polygon gets room, the labels stay legible instead of
+  // ballooning, and a ten-spoke chart stops being a smudge.
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   const axes = radar.axes;
   const n = axes.length;
 
   if (!n) {
     svg.innerHTML = `<text x="${cx}" y="${cy}" text-anchor="middle"
       fill="var(--muted)" font-size="12">No risk variables active on this route</text>`;
-    $('radar-legend').innerHTML = '';
+    if (legendEl) legendEl.innerHTML = '';
     return;
   }
 
@@ -708,7 +805,7 @@ function drawRadar(radar) {
   svg.innerHTML = parts.join('');
 
   const used = bands.filter((b) => (radar.series[b] || []).some((v) => v > 0));
-  $('radar-legend').innerHTML = used.map((b) =>
+  if (legendEl) legendEl.innerHTML = used.map((b) =>
     `<span class="rl"><span class="rl-sw" style="background:${BAND_COLOR[b]}"></span>${b}</span>`
   ).join('') || '<span class="rl muted">no contribution</span>';
 }
@@ -1225,15 +1322,21 @@ document.addEventListener('click', (e) => {
   closeMatrix();
 });
 
-// Delegated so it survives every re-render of the event list.
+/* Delegated so it survives every re-render of the event list.
+ *
+ * The button now opens the full modal rather than the small anchored card.
+ * The card was the right shape when the matrix was a glance beside the
+ * event; it is the wrong shape for a chart somebody is meant to read, and
+ * two matrix surfaces that disagree about size would be worse than one.
+ * openMatrix and its positioning code remain, unused by this path, because
+ * the anchored card is still the right answer on a narrow screen — wiring
+ * that is a separate change, not a silent one. */
 document.addEventListener('click', (e) => {
   const mx = e.target.closest('[data-matrix]');
   if (mx) {
     e.stopPropagation();
-    const id = mx.dataset.matrix;
-    const already = MATRIX.open && MATRIX.open.eventId === id;
     closeMatrix();
-    if (!already) openMatrix(id, mx);
+    openEventModal(mx.dataset.matrix);
   }
 });
 
@@ -1373,3 +1476,247 @@ function initAsk() {
     $('btn-ask').classList.toggle('has-model', m.status === 'connected');
   }).catch(() => {});
 }
+
+// ===============================================================
+// THE EVENT MODAL
+//
+// One event, given the room it needs: the matrix and the radar side by side
+// and large enough to read, over a scrim that keeps the board visible at the
+// edges.
+//
+// A MODAL RATHER THAN A PAGE. The globe is the context. A planner who
+// navigates to a "matrix page" has lost sight of which lane they were on, and
+// the first thing they do is navigate back to check. Keeping the board
+// underneath means you can see you are still on the Rhine while reading the
+// matrix — which is the whole reason the stage exists.
+//
+// It is deep-linkable anyway (?event=…), because "send me the thing you are
+// looking at" is the most common request in a disruption and a modal that
+// cannot be linked forces a screenshot.
+// ===============================================================
+const EVENT_MODAL = { open: null, lastFocus: null };
+
+function findEvent(eventId) {
+  for (const route of (state.board?.routes || [])) {
+    const found = (route.events || []).find((e) => e.event_id === eventId);
+    if (found) return { event: found, route };
+  }
+  return null;
+}
+
+/* How the cells are tinted.
+ *
+ * By CHF AT STAKE in the cell, on a single neutral ramp, normalised to the
+ * worst cell in this matrix.
+ *
+ * The small card deliberately did NOT colour by density, and that was right:
+ * "three shipments here" is not more severe than "one shipment here", and
+ * shading by count would invent an ordering the bands already state. Money is
+ * a different quantity. The bands say where a shipment sits; they say nothing
+ * about how much is riding on it, and a cell holding CHF 200k is genuinely
+ * worth looking at before one holding CHF 3k in the same band.
+ *
+ * Neutral, not the ladder palette. The ladder is a TIME-TO-ACT scale, so a
+ * red cell would read as "this cell is Critical" — a different claim from
+ * "this cell holds the most money". Those must not share a colour.
+ */
+function cellTint(chf, worst) {
+  if (!chf || !worst) return '';
+  const t = Math.min(1, Math.sqrt(chf / worst));   // sqrt: small sums stay visible
+  return `background: color-mix(in srgb, var(--mx-heat) ${(t * 68).toFixed(0)}%, transparent);`;
+}
+
+function buildMatrixGrid(event, board) {
+  const grid = board.matrix_grid;
+  const m = event.matrix;
+  const rows = impactRows(grid);
+  const cols = grid.probability_bands;
+
+  const count = new Map(), solid = new Map(), money = new Map();
+  for (const pt of m.points) {
+    const key = `${pt.impact_band}|${pt.probability_band}`;
+    count.set(key, (count.get(key) || 0) + 1);
+    money.set(key, (money.get(key) || 0) + (pt.expected_loss_chf || 0));
+    if (pt.ring === 'solid') solid.set(key, (solid.get(key) || 0) + 1);
+  }
+  const worst = Math.max(0, ...money.values());
+  const unsourced = m.points.filter((p) => p.p_late === null);
+
+  const cell = (rowId, colId, extraClass = '') => {
+    const key = `${rowId}|${colId}`;
+    const n = count.get(key) || 0;
+    const s = solid.get(key) || 0;
+    const chf = money.get(key) || 0;
+    // A cell where options have ALREADY closed is outlined, whatever it is
+    // worth. Money you can still act on and money you cannot are different
+    // problems, and the ramp alone cannot say which this is.
+    const lost = n > s;
+    return `<td class="mx-cell${n ? ' has' : ''}${lost ? ' mx-cell--lost' : ''} ${extraClass}"
+                style="${cellTint(chf, worst)}"
+                title="${n ? `${n} shipment(s) · CHF ${Math.round(chf).toLocaleString()} expected loss${lost ? ' · some options already closed' : ''}` : 'empty'}">
+              ${n ? dots(n, s) : ''}
+              ${chf ? `<span class="mx-chf">${shortChf(chf)}</span>` : ''}
+            </td>`;
+  };
+
+  return `
+    <table class="mx-grid mx-grid--big">
+      <thead>
+        <tr>
+          <th class="mx-corner"><span>impact if late</span></th>
+          ${cols.map((c) => `<th>${esc(c.label)}</th>`).join('')}
+          ${unsourced.length ? `<th class="mx-unsourced-h">${esc(grid.unsourced_band.label)}</th>` : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r) => `
+          <tr>
+            <th class="mx-row" title="${esc(r.action)}">${esc(r.label)}</th>
+            ${cols.map((c) => cell(r.id, c.id)).join('')}
+            ${unsourced.length ? (() => {
+              const n = unsourced.filter((p) => p.impact_band === r.id).length;
+              const s = unsourced.filter((p) => p.impact_band === r.id && p.ring === 'solid').length;
+              return `<td class="mx-cell mx-unsourced${n ? ' has' : ''}">${n ? dots(n, s) : ''}</td>`;
+            })() : ''}
+          </tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr><td></td>
+          <td colspan="${cols.length + (unsourced.length ? 1 : 0)}" class="mx-xaxis">
+            P(this shipment is late) →
+          </td></tr>
+      </tfoot>
+    </table>`;
+}
+
+function shortChf(n) {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}k`;
+  return String(Math.round(n));
+}
+
+/* Why this event is on the board at all.
+ *
+ * Which layer caught it, from which source, at which tier, and whether a
+ * model had to read it. This existed only in router_notes, where nobody could
+ * see it — and for a corporate audience it is the most persuasive thing on
+ * the screen: a planner can check every step rather than trusting the dot. */
+function provenanceLine(event) {
+  const bits = [];
+  bits.push(event.inferred
+    ? '<b>a model read this</b> — the keyword router could not name it'
+    : 'named by the keyword router — no model involved');
+  if (event.source) bits.push(`source: <b>${esc(event.source)}</b>`);
+  if (event.source_tier) bits.push(`tier ${esc(event.source_tier)}`);
+  if (event.probability === null || event.probability === undefined) {
+    bits.push('probability <b>not sourceable</b>');
+  }
+  return bits.join(' · ');
+}
+
+function openEventModal(eventId) {
+  const found = findEvent(eventId);
+  if (!found || !state.board) return;
+  const { event, route } = found;
+  closeEventModal({ keepUrl: true });
+
+  EVENT_MODAL.lastFocus = document.activeElement;
+
+  const scrim = document.createElement('div');
+  scrim.className = 'evm-scrim';
+  scrim.innerHTML = `
+    <div class="evm" role="dialog" aria-modal="true" aria-label="${esc(event.title)}">
+      <header class="evm-head">
+        <div class="evm-head-main">
+          <span class="level-chip level-${esc(route.level)}">${esc(route.level_label || route.level)}</span>
+          <h2>${esc(event.title)}</h2>
+          <p class="evm-prov">${provenanceLine(event)}</p>
+        </div>
+        <button type="button" class="mx-close" id="evm-close" aria-label="Close">&times;</button>
+      </header>
+
+      <div class="evm-body">
+        <section class="evm-pane">
+          <div class="evm-pane-head">
+            <h3>Risk matrix</h3>
+            <span class="block-note">shaded by CHF at stake, not by how many</span>
+          </div>
+          ${buildMatrixGrid(event, state.board)}
+          <div class="mx-legend">
+            <span><i class="mx-dot mx-dot--solid"></i> options still open</span>
+            <span><i class="mx-dot mx-dot--hollow"></i> too late to act</span>
+            <span><i class="mx-swatch"></i> deeper = more CHF in that cell</span>
+          </div>
+          <p class="mx-note">Vertical axis is the bill <b>if</b> the shipment is
+            late, not the probability-weighted loss — otherwise the odds would be
+            counted on both axes.</p>
+        </section>
+
+        <section class="evm-pane">
+          <div class="evm-pane-head">
+            <h3>Risk in effect</h3>
+            <span class="block-note">days of delay contributed, on this route</span>
+          </div>
+          <div class="evm-radar">
+            <svg id="evm-radar" role="img" aria-label="Active risk families"></svg>
+          </div>
+          <div class="radar-legend" id="evm-radar-legend"></div>
+        </section>
+      </div>
+
+      <footer class="evm-foot">
+        ${event.quote ? `<blockquote class="evm-quote">${esc(event.quote)}</blockquote>` : ''}
+        <div class="evm-facts">
+          ${(event.active_variables || []).map((v) => `<span class="pill">${esc(v)}</span>`).join('')}
+          ${event.shipments_here ? `<span class="muted">${event.shipments_here} shipment(s) here</span>` : ''}
+          ${event.exposure_chf ? `<span class="muted">${chf(event.exposure_chf)}</span>` : ''}
+        </div>
+        <div class="evm-actions">
+          <button type="button" class="ctl" id="evm-ask">Ask about this</button>
+          <a class="ctl ctl--primary" id="evm-ops" href="/ops?route=${encodeURIComponent(route.route_id)}">Open the playbook</a>
+        </div>
+      </footer>
+    </div>`;
+
+  document.body.appendChild(scrim);
+  document.body.classList.add('has-modal');
+  EVENT_MODAL.open = { scrim, eventId };
+
+  // The radar, large. Same function, same data, twice the geometry.
+  if (route.radar) {
+    drawRadar(route.radar, { svg: 'evm-radar', legend: 'evm-radar-legend', scale: 1.85 });
+  }
+
+  scrim.querySelector('#evm-close').addEventListener('click', () => closeEventModal());
+  scrim.addEventListener('mousedown', (e) => {
+    if (e.target === scrim) closeEventModal();     // click the scrim, not the card
+  });
+  scrim.querySelector('#evm-ask').addEventListener('click', () => {
+    closeEventModal();
+    openAsk({ kind: 'event', event_id: eventId, title: event.title });
+  });
+
+  const url = new URL(location.href);
+  url.searchParams.set('event', eventId);
+  history.replaceState(null, '', url);
+
+  scrim.querySelector('#evm-close').focus();
+}
+
+function closeEventModal({ keepUrl = false } = {}) {
+  const open = EVENT_MODAL.open;
+  if (!open) return;
+  open.scrim.remove();
+  document.body.classList.remove('has-modal');
+  EVENT_MODAL.open = null;
+  if (!keepUrl) {
+    const url = new URL(location.href);
+    url.searchParams.delete('event');
+    history.replaceState(null, '', url);
+  }
+  if (EVENT_MODAL.lastFocus?.isConnected) EVENT_MODAL.lastFocus.focus();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && EVENT_MODAL.open) closeEventModal();
+});

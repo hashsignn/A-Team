@@ -1428,3 +1428,131 @@ a.ctl { text-decoration: none; }
   letter-spacing: .06em; text-transform: uppercase; color: var(--lvl-yellow);
 }
 .dv-field.is-wanted input { border-color: var(--lvl-yellow); }
+
+/* ===============================================================
+   THE EVENT MODAL
+
+   The matrix and the radar, given room. The scrim is deliberately not
+   opaque: the globe stays visible at the edges so a planner can see which
+   lane they are still on while reading the chart. That visible context is
+   the whole reason this is a modal and not a page.
+   =============================================================== */
+:root { --mx-heat: #6a7fd4; }
+:root:not([data-theme="light"]) { --mx-heat: #7d92e8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --mx-heat: #7d92e8; }
+}
+:root[data-theme="dark"] { --mx-heat: #7d92e8; }
+
+body.has-modal { overflow: hidden; }
+
+.evm-scrim {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  backdrop-filter: blur(3px);
+  animation: evm-in .16s ease-out;
+}
+@keyframes evm-in { from { opacity: 0; } to { opacity: 1; } }
+
+.evm {
+  width: min(1180px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex; flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .34);
+  overflow: hidden;
+}
+
+.evm-head {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.evm-head-main { flex: 1; min-width: 0; }
+.evm-head h2 {
+  margin: 8px 0 4px; font-size: 19px; line-height: 1.3; font-weight: 650;
+}
+.evm-prov { margin: 0; font-size: 11.5px; color: var(--text-secondary); }
+
+.evm-body {
+  display: grid; grid-template-columns: 1.15fr 1fr; gap: 0;
+  overflow: auto;
+  /* NOT flex:1. The card should be as tall as its content and no taller —
+     stretching it to the viewport left the matrix stranded at the top of a
+     column of nothing, which reads as a loading state rather than a layout. */
+  align-items: stretch;
+}
+.evm-pane {
+  padding: 18px 20px 20px; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.evm-pane + .evm-pane { border-left: 1px solid var(--border); }
+.evm-pane-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px;
+}
+.evm-pane-head h3 { margin: 0; font-size: 13px; font-weight: 650; }
+
+/* The radar centres in whatever height the matrix column dictates, rather
+   than hanging from the top of it. The two panes are different shapes and
+   always will be; centring is what makes that look deliberate. */
+.evm-radar {
+  display: flex; justify-content: center; align-items: center;
+  flex: 1; min-height: 0;
+}
+.evm-radar svg { width: 100%; max-width: 560px; height: auto; }
+
+/* ---- the matrix, large ---- */
+.mx-grid--big { width: 100%; border-collapse: separate; border-spacing: 3px; }
+.mx-grid--big th { font-size: 10.5px; }
+/* Sized to fill the column beside the radar rather than leaving a band of
+   nothing under the table. Bigger cells are also the point of this surface:
+   the small card had to fit beside an event row, this one does not. */
+.mx-grid--big .mx-cell {
+  height: 82px; min-width: 82px;
+  border-radius: 7px;
+  position: relative;
+  transition: outline-color .12s ease;
+}
+.mx-grid--big .mx-cell.has { outline: 1px solid var(--border); }
+/* Options already closed in this cell. Outlined rather than filled: the fill
+   is carrying the money, and two meanings in one channel is one too many. */
+.mx-grid--big .mx-cell--lost { outline: 1.5px solid var(--lvl-red) !important; }
+.mx-chf {
+  position: absolute; right: 5px; bottom: 3px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .02em;
+  color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.mx-swatch {
+  display: inline-block; width: 22px; height: 9px; border-radius: 3px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--mx-heat) 10%, transparent),
+    color-mix(in srgb, var(--mx-heat) 68%, transparent));
+  vertical-align: middle;
+}
+
+.evm-foot {
+  padding: 14px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.evm-quote {
+  margin: 0 0 10px; padding: 0 0 0 12px;
+  border-left: 2px solid var(--accent);
+  font-size: 12.5px; font-style: italic; color: var(--text-secondary);
+}
+.evm-facts {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-bottom: 12px; font-size: 11.5px;
+}
+.evm-actions { display: flex; gap: 8px; }
+
+@media (max-width: 900px) {
+  .evm-body { grid-template-columns: 1fr; }
+  .evm-pane + .evm-pane { border-left: 0; border-top: 1px solid var(--border); }
+  .evm-scrim { padding: 12px; }
+}
