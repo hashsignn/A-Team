@@ -53,6 +53,23 @@
              placeholder="SYN-0060" required>
     </label>
 
+    <!-- WHO IS REPORTING.
+         The app is for anyone on site with the freight — the driver in the
+         cab, the agent at the quay, the person at the terminal gate. They are
+         all looking at it, which is what makes a field report beat every feed
+         in this system.
+
+         Asked because the planner cannot recover it from the text. "The lock
+         is shut" reads identically whether the person can see the lock or was
+         told about it over the phone, and only one of those should send
+         freight the long way round. Remembered between reports, so it is a
+         once-ever tap rather than a question on every trip. -->
+    <fieldset class="dv-role">
+      <legend>Who is reporting?</legend>
+      <div class="dv-role-grid" id="f-role"></div>
+      <p class="dv-role-note" id="dv-role-note"></p>
+    </fieldset>
+
     <!-- The one required answer, as buttons rather than a dropdown: a
          dropdown on a phone is two taps and a scroll, and this is the field
          that matters. -->
@@ -113,8 +130,9 @@
   <div class="dv-log" id="dv-log"></div>
 
   <p class="dv-foot">
-    Your name is not required. Reports are kept as a permanent record and
-    are never edited — a correction is a new report.
+    For anyone on site with the load — driver, agent, terminal. Your name is
+    not required. Reports are kept as a permanent record and are never
+    edited — a correction is a new report.
   </p>
 </main>
 

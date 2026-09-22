@@ -51,7 +51,58 @@ function observedNow() {
   return new Date(base - 60000 + nth * 1000).toISOString();
 }
 
-const state = { status: null, load: 'intact', sending: false };
+const state = { status: null, load: 'intact', sending: false, role: 'driver' };
+
+/* Who can report, and what it means for the planner.
+ *
+ * Everyone here is on site EXCEPT 'relayed', and that single distinction is
+ * the only thing this field is for: a report from somebody who can see the
+ * freight is tier 1 and can unlock a reroute; one passed along second-hand
+ * is kept, shown and tier 2, but cannot move the money on its own.
+ *
+ * Nobody is blocked from reporting. It records what kind of knowledge this
+ * is, which is not recoverable from the words — "the lock is shut" reads
+ * identically either way. */
+const ROLES = [
+  { id: 'driver',     label: 'Driver',       note: 'You are with the vehicle or on board.' },
+  { id: 'site_agent', label: 'On site',      note: 'You are with the load.' },
+  { id: 'terminal',   label: 'Terminal',     note: 'You are at the depot or quay.' },
+  { id: 'relayed',    label: 'Told by someone', note:
+      'Kept and shown to the planner, but a second-hand account on its own '
+      + 'will not release a re-route.' },
+];
+const ROLE_KEY = 'radar.driver.role';
+
+function readRole() {
+  try { return localStorage.getItem(ROLE_KEY) || 'driver'; }
+  catch { return 'driver'; }
+}
+function saveRole(id) {
+  try { localStorage.setItem(ROLE_KEY, id); } catch { /* private window */ }
+}
+
+/* Remembered between reports: the same person files from the same cab all
+ * week, and asking every time is the kind of friction that gets an app
+ * closed. One tap, once. */
+function renderRoles() {
+  const host = document.getElementById('f-role');
+  if (!host) return;
+  state.role = readRole();
+  host.innerHTML = ROLES.map((r) => `
+    <button type="button" class="dv-role-btn${r.id === state.role ? ' is-on' : ''}"
+            data-role="${r.id}" aria-pressed="${r.id === state.role}">
+      ${r.label}
+    </button>`).join('');
+  host.querySelectorAll('[data-role]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.role = btn.dataset.role;
+      saveRole(state.role);
+      renderRoles();
+    });
+  });
+  const note = document.getElementById('dv-role-note');
+  if (note) note.textContent = (ROLES.find((r) => r.id === state.role) || {}).note || '';
+}
 
 // ---------------------------------------------------------------
 // The queue. Browser storage can throw or come back empty, so every
@@ -265,6 +316,7 @@ $('dv-form').addEventListener('submit', (e) => {
     load_state: state.load,
     note: $('f-note').value.trim() || null,
     reported_by: null,
+    role: state.role,
     confirms_disruption: $('f-confirm').checked,
     // Stamped NOW, on the device. See the header comment.
     observed_at: observedNow(),
@@ -290,6 +342,7 @@ window.addEventListener('offline', renderNet);
     document.querySelector('.dv-main').prepend(banner);
   }
   renderNet();
+  renderRoles();
   renderQueue();
   const shipment = params.get('shipment') || recall();
   if (shipment) {

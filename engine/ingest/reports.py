@@ -65,6 +65,33 @@ DEFAULT_LOG = ROOT / "data" / "reports.jsonl"
 # freight rather than a feed describing the region around it.
 SOURCE_TIER = 1
 
+# WHO IS REPORTING, and why it changes the tier.
+#
+# The app is for anyone on site with the freight — the driver in the cab, the
+# agent at the quay, a forwarder's person at the terminal gate. They are all
+# tier 1, because they are all LOOKING AT IT. That is the whole reason a field
+# report beats every feed in this system: every other input describes a region
+# and infers your consignment; this one observes it.
+#
+# But "on site" and "relaying what somebody told me" are different evidence,
+# and the difference is exactly the one that matters when a report is about to
+# unlock a reroute. A planner reading "the lock is shut" needs to know whether
+# the person typing it can see the lock. So a relayed report is accepted, kept
+# and shown — it is still worth having — at tier 2, alongside trade press,
+# rather than at tier 1 alongside a gauge reading.
+#
+# This is not a permissions model. Nobody is stopped from reporting. It only
+# records what kind of knowledge the report is, which the planner could not
+# otherwise recover from the text.
+ROLES: dict[str, dict] = {
+    "driver":     {"label": "Driver / on board",     "tier": 1, "on_site": True},
+    "site_agent": {"label": "On site with the load", "tier": 1, "on_site": True},
+    "terminal":   {"label": "Terminal / depot staff", "tier": 1, "on_site": True},
+    "relayed":    {"label": "Passing on what I was told", "tier": 2, "on_site": False},
+    "other":      {"label": "Other",                 "tier": 1, "on_site": True},
+}
+DEFAULT_ROLE = "driver"
+
 STATUSES = ("moving", "queued", "held", "stopped", "delivered")
 LOAD_STATES = ("intact", "damaged", "unknown")
 
@@ -89,6 +116,7 @@ class FieldReport:
     note: str | None
     reported_by: str | None
     confirms_disruption: bool
+    role: str = DEFAULT_ROLE
 
     def as_dict(self) -> dict:
         return {
@@ -103,8 +131,22 @@ class FieldReport:
             "note": self.note,
             "reported_by": self.reported_by,
             "confirms_disruption": self.confirms_disruption,
-            "source_tier": SOURCE_TIER,
+            "role": self.role,
+            "role_label": ROLES[self.role]["label"],
+            # Derived from the role, never hardcoded: a relayed account is
+            # tier 2 however confidently it is worded.
+            "source_tier": self.source_tier,
+            "first_hand": self.first_hand,
         }
+
+    @property
+    def source_tier(self) -> int:
+        return int(ROLES[self.role]["tier"])
+
+    @property
+    def first_hand(self) -> bool:
+        """Could this person SEE the thing they are describing?"""
+        return bool(ROLES[self.role]["on_site"])
 
 
 class ReportError(ValueError):
@@ -140,6 +182,13 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
     if load_state not in LOAD_STATES:
         raise ReportError(f"load_state must be one of {', '.join(LOAD_STATES)}")
 
+    # An unknown role is refused rather than defaulted. Defaulting to 'driver'
+    # would silently promote a relayed account to tier 1 on a typo, which is
+    # the exact mistake the field exists to prevent.
+    role = str(payload.get("role", DEFAULT_ROLE)).strip().lower() or DEFAULT_ROLE
+    if role not in ROLES:
+        raise ReportError(f"role must be one of {', '.join(ROLES)}")
+
     # The moment the driver SAW it, which is not the moment it reached us —
     # a report queued in a tunnel can arrive an hour late and must not claim
     # to be an hour-old observation.
@@ -172,6 +221,7 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
         note=_clean(payload.get("note"), MAX_NOTE),
         reported_by=_clean(payload.get("reported_by"), MAX_TEXT),
         confirms_disruption=bool(payload.get("confirms_disruption")),
+        role=role,
     )
 
 
@@ -216,6 +266,9 @@ def read_all(log: Path | None = None) -> list[FieldReport]:
                 load_state=raw.get("load_state", "unknown"),
                 note=raw.get("note"),
                 reported_by=raw.get("reported_by"),
+                # Reports written before the role existed are 'driver', which
+                # is what they were: the app had no other kind of user.
+                role=raw.get("role") or DEFAULT_ROLE,
                 confirms_disruption=bool(raw.get("confirms_disruption")),
             ))
         except (json.JSONDecodeError, KeyError, ValueError, TypeError):
