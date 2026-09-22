@@ -187,6 +187,7 @@ async function boot() {
     reload(DEFAULT_AS_OF);
   });
 
+  initViews();
   restoreDeepLinkedEvent();
 }
 
@@ -1747,3 +1748,66 @@ function closeEventModal({ keepUrl = false } = {}) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && EVENT_MODAL.open) closeEventModal();
 });
+
+// ===============================================================
+// VIEW ROUTING
+//
+// Two views on this page — the map and the ranked routes — shown one at a
+// time, each with its own URL.
+//
+// WHY NOT TWO DOCUMENTS. They share the board, the selected route and every
+// formatting helper. Separate HTML pages would mean fetching the board twice,
+// keeping two copies of the selection in sync, and rebuilding the globe on
+// every switch — real cost, for nothing a planner can see. What a person
+// means by "a page" is the address bar, and each of these has its own.
+//
+// THE GLOBE IS NEVER DESTROYED. It is hidden, and resized when it comes back:
+// a WebGL context that gets torn down and rebuilt on every switch is both
+// slow and, on some drivers, a hard crash after enough of them.
+// ===============================================================
+const VIEWS = ['map', 'routes'];
+const DEFAULT_VIEW = 'map';
+
+function currentView() {
+  const asked = (location.hash || '').replace('#', '').split('?')[0];
+  return VIEWS.includes(asked) ? asked : DEFAULT_VIEW;
+}
+
+function showView(name) {
+  const view = VIEWS.includes(name) ? name : DEFAULT_VIEW;
+
+  VIEWS.forEach((v) => {
+    const el = document.getElementById(`view-${v}`);
+    if (el) el.hidden = v !== view;
+  });
+  document.querySelectorAll('.viewtab').forEach((tab) => {
+    const on = tab.dataset.view === view;
+    tab.classList.toggle('is-on', on);
+    tab.setAttribute('aria-current', on ? 'page' : 'false');
+  });
+
+  // A canvas sized while its container was display:none comes back 0x0.
+  if (view === 'map') {
+    requestAnimationFrame(() => {
+      sizeGlobe();
+      if (state.globe) state.globe.controls().update();
+    });
+  }
+  document.body.dataset.view = view;
+}
+
+function initViews() {
+  showView(currentView());
+  window.addEventListener('hashchange', () => showView(currentView()));
+
+  // Selecting a route on the map is a diagnosis; the response lives on the
+  // other view. The table row and the panel's own link both go there, so the
+  // path from "this one" to "what do I do" is one click rather than a scroll.
+  document.addEventListener('click', (e) => {
+    const jump = e.target.closest('[data-goto-view]');
+    if (jump) {
+      e.preventDefault();
+      location.hash = `#${jump.dataset.gotoView}`;
+    }
+  });
+}
