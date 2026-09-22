@@ -414,6 +414,20 @@ def run_tool(
             ),
         })
 
+    if tool_id == "show.ruled_out":
+        detail = view.route_detail(context, route_id, ledger=LEDGER)
+        vetoed = detail["vetoed"] if detail else []
+        return JSONResponse({
+            "ok": True, "kind": "options", "step_id": step_id,
+            "options": [], "vetoed": vetoed,
+            "sentence": (
+                f"{len(vetoed)} option(s) were discarded for losing money."
+                if vetoed else
+                "Nothing was discarded on cost — every option found pays for "
+                "itself."
+            ),
+        })
+
     if tool_id == "find.vendors":
         return JSONResponse({
             "ok": True, "kind": "vendors", "step_id": step_id,
@@ -437,6 +451,42 @@ def run_tool(
         )
         return JSONResponse({
             "ok": True, "kind": "dispatch", "step_id": step_id,
+            "dispatch": dispatch_mod.summarise(receipts),
+        })
+
+    # ---- scoped to ONE consignment ---------------------------------
+    # "What if I want to escalate just one issue?" The lane-level answer is
+    # the right one for a lane and the wrong one for a customer on the phone.
+    shipment_id = str(payload.get("shipment_id", "")).strip()
+
+    if tool_id == "options.one":
+        result = view.options_for_shipment(context, shipment_id)
+        if result is None:
+            raise HTTPException(404, f"no consignment {shipment_id!r}")
+        return JSONResponse({"ok": True, "kind": "options", "step_id": step_id,
+                             "scope": shipment_id, **result})
+
+    if tool_id == "escalate.one":
+        return JSONResponse({
+            "ok": True, "kind": "draft", "step_id": step_id,
+            "scope": shipment_id,
+            "draft": _consignment_draft(context, route_id, shipment_id),
+        })
+
+    if tool_id == "locate.one":
+        body = {
+            "type": "request.field",
+            "at": moment.isoformat(),
+            "route_id": route_id,
+            "asking_for": "a position and status",
+            "shipments": [shipment_id],
+        }
+        receipts = dispatch_mod.fan_out(
+            context.config, body, audiences={"driver", "site_agent"}
+        )
+        return JSONResponse({
+            "ok": True, "kind": "dispatch", "step_id": step_id,
+            "scope": shipment_id,
             "dispatch": dispatch_mod.summarise(receipts),
         })
 
@@ -520,6 +570,58 @@ def _customer_draft(context, route_id: str) -> dict:
             f"{route.get('shipments')} consignments on this lane.\n"
             "We will come back to you as soon as anything changes."
         ),
+    }
+
+
+def _consignment_draft(context, route_id: str, shipment_id: str) -> dict:
+    """An escalation for ONE consignment, with its own numbers.
+
+    Not the lane notice with a shipment id appended: this customer's value,
+    this consignment's committed date, and the option that is actually open
+    to it — which is frequently not the one the lane as a whole is taking.
+    """
+    shipment = next(
+        (s for s in context.shipments if s.shipment_id == shipment_id), None
+    )
+    if shipment is None:
+        raise HTTPException(404, f"no consignment {shipment_id!r}")
+
+    route = _route_of(context, route_id)
+    ranked = view.options_for_shipment(context, shipment_id) or {}
+    best = (ranked.get("options") or [None])[0]
+
+    if best and best.get("on_time"):
+        outcome = (
+            f"We are moving it: {best['label']}, set running within "
+            f"{best['hours_to_resolve']:.0f} h. The agreed date still holds."
+        )
+    elif best:
+        outcome = (
+            f"The fastest option left is {best['label']}, which still lands "
+            f"{best['days_late_after']:.1f} day(s) after the agreed date. "
+            "We would like to re-agree it."
+        )
+    else:
+        outcome = (
+            "No option on this consignment both holds the date and pays for "
+            "itself. We would like to re-agree the date."
+        )
+
+    committed = shipment.otif_committed_date.strftime("%d %b %Y")
+    return {
+        "to": [shipment.customer],
+        "subject": (
+            f"{shipment.shipment_id} — {route['level_label']} on "
+            f"{route['name']}"
+        ),
+        "body": (
+            f"{route['reason']}\n\n"
+            f"Consignment {shipment.shipment_id}, value CHF "
+            f"{shipment.value_chf:,.0f}, committed {committed}.\n\n"
+            f"{outcome}\n\n"
+            "We will come back to you as soon as anything changes."
+        ),
+        "scope": shipment.shipment_id,
     }
 
 

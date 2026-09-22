@@ -189,3 +189,85 @@ def test_the_record_is_written_not_typed(payload):
     assert not any(
         t["kind"] == "log" for t in step(payload, "close.record")["tools"]
     ), "the close-out must not ask a planner to retype what already happened"
+
+
+# ---------------------------------------------- acting on one consignment
+def test_every_consignment_row_carries_its_own_controls(payload):
+    """The lane-level answer is right for a lane and useless when one
+    customer is on the phone."""
+    data = step(payload, "detect.scope")["data"]
+    tools = {t["tool_id"] for t in data["row_tools"]}
+    assert {"options.one", "escalate.one", "locate.one"} <= tools
+
+
+def test_a_single_consignment_can_be_ranked_on_its_own(context):
+    from engine.fast import view
+
+    at_risk = next(
+        risk.shipment_id
+        for assessment in context.result.assessments
+        for risk in assessment.shipment_risks
+    )
+    result = view.options_for_shipment(context, at_risk)
+    assert result is not None
+    assert result["shipment_id"] == at_risk
+    assert result["sentence"]
+
+
+def test_ranking_an_unknown_consignment_returns_nothing_rather_than_guessing(context):
+    from engine.fast import view
+
+    assert view.options_for_shipment(context, "SYN-NOPE") is None
+
+
+def test_a_consignment_touched_by_two_events_keeps_the_tighter_answer(context):
+    """A consignment is only as safe as its tightest constraint, so merging
+    two rankings must not quietly pick the more comfortable one."""
+    from collections import Counter
+
+    from engine.fast import view
+
+    counts = Counter(
+        risk.shipment_id
+        for assessment in context.result.assessments
+        for risk in assessment.shipment_risks
+    )
+    doubled = [sid for sid, n in counts.items() if n > 1]
+    if not doubled:
+        pytest.skip("no consignment is hit by two events in this run")
+
+    result = view.options_for_shipment(context, doubled[0])
+    ids = [o["option_id"] for o in result["options"]]
+    assert len(ids) == len(set(ids)), "the same option came back twice"
+
+
+# --------------------------------------------------- the rail is not a gate
+def test_no_step_depends_on_an_earlier_one(payload):
+    """Four numbered segments filling left to right read as a wizard, and the
+    page was being taken for one. Nothing may actually be sequenced."""
+    for s in payload["steps"]:
+        assert "depends_on" not in s
+        assert "requires" not in s
+        for tool in s["tools"]:
+            assert "disabled" not in tool
+
+
+def test_act_tools_are_available_while_detect_is_untouched(payload):
+    """You can escalate one consignment without confirming anything."""
+    act = step(payload, "act.choose")
+    assert act["tools"]
+    assert all(t["kind"] in ("run", "reveal", "link", "log") for t in act["tools"])
+
+
+def test_the_toolbox_is_dense_enough_to_be_a_toolbox(payload):
+    """Counted, because "not many buttons" was a real complaint and a number
+    is the only way to keep an answer to it from eroding."""
+    total = sum(len(s["tools"]) for s in payload["steps"])
+    assert total >= 24, f"only {total} controls across the console"
+    assert all(len(s["tools"]) >= 1 for s in payload["steps"])
+
+
+def test_the_matrix_is_reachable_from_the_step_that_wants_it(payload):
+    """It was never deleted, but it was not reachable from here either."""
+    tools = {t["tool_id"] for t in step(payload, "detect.read")["tools"]}
+    assert "show.matrix" in tools

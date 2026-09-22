@@ -71,6 +71,11 @@ function render() {
       <p class="cause">${esc(c.reason)}</p>
     </div>
 
+    <p class="cons-freeform">Nothing here runs in order. Jump to any stage on
+      the bar above, act on the whole lane, or act on one consignment from its
+      own row — the stages are a record of what has been settled, not a
+      sequence you have to walk.</p>
+
     <dl class="cons-facts">
       <div class="cons-fact"><dt>Directive</dt><dd style="font-size:15px">${esc(c.directive)}</dd></div>
       <div class="cons-fact"><dt>Action by</dt><dd>${hrs(c.lead_time_hours)}</dd></div>
@@ -105,22 +110,36 @@ function renderRail(c) {
       s.evidence ? 'has-evidence' : '',
     ].filter(Boolean).join(' ');
     return `
-      <div class="${cls}" style="--fill:${Math.round(s.progress * 100)}%">
-        <div class="rail-seg-top">
+      <button type="button" class="${cls}" data-jump="${esc(s.stage)}"
+              style="--fill:${Math.round(s.progress * 100)}%"
+              title="Jump to ${esc(s.title)} — nothing here is locked">
+        <span class="rail-seg-top">
           <span class="rail-seg-num">${s.settled ? '✓' : i + 1}</span>
           ${esc(s.title)}
           ${s.evidence ? `<span class="rail-amber">${s.evidence} to review</span>` : ''}
-        </div>
-        <div class="rail-seg-sub">${s.done} of ${s.steps} settled</div>
-      </div>`;
+        </span>
+        <span class="rail-seg-sub">${s.done} of ${s.steps} settled</span>
+      </button>`;
   }).join('');
+
+  /* The rail is NAVIGATION, not a gate. It looked like one — four numbered
+   * segments filling left to right reads as a wizard — so it is clickable,
+   * and every stage is reachable whatever the one before it says. You can
+   * escalate a single consignment without confirming anything. */
+  $('rail').querySelectorAll('[data-jump]').forEach((seg) => {
+    seg.addEventListener('click', () => {
+      const block = document.querySelector(
+        `.stage-block[data-stage="${seg.dataset.jump}"]`);
+      if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 function stageHTML(c, stage) {
   const steps = c.steps.filter((s) => s.stage === stage.stage);
   if (!steps.length) return '';
   return `
-    <section class="stage-block">
+    <section class="stage-block" data-stage="${esc(stage.stage)}">
       <h3 class="stage-title">${esc(stage.title)}
         <span class="count">${stage.done}/${stage.steps} settled${
           stage.evidence ? ` · ${stage.evidence} awaiting review` : ''}</span>
@@ -205,6 +224,7 @@ async function press(btn) {
   // REVEAL needs no round trip: the data came with the console.
   if (kind === 'reveal') {
     show(stepId, revealHTML(toolId, (step.data || {})[btn.dataset.key] || []));
+    wireRowTools(stepId);
     return;
   }
   if (kind === 'log') {
@@ -271,6 +291,10 @@ function revealHTML(toolId, rows) {
   if (toolId === 'show.sources') return sourcesHTML(rows);
   if (toolId === 'show.capacity') return capacityHTML(rows);
   if (toolId === 'show.contacts') return contactsHTML(rows);
+  if (toolId === 'show.atrisk') return consignmentsHTML(rows);
+  if (toolId === 'show.matrix') return matrixHTML(rows);
+  if (toolId === 'call.carrier') return capacityHTML(rows);
+  if (toolId === 'show.ladder') return ladderHTML(rows);
   if (toolId === 'show.options') return optionsHTML({ options: rows, sentence: '' });
   return `<pre class="note-line">${esc(JSON.stringify(rows, null, 1))}</pre>`;
 }
@@ -298,13 +322,25 @@ function eventsHTML(events) {
     </table>`;
 }
 
+/* Each row acts on its own.
+ *
+ * "What if I want to escalate just one issue?" — the lane-level answer is
+ * the right one for a lane and useless when one customer is on the phone. So
+ * every row carries the three things you would want for that consignment
+ * alone: what is open for it, a notice written with ITS numbers, and a ping
+ * to whoever is holding it. */
 function consignmentsHTML(rows) {
   const risk = rows.filter((r) => r.at_risk);
+  const tools = (state.console.steps
+    .find((s) => s.step_id === 'detect.scope') || {}).data?.row_tools || [];
+
   return `
-    <p class="out-title">${risk.length} of ${rows.length} consignments in scope</p>
+    <p class="out-title">${risk.length} of ${rows.length} consignments in scope
+      — every row acts on its own</p>
     <table class="dtable">
       <tr><th>Consignment</th><th>Customer</th><th class="num">Value</th>
-          <th>Committed</th><th>Decide within</th><th>Fastest option</th></tr>
+          <th>Committed</th><th>Decide within</th><th>Fastest option</th>
+          <th>For this one</th></tr>
       ${rows.map((r) => `
         <tr class="${r.at_risk ? 'is-risk' : ''}">
           <td>${esc(r.shipment_id)}</td>
@@ -313,8 +349,15 @@ function consignmentsHTML(rows) {
           <td>${esc(when(r.committed))}</td>
           <td>${r.at_risk ? hrs(r.lead_time_hours) : '—'}</td>
           <td class="wrap">${esc(r.best_action || (r.at_risk ? 'nothing worth doing' : 'on plan'))}</td>
+          <td class="rowtools">
+            ${tools.map((t) => `
+              <button type="button" class="rowtool" data-row-tool="${esc(t.tool_id)}"
+                      data-shipment="${esc(r.shipment_id)}"
+                      title="${esc(t.hint)}">${esc(t.label)}</button>`).join('')}
+          </td>
         </tr>`).join('')}
-    </table>`;
+    </table>
+    <div class="rowout" hidden></div>`;
 }
 
 function positionsHTML(rows) {
@@ -359,6 +402,47 @@ function sourcesHTML(rows) {
     </table>
     <p class="note-line">Two independent tier-1 sources is what the engine treats
       as corroboration. Below that the step stays amber and says so.</p>`;
+}
+
+/* The matrix, back where a step can open it. Rendered as the rows it is
+ * built from rather than as a picture: at this size the grid was never the
+ * readable form, and the full-size chart is one link away on the lane page. */
+function matrixHTML(rows) {
+  const cells = rows.flatMap((r) => (r.matrix.points || []).map((p) => ({
+    title: r.title, ...p,
+  })));
+  if (!cells.length) return `<p class="note-line">No matrix points on this lane.</p>`;
+  return `
+    <p class="out-title">Where each affected consignment sits</p>
+    <table class="dtable">
+      <tr><th>Event</th><th>Consignment</th><th>Impact if late</th>
+          <th>Likelihood</th><th class="num">At stake</th></tr>
+      ${cells.slice(0, 40).map((c) => `
+        <tr><td class="wrap">${esc(c.title)}</td>
+            <td>${esc(c.shipment_id || '—')}</td>
+            <td>${esc(c.impact_band || '—')}</td>
+            <td>${esc(c.probability_band || '—')}</td>
+            <td class="num">${chf(c.conditional_loss_chf ?? c.value_chf)}</td>
+        </tr>`).join('')}
+    </table>
+    <p class="note-line">The grid itself, full size and shaded by CHF, is on
+      the lane page — this is the same data at a size that fits a step.</p>`;
+}
+
+function ladderHTML(rows) {
+  if (!rows.length) {
+    return `<p class="note-line">No escalation ladder configured for this route.</p>`;
+  }
+  return `
+    <p class="out-title">Who is next if nobody answers</p>
+    <table class="dtable">
+      <tr><th>Level</th><th>Who</th><th>When</th></tr>
+      ${rows.map((r) => `
+        <tr><td>${esc(r.level ?? r.tier ?? '—')}</td>
+            <td class="wrap">${esc(r.function || r.name || r.notify || '—')}</td>
+            <td>${esc(r.after_hours ? `${r.after_hours} h unresolved` : (r.when || '—'))}</td>
+        </tr>`).join('')}
+    </table>`;
 }
 
 function capacityHTML(rows) {
@@ -414,8 +498,64 @@ function optionsHTML(payload) {
         losing money: ${payload.vetoed.map((v) => esc(v.label)).join('; ')}.</p>` : ''}`;
 }
 
+/* One consignment, acted on from its own row. The result lands directly
+ * under the table rather than replacing it, so the row you clicked is still
+ * on screen next to the answer. */
+function wireRowTools(stepId) {
+  const box = document.querySelector(`.out[data-step="${stepId}"]`);
+  if (!box) return;
+  const out = box.querySelector('.rowout');
+
+  box.querySelectorAll('[data-row-tool]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const shipment = btn.dataset.shipment;
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = '…';
+      try {
+        const res = await fetch(
+          `/api/v2/console/${encodeURIComponent(ROUTE)}/tool?${QS}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tool_id: btn.dataset.rowTool, step_id: stepId,
+              shipment_id: shipment,
+            }),
+          });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.detail || res.statusText);
+
+        out.hidden = false;
+        if (payload.kind === 'options') {
+          out.innerHTML = `<p class="out-title">${esc(shipment)} —
+            ${esc(payload.sentence || '')}</p>` + optionsHTML(payload);
+          wireExecuteIn(out, stepId);
+        } else if (payload.kind === 'draft') {
+          out.innerHTML = draftHTML(payload.draft);
+          wireCopyIn(out);
+        } else if (payload.kind === 'dispatch') {
+          out.innerHTML = `<p class="out-title">${esc(shipment)} — asked</p>
+            <p class="note-line">${esc(payload.dispatch.sentence)}</p>`;
+        }
+        out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (err) {
+        out.hidden = false;
+        out.innerHTML = `<p class="note-line bad">${esc(err.message)}</p>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
+  });
+}
+
 function wireExecute(stepId) {
-  document.querySelectorAll(`.out[data-step="${stepId}"] .exec`).forEach((btn) => {
+  wireExecuteIn(document.querySelector(`.out[data-step="${stepId}"]`), stepId);
+}
+
+function wireExecuteIn(scope, stepId) {
+  if (!scope) return;
+  scope.querySelectorAll('.exec').forEach((btn) => {
     btn.addEventListener('click', async () => {
       btn.disabled = true; btn.textContent = 'running…';
       try {
@@ -482,7 +622,10 @@ function draftHTML(draft) {
 }
 
 function wireCopy(stepId) {
-  const box = document.querySelector(`.out[data-step="${stepId}"]`);
+  wireCopyIn(document.querySelector(`.out[data-step="${stepId}"]`));
+}
+
+function wireCopyIn(box) {
   if (!box) return;
   const copy = box.querySelector('#draft-copy');
   const mail = box.querySelector('#draft-mail');

@@ -354,6 +354,79 @@ def route_detail(
     return None
 
 
+def options_for_shipment(context: RunContext, shipment_id: str) -> dict | None:
+    """Every option for ONE consignment, ranked.
+
+    The lane view groups options across the consignments they apply to, which
+    is right for "what do I do about this lane" and wrong for "this one
+    customer is on the phone". A consignment three days from its committed
+    date and the one behind it with a week of slack get the same grouped
+    answer, and only one of them deserves it.
+    """
+    shipment = next(
+        (s for s in context.shipments if s.shipment_id == shipment_id), None
+    )
+    if shipment is None:
+        return None
+
+    rankings: list[fast.Ranking] = []
+    for assessment in context.result.assessments:
+        for risk in assessment.shipment_risks:
+            if risk.shipment_id != shipment_id:
+                continue
+            rankings.append(
+                _rank_shipment(shipment, context, risk, assessment.event)
+            )
+
+    if not rankings:
+        return {
+            "shipment_id": shipment_id,
+            "customer": shipment.customer,
+            "value_chf": round(shipment.value_chf, 2),
+            "committed": shipment.otif_committed_date.isoformat(),
+            "options": [], "vetoed": [], "expired": [],
+            "sentence": "Nothing is touching this consignment.",
+        }
+
+    # One shipment hit by two events yields two rankings. Merge on option id
+    # and keep the worst case, because a consignment is only as safe as its
+    # tightest constraint.
+    merged: dict[str, fast.FastOption] = {}
+    vetoed: dict[str, tuple] = {}
+    for ranking in rankings:
+        for option in ranking.viable:
+            keep = merged.get(option.option_id)
+            if keep is None or option.rank_key > keep.rank_key:
+                merged[option.option_id] = option
+        for option, why in ranking.vetoed:
+            vetoed.setdefault(option.option_id, (option, why))
+
+    ordered = sorted(merged.values(), key=lambda o: o.rank_key)
+    best = ordered[0] if ordered else None
+
+    return {
+        "shipment_id": shipment_id,
+        "customer": shipment.customer,
+        "value_chf": round(shipment.value_chf, 2),
+        "committed": shipment.otif_committed_date.isoformat(),
+        "options": [o.as_dict() for o in ordered],
+        "vetoed": [
+            {**o.as_dict(), "vetoed_because": why} for o, why in vetoed.values()
+        ],
+        "expired": [
+            o.as_dict() for r in rankings for o in r.expired
+        ][:4],
+        "sentence": (
+            f"{best.label} — resolved in {best.hours_to_resolve:.0f} h, "
+            + ("arrives on the agreed date." if best.on_time
+               else f"still {best.days_late_after:.1f} day(s) late.")
+            if best else
+            "Nothing for this consignment both holds the date and pays for "
+            "itself. Tell the customer and re-agree."
+        ),
+    }
+
+
 def option_by_id(
     context: RunContext,
     route_id: str,

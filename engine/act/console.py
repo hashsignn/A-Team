@@ -195,6 +195,19 @@ def _consignment_rows(route: dict, context) -> list[dict]:
     return rows
 
 
+# What a single consignment can have done to it, from the row it sits on.
+# Declared here rather than hardcoded in the browser: the page should not be
+# inventing capabilities the server has not agreed to.
+ROW_TOOLS: tuple[dict, ...] = (
+    {"tool_id": "options.one", "label": "Options",
+     "hint": "What is open for this consignment alone"},
+    {"tool_id": "escalate.one", "label": "Escalate",
+     "hint": "Draft a notice for this customer, with this consignment's numbers"},
+    {"tool_id": "locate.one", "label": "Locate",
+     "hint": "Ask whoever is with it where it is"},
+)
+
+
 def _position_rows(reports: list) -> list[dict]:
     """The last thing anybody actually saw, per consignment."""
     latest: dict[str, Any] = {}
@@ -299,7 +312,15 @@ def build(
 
     # ---- DETECT -----------------------------------------------------
     read = base("detect.read")
-    read.data = {"events": events}
+    read.data = {
+        "events": events,
+        # The matrix is not gone; it is one button away, where the step that
+        # needs it can open it. Removing it from this page was the complaint.
+        "matrix": [
+            {"title": e.get("title"), "matrix": e.get("matrix")}
+            for e in route.get("events", []) if e.get("matrix")
+        ],
+    }
     read.evidence = [
         {"kind": "engine", "text": f"{len(events)} event(s) gated onto this lane",
          "weight": "computed"}
@@ -308,16 +329,26 @@ def build(
         Tool("show.event", "Open the event", REVEAL,
              "Provenance, window, and what it touches", primary=True,
              data_key="events"),
+        Tool("show.matrix", "Impact and likelihood", REVEAL,
+             "Where each affected consignment sits on the grid",
+             data_key="matrix"),
         Tool("ask.event", "Ask about it", LINK,
              "Put a question to the assistant, grounded in this board",
              href=f"/?ask={route_id}"),
+        Tool("open.charts", "Charts for this lane", LINK,
+             "Radar, matrix and the per-consignment grid, full size",
+             href=f"/route/{route_id}"),
     ]
     read.state = EVIDENCE if events else OPEN
     steps.append(read)
 
     scope = base("detect.scope")
     at_risk = [c for c in consignments if c["at_risk"]]
-    scope.data = {"consignments": consignments}
+    scope.data = {
+        "consignments": consignments,
+        "at_risk": [c for c in consignments if c["at_risk"]],
+        "row_tools": [dict(rt) for rt in ROW_TOOLS],
+    }
     scope.evidence = [
         {"kind": "engine",
          "text": f"{len(at_risk)} of {len(consignments)} consignments in scope, "
@@ -326,10 +357,12 @@ def build(
     ]
     scope.tools = [
         Tool("show.consignments", "List them", REVEAL,
-             "Every consignment, its customer, its deadline", primary=True,
-             data_key="consignments"),
+             "Every consignment — and each row acts on its own",
+             primary=True, data_key="consignments"),
+        Tool("show.atrisk", "Only the affected", REVEAL,
+             "Hide the ones running to plan", data_key="at_risk"),
         Tool("open.route", "Open the lane page", LINK,
-             "Matrix, charts and the per-consignment view",
+             "The per-consignment grid, full size",
              href=f"/route/{route_id}"),
     ]
     scope.state = EVIDENCE
@@ -344,7 +377,11 @@ def build(
         reports, lambda r: r.confirms_disruption and r.first_hand,
         "confirmed from the road")
     carrier.evidence = corroboration + carrier_reports
-    carrier.data = {"sources": corroboration, "reports": carrier_reports}
+    carrier.data = {
+        "sources": corroboration,
+        "reports": carrier_reports,
+        "carriers": (route.get("response") or {}).get("carriers", []),
+    }
     carrier.tools = [
         Tool("show.sources", "Show what agrees", REVEAL,
              "Every source, with its tier", primary=True, data_key="sources"),
@@ -354,6 +391,9 @@ def build(
                      {"name": "outcome", "label": "What they said", "type": "text"})),
         Tool("request.confirmation", "Ask the road", RUN,
              "Push a request to whoever is with the freight"),
+        Tool("call.carrier", "Call the carrier", REVEAL,
+             "Numbers for the operators running these modes",
+             data_key="carriers"),
     ]
     official = [e for e in corroboration if e["weight"] == "official"]
     carrier.state = (
@@ -374,6 +414,8 @@ def build(
              data_key="positions"),
         Tool("request.position", "Request a position", RUN,
              "Dispatch a position request to the vehicles on this lane"),
+        Tool("open.driver", "Open the reporting app", LINK,
+             "What the person with the freight sees", href="/driver"),
     ]
     position.state = (
         DONE if "confirm.position" in logged
@@ -417,9 +459,10 @@ def build(
         Tool("find.alternates", "Find alternate routes", RUN,
              "Search the network around the failed node, ranked by speed",
              primary=True),
-        Tool("show.options", "Show current options", REVEAL,
-             "Ranked fastest first, loss-making ones removed",
-             data_key="options"),
+        Tool("find.vendors", "Find someone to take it", RUN,
+             "3PLs near the freight, when the graph has nothing left"),
+        Tool("show.ruled_out", "What was ruled out", RUN,
+             "Options discarded for losing money, with the arithmetic"),
     ]
     choose.state = DONE if ran else OPEN
     steps.append(choose)
@@ -442,12 +485,25 @@ def build(
     steps.append(capacity)
 
     customer = base("act.customer")
-    customer.data = {"contacts": (route.get("response") or {}).get("internal", [])}
+    response = route.get("response") or {}
+    customer.data = {
+        "contacts": response.get("internal", []),
+        "ladder": response.get("escalation", []) or response.get("ladder", []),
+    }
     customer.tools = [
         Tool("compose.customer", "Compose the notice", RUN,
-             "Draft it from the board's own numbers", primary=True),
+             "Draft it for the whole lane, from the board's own numbers",
+             primary=True),
         Tool("show.contacts", "Who to tell", REVEAL,
-             "The teams on this route", data_key="contacts"),
+             "The teams on this route, with their acknowledgement SLAs",
+             data_key="contacts"),
+        Tool("show.ladder", "Escalation ladder", REVEAL,
+             "Who is next if nobody answers", data_key="ladder"),
+        Tool("log.told", "Record who was told", LOG,
+             "So the close-out can say it without you retyping it",
+             fields=({"name": "who", "label": "Told", "type": "text"},
+                     {"name": "how", "label": "How", "type": "select",
+                      "options": ["phone", "email", "portal", "in person"]})),
     ]
     customer.state = DONE if "act.customer" in logged else OPEN
     steps.append(customer)
@@ -467,9 +523,11 @@ def build(
         Tool("build.record", "Write the record", RUN,
              "Assembled from what actually ran — not typed twice",
              primary=True),
-        Tool("export.record", "Download it", LINK,
-             "The same pack the escalation sends",
+        Tool("export.record", "Download the pack", LINK,
+             "PDF, the same one the escalation attaches",
              href=f"/api/report/{route_id}.pdf"),
+        Tool("export.text", "Plain text", LINK,
+             "For pasting into a ticket", href=f"/api/report/{route_id}.txt"),
     ]
     record.state = DONE if "close.record" in logged else OPEN
     steps.append(record)
