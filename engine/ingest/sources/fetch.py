@@ -54,18 +54,26 @@ def network_allowed() -> bool:
 
 
 # ---------------------------------------------------------------------
-def collect(spec: SourceSpec, retrieved_at: datetime) -> tuple[list[dict], FeedReport]:
+def collect(
+    spec: SourceSpec,
+    retrieved_at: datetime,
+    window_days: float | None = None,
+) -> tuple[list[dict], FeedReport]:
     """Fetch one source. Never raises. Always returns a truthful report."""
     if not spec.runnable:
         return [], _absent(spec, spec.why_not_runnable())
 
     blob, error = (None, "network not enabled (set RADAR_ALLOW_NETWORK=1)")
     if network_allowed():
-        blob, error = _get(spec)
+        blob, error = _get(spec, as_of=retrieved_at, window_days=window_days)
 
     if blob is not None:
         items, dropped = to_items(blob, spec, retrieved_at)
         detail = f"{len(items)} item(s)"
+        if spec.window is not None:
+            span = spec.window.days if window_days is None else window_days
+            detail += (f" over the {span:g} day(s) ending "
+                       f"{retrieved_at.strftime('%Y-%m-%d')}")
         if dropped:
             detail += f", {dropped} unmapped (spec may be stale)"
         return items, FeedReport(
@@ -104,25 +112,41 @@ def collect(spec: SourceSpec, retrieved_at: datetime) -> tuple[list[dict], FeedR
 
 
 def collect_all(
-    specs: list[SourceSpec], retrieved_at: datetime
+    specs: list[SourceSpec],
+    retrieved_at: datetime,
+    window_days: float | None = None,
 ) -> tuple[list[dict], list[FeedReport]]:
     items: list[dict] = []
     reports: list[FeedReport] = []
     for spec in specs:
-        got, report = collect(spec, retrieved_at)
+        got, report = collect(spec, retrieved_at, window_days=window_days)
         items.extend(got)
         reports.append(report)
     return items, reports
 
 
 # ---------------------------------------------------------------------
-def _get(spec: SourceSpec) -> tuple[Any | None, str]:
+def _get(
+    spec: SourceSpec,
+    as_of: datetime | None = None,
+    window_days: float | None = None,
+) -> tuple[Any | None, str]:
     """GET and decode. Returns (blob, error) with exactly one of them set."""
     url = spec.resolved_url
     if not url:
         return None, "no URL configured"
 
     params = dict(spec.params)
+
+    # Ask for the window that ends at the as-of, when the source supports it.
+    # Without this every request means "the last few hours from whenever you
+    # happen to be running", which makes replaying a past day impossible and
+    # makes a recording over a period that already happened impossible too.
+    if spec.window is not None and as_of is not None:
+        add, drop = spec.window.params_for(as_of, window_days)
+        for key in drop:
+            params.pop(key, None)
+        params.update(add)
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json", **spec.headers}
 
     secret = spec.auth.resolve()

@@ -33,7 +33,14 @@ items instead of millions.
 
 from __future__ import annotations
 
-from engine.ingest.sources.spec import Auth, Cost, FieldMap, Nature, SourceSpec
+from engine.ingest.sources.spec import (
+    Auth,
+    Cost,
+    FieldMap,
+    Nature,
+    SourceSpec,
+    Window,
+)
 
 # ---------------------------------------------------------------------
 # GDELT query construction
@@ -152,6 +159,18 @@ CATALOG: tuple[SourceSpec, ...] = (
             "timespan": "3d",
             "sort": "datedesc",
         },
+        # GDELT indexes back to 2017 and will answer for any window, which is
+        # what makes a recording over a period that already happened possible
+        # at all. `timespan` must be dropped when asking: a request carrying
+        # both silently returns the RELATIVE window, which looks exactly like
+        # the historical query working.
+        window=Window(
+            start_param="startdatetime",
+            end_param="enddatetime",
+            format="gdelt",
+            days=3.0,
+            drops=("timespan",),
+        ),
         unlocks_if_connected=(
             "The shock events nothing else here can see: a strait closed by "
             "announcement, a union calling a stoppage, a border shut overnight. "

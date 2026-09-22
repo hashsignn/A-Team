@@ -50,6 +50,12 @@ def main() -> int:
     parser.add_argument("--as-of", default="2026-09-16",
                         help="the instant to record, pinned and reproducible")
     parser.add_argument("--shipments", type=int, default=220)
+    parser.add_argument(
+        "--window-days", type=float, default=None,
+        help="how far back to ask sources that can answer about a past "
+             "window (GDELT indexes to 2017). Needs RADAR_ALLOW_NETWORK=1; "
+             "without it every source serves its fixture and this does "
+             "nothing.")
     parser.add_argument("--dry-run", action="store_true",
                         help="report what would be recorded, write nothing")
     args = parser.parse_args()
@@ -83,11 +89,28 @@ def main() -> int:
     print(f"\nRunning the funnel at {args.as_of} over "
           f"{args.shipments} shipments…")
 
+    from engine.ingest.sources import network_allowed
+
+    if args.window_days and not network_allowed():
+        print("\n--window-days asks sources for a PAST window, but egress is")
+        print("off, so every source will serve its fixture and the window will")
+        print("do nothing. Set RADAR_ALLOW_NETWORK=1 as well, or drop the flag.")
+        return 1
+
     context = run(
         clock=Clock.at(args.as_of),
         config=load_config(),
-        options=RunOptions(shipment_count=args.shipments),
+        options=RunOptions(
+            shipment_count=args.shipments,
+            source_window_days=args.window_days,
+        ),
     )
+
+    live = [r for r in context.reports if r.status.value == "connected"]
+    fixture = [r for r in context.reports if r.status.value == "fixture"]
+    print(f"  sources: {len(live)} live, {len(fixture)} on recorded fixtures")
+    for report in live:
+        print(f"    live · {report.label}: {report.detail}")
 
     funnel = context.result.funnel
     print(f"  {funnel.raw_observations} arrived → "

@@ -75,6 +75,11 @@ class RunOptions:
     # to its fixture — so leaving this on costs nothing offline.
     use_external_sources: bool = True
 
+    # How far back to ask sources that can answer about a past window. None
+    # leaves each source on its own default, which is a few days — right for a
+    # live board, useless for recording a period that already happened.
+    source_window_days: float | None = None
+
 
 @dataclass
 class RunContext:
@@ -246,7 +251,9 @@ def _collect_sources(
         ]
 
     runnable = [s for s in specs if s.runnable]
-    items, reports = source_pkg.collect_all(runnable, clock.as_of)
+    items, reports = source_pkg.collect_all(
+        runnable, clock.as_of, window_days=options.source_window_days
+    )
 
     # Text sources carry no coordinates — a wire story says "the Strait of
     # Hormuz", never a UN/LOCODE. Without this every one of them would be

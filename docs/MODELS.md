@@ -231,6 +231,34 @@ That is the encoding of "it is not built for events we can predict with an
 API like weather": weather and water are instruments, and the model never
 sees them.
 
+### Fetching events that already happened
+
+By default every source is asked about **now** — GDELT for the last 3 days,
+Autobahn for current closures, USGS for the last 24 hours. That is right for a
+live board and useless for two things this product needs: replaying a specific
+day, and recording the reasoning layer over a period that already happened.
+
+GDELT indexes back to **2017** and will answer for any window, so it can be
+asked properly:
+
+```bash
+RADAR_ALLOW_NETWORK=1 RADAR_RECORD_REASONING=1 \
+  .venv/bin/python scripts/record_reasoning.py \
+    --as-of 2026-09-16 --window-days 60
+```
+
+That asks for every matching story between 18 July and 16 September, reasons
+over it, and records the answers.
+
+One trap the code handles for you: GDELT **silently returns the relative
+window** if `timespan` is sent alongside `startdatetime`, which looks exactly
+like the historical query working. The window spec declares `timespan` as a
+param to drop.
+
+Sources that can only answer about now say so rather than being sent a
+parameter they would ignore — `spec.window is None`, and the source panel
+reports what was actually asked for.
+
 Egress is opt-in:
 
 ```bash

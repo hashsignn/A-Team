@@ -106,6 +106,54 @@ class FieldMap:
 
 
 @dataclass(frozen=True)
+class Window:
+    """How to ask a source for a PAST window rather than "the last few hours".
+
+    Without this the fetcher can only ever ask for now. That is fine for a
+    live board and wrong for two things the product needs: replaying a
+    specific day for a demo, and recording the reasoning layer over a period
+    that already happened. Both were impossible while every request meant
+    "the last 3 days from whenever you happen to be running this".
+
+    ``days`` is how far back from the as-of to ask. It is per source because
+    the right window differs: a news index over two months is a corpus, the
+    same span of motorway closures is mostly noise about roadworks that
+    reopened.
+    """
+
+    start_param: str
+    end_param: str = ""
+    # "gdelt" -> YYYYMMDDHHMMSS, "iso" -> 2026-09-16T00:00:00Z,
+    # "date" -> 2026-09-16, "epoch" -> seconds
+    format: str = "iso"
+    days: float = 3.0
+    # Params to DROP when a window is asked for. GDELT rejects `timespan`
+    # alongside `startdatetime`, and a request carrying both silently returns
+    # the relative window — which looks like the historical query working.
+    drops: tuple[str, ...] = ()
+
+    def stamp(self, moment) -> str:
+        if self.format == "gdelt":
+            return moment.strftime("%Y%m%d%H%M%S")
+        if self.format == "date":
+            return moment.strftime("%Y-%m-%d")
+        if self.format == "epoch":
+            return str(int(moment.timestamp()))
+        return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def params_for(self, as_of, days: float | None = None) -> tuple[dict, tuple]:
+        """(params to add, params to drop) for a window ending at ``as_of``."""
+        from datetime import timedelta
+
+        span = self.days if days is None else days
+        start = as_of - timedelta(days=span)
+        out = {self.start_param: self.stamp(start)}
+        if self.end_param:
+            out[self.end_param] = self.stamp(as_of)
+        return out, self.drops
+
+
+@dataclass(frozen=True)
 class SourceSpec:
     """One feed, declaratively.
 
@@ -127,6 +175,9 @@ class SourceSpec:
     params: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     date_format: str = "iso"
+    # Set when the source can be asked for a past window. None means it only
+    # ever answers about now, which the /inputs panel says rather than hiding.
+    window: Window | None = None
     families: tuple[str, ...] = ()
 
     # Modes this source can POSSIBLY be reporting on. A motorway closure feed

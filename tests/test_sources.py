@@ -353,3 +353,59 @@ def test_a_source_supplied_hint_is_never_overwritten(config):
 
 def test_text_naming_nothing_resolves_to_nothing(config):
     assert places.resolve_nodes("Markets rallied on optimism", config) == []
+
+
+# =====================================================================
+# Asking a source about a PAST window
+# =====================================================================
+def test_gdelt_can_be_asked_about_a_window_that_already_happened():
+    """Without this every request means "the last few hours from whenever you
+    happen to be running", which makes replaying a past day impossible."""
+    from datetime import UTC, datetime
+
+    from engine.ingest.sources import catalog
+
+    spec = catalog.by_key("gdelt_doc")
+    assert spec.window is not None
+
+    add, drop = spec.window.params_for(datetime(2026, 9, 16, tzinfo=UTC), 60)
+    assert add["startdatetime"] == "20260718000000"
+    assert add["enddatetime"] == "20260916000000"
+
+
+def test_the_relative_window_is_dropped_when_a_date_range_is_asked_for():
+    """GDELT silently returns the RELATIVE window if both are sent, which
+    looks exactly like the historical query working."""
+    from datetime import UTC, datetime
+
+    from engine.ingest.sources import catalog
+
+    spec = catalog.by_key("gdelt_doc")
+    assert "timespan" in spec.params, "the live default is still relative"
+
+    add, drop = spec.window.params_for(datetime(2026, 9, 16, tzinfo=UTC), 60)
+    params = {k: v for k, v in spec.params.items() if k not in drop}
+    params.update(add)
+    assert "timespan" not in params
+
+
+def test_a_source_with_no_window_is_left_alone():
+    """Most sources only answer about now, and saying so is better than
+    sending them a parameter they will ignore."""
+    from engine.ingest.sources import catalog
+
+    assert catalog.by_key("usgs_quakes").window is None
+
+
+@pytest.mark.parametrize("fmt,expected", [
+    ("gdelt", "20260916000000"),
+    ("iso", "2026-09-16T00:00:00Z"),
+    ("date", "2026-09-16"),
+])
+def test_window_stamps_match_each_api_s_convention(fmt, expected):
+    from datetime import UTC, datetime
+
+    from engine.ingest.sources.spec import Window
+
+    window = Window(start_param="s", format=fmt)
+    assert window.stamp(datetime(2026, 9, 16, tzinfo=UTC)) == expected
