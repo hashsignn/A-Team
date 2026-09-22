@@ -11,10 +11,12 @@ from __future__ import annotations
 import pytest
 
 from engine.ingest import photos as P
+from tests.conftest_media import SCAN, jpeg, png, webp
 
-JPEG = b"\xff\xd8\xff\xe0" + b"x" * 200
-PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 200
-WEBP = b"RIFF" + b"\x00\x00\x00\x00" + b"WEBP" + b"x" * 200
+# Structurally real files, not a marker followed by filler. A fixture of
+# b"\xff\xd8\xff" + 200 bytes of noise is not a JPEG, and a test that passes
+# against it proves nothing about a file a phone produced.
+JPEG, PNG, WEBP = jpeg(), png(), webp()
 
 
 @pytest.fixture
@@ -52,7 +54,10 @@ def test_the_same_photo_twice_is_stored_once(store):
     doubled anything."""
     first, second = P.store(JPEG, store), P.store(JPEG, store)
     assert first["photo_id"] == second["photo_id"]
-    assert len(list(store.iterdir())) == 1
+    # One IMAGE. There is also an orientation sidecar, which is not a second
+    # copy of the photo — it is the rotation that stripping the EXIF removed.
+    assert len(list(store.glob("*.jpg"))) == 1
+    assert len(list(store.glob("*.json"))) == 1
 
 
 def test_different_photos_get_different_ids(store):
@@ -70,9 +75,18 @@ def test_a_path_cannot_be_smuggled_through_an_id(nasty, store):
 
 
 def test_a_real_id_resolves(store):
+    """The bytes on disk are the STRIPPED ones, not the upload.
+
+    This asserted byte-equality with the input, which stripping correctly
+    breaks. The property that matters is that the image data survived — the
+    metadata is supposed to be gone.
+    """
     stored = P.store(JPEG, store)
     path = P.path_for(stored["photo_id"], store)
-    assert path is not None and path.read_bytes() == JPEG
+    assert path is not None
+    on_disk = path.read_bytes()
+    assert SCAN in on_disk, "the compressed scan must survive untouched"
+    assert on_disk.startswith(b"\xff\xd8") and on_disk.endswith(b"\xff\xd9")
 
 
 def test_an_unknown_but_well_formed_id_is_simply_absent(store):

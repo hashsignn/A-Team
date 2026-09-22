@@ -30,8 +30,11 @@ real drivers. See SECURITY.md.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
+
+from engine.ingest.exif import UPRIGHT, strip
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DIR = ROOT / "data" / "photos"
@@ -67,23 +70,66 @@ def sniff(data: bytes) -> tuple[str, str]:
 
 
 def store(data: bytes, directory: Path | None = None) -> dict:
-    """Write one photo. Returns its id, type and size.
+    """Strip the metadata, then write. Returns id, type, size and orientation.
 
-    Content-addressed, so the same bytes stored twice produce one file and
-    the same id. A driver whose connection dropped mid-upload and retried has
-    not doubled anything.
+    STRIPPED BEFORE ANYTHING ELSE HAPPENS TO IT. A phone photo carries the
+    GPS of whoever took it, the camera's serial number, and on some devices
+    the owner's name. That is the photographer's location, which is not
+    always the freight's and is never ours to publish — and once it is on
+    disk, "we will strip it later" is a promise nobody keeps.
+
+    The id is the hash of the CLEAN bytes, so it identifies what we actually
+    hold. Hashing the original would mean the id described a file that no
+    longer exists anywhere.
+
+    Still content-addressed: stripping is deterministic, so the same photo
+    sent twice still lands once. A driver whose connection dropped mid-upload
+    and retried has not doubled anything.
     """
     if len(data) > MAX_BYTES:
         raise PhotoError(f"photo is larger than {MAX_BYTES // (1024 * 1024)} MB")
-    ext, media = sniff(data)
 
-    photo_id = hashlib.sha256(data).hexdigest()[:32]
+    # Sniffed on the ORIGINAL: deciding what it is, before rewriting it, is
+    # the only order that makes sense.
+    ext, media = sniff(data)
+    clean, orientation = strip(data)
+
+    photo_id = hashlib.sha256(clean).hexdigest()[:32]
     folder = directory or DEFAULT_DIR
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{photo_id}.{ext}"
     if not path.exists():
-        path.write_bytes(data)
-    return {"photo_id": photo_id, "media_type": media, "bytes": len(data)}
+        path.write_bytes(clean)
+
+    # The rotation, kept as a number we control rather than as a block of
+    # camera metadata we cannot audit. Written only when it is not the
+    # default, so the common case leaves no extra file.
+    if orientation != UPRIGHT:
+        (folder / f"{photo_id}.json").write_text(
+            json.dumps({"orientation": orientation})
+        )
+
+    return {
+        "photo_id": photo_id,
+        "media_type": media,
+        "bytes": len(clean),
+        "stripped_bytes": len(data) - len(clean),
+        "orientation": orientation,
+    }
+
+
+def orientation_for(photo_id: str, directory: Path | None = None) -> int:
+    """How the page should rotate this photo. 1 means leave it alone."""
+    if not ID_RE.match(photo_id or ""):
+        return UPRIGHT
+    sidecar = (directory or DEFAULT_DIR) / f"{photo_id}.json"
+    if not sidecar.exists():
+        return UPRIGHT
+    try:
+        value = int(json.loads(sidecar.read_text()).get("orientation", UPRIGHT))
+    except (OSError, ValueError, TypeError):
+        return UPRIGHT
+    return value if 1 <= value <= 8 else UPRIGHT
 
 
 def path_for(photo_id: str, directory: Path | None = None) -> Path | None:

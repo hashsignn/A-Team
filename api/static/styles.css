@@ -1796,3 +1796,15 @@ body.has-modal { overflow: hidden; }
   width: 96px; height: 96px; object-fit: cover;
   border-radius: 7px; border: 1px solid var(--border);
 }
+
+/* ---- photo rotation, from the stripped orientation tag --------------
+   EXIF is removed on upload, so a browser can no longer rotate these by
+   itself. The eight EXIF orientation values, as transforms. 1 is upright
+   and needs no rule. */
+.shot-o2 { transform: scaleX(-1); }
+.shot-o3 { transform: rotate(180deg); }
+.shot-o4 { transform: scaleY(-1); }
+.shot-o5 { transform: rotate(90deg) scaleX(-1); }
+.shot-o6 { transform: rotate(90deg); }
+.shot-o7 { transform: rotate(270deg) scaleX(-1); }
+.shot-o8 { transform: rotate(270deg); }

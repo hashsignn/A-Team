@@ -185,10 +185,18 @@ function selectVehicle(shipmentId, legIndex) {
           ${r.position ? `<div class="rep-line"><b>Where:</b> ${esc(r.position)}</div>` : ''}
           <div class="rep-line"><b>Load:</b> ${esc(r.load_state)}</div>
           ${r.note ? `<div class="rep-note">“${esc(r.note)}”</div>` : ''}
-          ${(r.photos || []).length ? `<div class="rep-shots">${r.photos.map((id) => `
-            <a href="/api/v1/photos/${esc(id)}" target="_blank" rel="noopener">
-              <img src="/api/v1/photos/${esc(id)}" alt="photo from site" loading="lazy">
-            </a>`).join('')}</div>` : ''}
+          ${(r.photos || []).length ? `<div class="rep-shots">${r.photos.map((ph) => {
+            // EXIF is stripped on upload, so the rotation cannot come from
+            // the file any more. It comes back as a number and is applied
+            // here — otherwise stripping the metadata would quietly lay a
+            // whole class of phone photos on their side.
+            const id = typeof ph === 'string' ? ph : ph.id;
+            const o = (typeof ph === 'object' && ph.orientation) || 1;
+            return `<a href="/api/v1/photos/${esc(id)}" target="_blank" rel="noopener">
+              <img class="shot-o${o}" src="/api/v1/photos/${esc(id)}"
+                   alt="photo from site" loading="lazy">
+            </a>`;
+          }).join('')}</div>` : ''}
           ${r.lat != null ? `<div class="rep-line"><b>Fix:</b> ${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}${r.accuracy_m ? ` ±${Math.round(r.accuracy_m)} m` : ''}</div>` : ''}
         </div>`).join('')}</div>`
     : `<p class="socket"><b>Nothing reported from the road.</b> Whoever is with
