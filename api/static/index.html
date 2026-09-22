@@ -15,9 +15,11 @@
 <!-- ============================================================
      SECTION 1 — full viewport: globe + detail panel
      ============================================================ -->
-<section class="stage">
-
-  <header class="topbar">
+<!-- The topbar lives OUTSIDE the views. It carries the as-of, the ladder and
+     the theme, all of which are properties of the BOARD rather than of
+     whichever view you happen to be reading, and re-rendering them per view
+     would make switching feel like a page load. -->
+<header class="topbar">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
       <div>
@@ -58,8 +60,31 @@
 
     <!-- Four themes. The swatches preview the theme they switch to. -->
     <nav class="themes" id="themes" aria-label="Colour theme"></nav>
-  </header>
+</header>
 
+<!-- ============================================================
+     THE VIEWS
+
+     One at a time, each its own full height, each with its own URL.
+
+     They were stacked on one scrolling page: globe, then the ranked table,
+     then the response workspace. That is three different questions — where
+     is it, which lanes, what do I do — competing for one screen, and the
+     answer to any one of them was always half off-screen.
+
+     Not separate documents. They share the board, the selected route and
+     every formatting helper, so splitting them into separate HTML pages
+     would mean fetching the board twice and keeping two copies of the
+     selection in sync — a real cost for no gain a planner can see. The
+     address bar is what a person means by "a page", and each of these has
+     its own.
+     ============================================================ -->
+<nav class="views" id="views" aria-label="View">
+  <a class="viewtab" href="#map"    data-view="map">Map</a>
+  <a class="viewtab" href="#routes" data-view="routes">Affected routes</a>
+</nav>
+
+<section class="view" id="view-map">
   <div class="stage-body">
 
     <!-- ---------- globe ---------- -->
@@ -131,13 +156,12 @@
           <div class="events" id="d-events"></div>
         </section>
 
-        <section class="block" id="block-actions">
-          <div class="block-head">
-            <h3>What to do</h3>
-            <span class="block-note">only options worth more than they cost</span>
-          </div>
-          <div class="actions" id="d-actions"></div>
-        </section>
+        <!-- "What to do" is NOT here any more. It was rendered twice —
+             once in this panel and again in the response workspace — from
+             the same data, and two lists of actions that can drift apart is
+             worse than one that is a click away. It lives on the Affected
+             routes view, next to the contacts and the escalation, which is
+             where somebody acting on it already is. -->
 
         <p class="advisory">
           Advisory. The tool proposes; the planner decides.
@@ -146,10 +170,6 @@
     </aside>
   </div>
 
-  <div class="scroll-cue" aria-hidden="true">
-    <span>Affected routes, ranked</span>
-    <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-  </div>
 </section>
 
 
@@ -161,7 +181,8 @@
      answers "what do I do and who do I call", which is the third failure the
      client named and the one they said is most often skipped.
      ============================================================ -->
-<section class="ranked" id="ranked">
+<section class="view" id="view-routes">
+<div class="ranked" id="ranked">
 
   <div class="ranked-head">
     <div>
@@ -266,6 +287,7 @@
       </div>
     </aside>
   </div>
+</div>
 </section>
 
 <script src="/vendor/globe.gl.min.js?v=__ASSETV__"></script>
