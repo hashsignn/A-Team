@@ -13,6 +13,7 @@ route updates the panel.
 from __future__ import annotations
 
 import sys
+import urllib.request
 from pathlib import Path
 
 from PIL import Image
@@ -29,6 +30,16 @@ def _lit_pixels(path: Path, threshold: int = 42) -> float:
     px = list(img.getdata())
     lit = sum(1 for r, g, b in px if r + g + b > threshold)
     return lit / max(1, len(px))
+
+
+def _server_alive() -> bool:
+    """Is the thing we were checking still there? Cheap, and never raises."""
+    try:
+        url = f"http://localhost:{PORT}/api/health"
+        with urllib.request.urlopen(url, timeout=3) as response:
+            return response.status == 200
+    except Exception:  # noqa: BLE001 — any failure means "no"
+        return False
 
 
 def main() -> int:
@@ -425,6 +436,29 @@ def main() -> int:
         browser.close()
 
     if errors:
+        # Tell a dead server apart from a broken page BEFORE printing a list
+        # that blames the UI.
+        #
+        # A run was lost to this: dev_serve.sh kills every uvicorn before it
+        # restarts, so restarting the server for an unrelated test mid-check
+        # produced four errors reading "summary did not load" and
+        # "summary/header disagree" — which is precisely what a genuine
+        # rendering bug looks like. The page was fine. The socket was gone.
+        #
+        # A checker that misattributes its own environment failure to the code
+        # under test is worse than one that simply crashes, because somebody
+        # will spend an afternoon fixing a bug that was never there.
+        refused = [e for e in errors if "ERR_CONNECTION_REFUSED" in e
+                   or "Failed to fetch" in e]
+        if refused and not _server_alive():
+            print("\nTHE SERVER WENT AWAY MID-RUN — these are not UI errors.")
+            print(f"  http://localhost:{PORT} stopped answering mid-run.")
+            print("  Most likely something restarted it (dev_serve.sh kills every")
+            print("  uvicorn before it starts one). Re-run with nothing else")
+            print("  touching the server.")
+            print(f"\n  {len(refused)} of {len(set(errors))} error(s) were connection failures.")
+            return 2
+
         print("\nERRORS")
         for e in dict.fromkeys(errors):
             print("  ", e)
