@@ -730,9 +730,21 @@ def _page(filename: str) -> Response:
 # HEAD as well as GET: uptime monitors, load balancers and `curl -I` all use
 # it, and a 404 from a health probe on the app's own front page is a false
 # alarm somebody has to chase.
+#
+# The front page is the DECISION surface, not the analytical one. A planner
+# opening the tool during an incident is asking "what do I press", and making
+# them find a second page to ask it was the whole complaint. The globe board
+# is still here, one click away at /board, because "why is this lane bad" is
+# a real question — just not the first one.
 @app.get("/")
 @app.head("/")
 def index() -> Response:
+    return _page("fast.html")
+
+
+@app.get("/board")
+@app.head("/board")
+def board_page() -> Response:
     return _page("index.html")
 
 
@@ -762,8 +774,8 @@ def driver_page() -> Response:
     return _page("driver.html")
 
 
-# Solution A. The decluttered surface: one decision at a time, and the button
-# that carries it out.
+# Kept as an alias of "/" so links, bookmarks and the screenshots in
+# docs/pitch keep working after the front page moved.
 @app.get("/fast")
 @app.head("/fast")
 def fast_page() -> Response:

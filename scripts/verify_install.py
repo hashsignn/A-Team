@@ -29,11 +29,28 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 # A marker per user-visible feature: the string that must be in the shipped
 # file for that feature to exist at all.
 MARKERS = {
+    # Solution A — the delivery-first surface. First in the table because it
+    # is what "/" now serves, so it is the thing somebody reporting "still the
+    # old front end" is actually asking about.
+    "Front page is the decision surface": ("api/main.py", 'def index() -> Response:\n    return _page("fast.html")'),
+    "Fast dashboard page":            ("api/static/fast.html", "What needs a decision"),
+    "One-click execute":              ("api/static/fast.js", "/api/v2/act"),
+    "Undo window with a countdown":   ("api/static/fast.js", "to change your mind"),
+    "Delivery-first ranking":         ("engine/fast/options.py", "restores_delivery"),
+    "Profitability veto":             ("engine/fast/margin.py", "margin_floor_chf"),
+    "Generated reroutes":             ("engine/fast/contingency.py", "fastest_path"),
+    "Event bus":                      ("engine/fast/bus.py", "TOPIC_DISRUPTION"),
+
     "Globe stops when you touch it":  ("api/static/app.js", "pointerdown"),
     "Click a port to open its lane":  ("api/static/app.js", "busiestRouteThrough"),
-    "Large event modal":              ("api/static/app.js", "openEventModal"),
-    "Matrix cells shaded by CHF":     ("api/static/app.js", "cellTint"),
-    "Modal styling":                  ("api/static/styles.css", "evm-scrim"),
+    # NOT a modal. The pop-up was replaced by a real page with a real URL,
+    # because a planner looking at one lane wants to send somebody the lane
+    # and a dialog cannot be sent. The old marker for the modal was left
+    # behind and reported "your clone is behind" for a feature that had been
+    # deliberately removed — a false alarm that sends people to chase a git
+    # pull which cannot help them.
+    "Lane opens as its own page":     ("api/static/route.js", "selectVehicle"),
+    "Matrix cells shaded by CHF":     ("api/static/charts.js", "cellTint"),
     "Who-is-reporting on the app":    ("api/static/driver.js", "renderRoles"),
     "Free source catalogue":          ("engine/ingest/sources/catalog.py", "gdelt_doc"),
     "Two-model funnel":               ("engine/reason/funnel.py", "TRIAGE_SYSTEM"),
@@ -79,11 +96,21 @@ def main() -> int:
     index = _served("/")
     if index is None:
         print(f"server         : not running on port {PORT}")
-        served_js = served_css = None
+        served: dict[str, str] = {}
     else:
         print(f"server         : answering on port {PORT}")
-        served_js = _served("/app.js")
-        served_css = _served("/styles.css")
+        # Whatever a marker names, fetch that asset once. Hardcoding two file
+        # names meant a new page could be entirely missing and the table would
+        # still read "n/a" next to every row of it.
+        served = {}
+        for rel, _ in MARKERS.values():
+            if not rel.startswith("api/static/"):
+                continue
+            name = rel.removeprefix("api/static/")
+            if name not in served:
+                served[name] = _served(f"/{name}") or ""
+        # The front page is served at "/", not at its filename.
+        served["fast.html"] = index
 
     print("\n  FEATURE                              ON DISK   SERVED")
     missing_disk = missing_served = 0
@@ -92,21 +119,23 @@ def main() -> int:
         on_disk = path.exists() and marker in path.read_text(errors="replace")
         missing_disk += not on_disk
 
-        if served_js is None:
-            served = "   -   "
-        elif rel.endswith("app.js"):
-            served = " yes  " if marker in (served_js or "") else " NO   "
-        elif rel.endswith("styles.css"):
-            served = " yes  " if marker in (served_css or "") else " NO   "
+        if index is None:
+            cell = "   -   "
+        elif rel.startswith("api/static/"):
+            body = served.get(rel.removeprefix("api/static/"), "")
+            cell = " yes  " if marker in body else " NO   "
         else:
-            served = "  n/a "        # engine/config files are not served as assets
-        if served.strip() == "NO":
+            cell = "  n/a "       # engine/ and config/ are not served as assets
+        if cell.strip() == "NO":
             missing_served += 1
-        print(f"  {name:<36} {'yes' if on_disk else 'NO ':<9} {served}")
+        print(f"  {name:<36} {'yes' if on_disk else 'NO ':<9} {cell}")
 
     print()
     if missing_disk:
-        print("YOUR CLONE IS BEHIND. Run:  git checkout main && git pull origin main")
+        branch = _git("rev-parse", "--abbrev-ref", "HEAD") or "main"
+        print("YOUR CLONE IS BEHIND. Run:")
+        print(f"  git fetch origin && git checkout {branch} "
+              f"&& git pull origin {branch}")
         if space:
             print("(A Codespace is a clone. It does not update itself when main moves.)")
         return 1
@@ -120,6 +149,10 @@ def main() -> int:
         return 0
 
     print("Everything is present, on disk and in what the server sends.")
+    print()
+    print('"/" is the decision surface. The globe board moved to "/board".')
+    print("If you are looking at the globe, you are on /board, and that page")
+    print("is meant to look the way it always did.")
     if space:
         # In a Codespace the likeliest remaining cause is not the browser
         # cache at all — it is that you are not looking at a browser.

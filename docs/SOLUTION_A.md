@@ -13,10 +13,19 @@ NOW      discard every option that would take the consignment into a loss;
          among what is left, the fastest wins outright. Cost is a VETO.
 ```
 
-Nothing in `engine/` outside `engine/fast/` changed its meaning. The old board
-still exists at `/` and still answers "why is this lane bad". The new surface
-at `/fast` answers "what do I press", which is the question a planner has
-during an incident.
+Nothing in `engine/` outside `engine/fast/` changed its meaning. What moved is
+which surface is the front page:
+
+| | |
+|---|---|
+| `/` | the decision surface — what needs me first, and what do I press |
+| `/board` | the analytical board — the globe, the ladder, why a lane is bad |
+| `/fast` | an alias of `/`, so older links keep working |
+
+A planner opening the tool during an incident is asking the first question,
+and making them find a second page to ask it was the complaint. The board is
+one click away, because "why is this lane bad" is a real question — just not
+the first one.
 
 ---
 
@@ -276,9 +285,19 @@ that on the card.
 ## Running it
 
 ```bash
-python run.py serve                 # binds 0.0.0.0 in a Codespace
-# then open /fast
+.venv/bin/python run.py serve       # binds 0.0.0.0 in a Codespace
+# "/" is the decision surface; "/board" is the old globe.
 ```
+
+If a page looks older than the commit you are on, do not guess:
+
+```bash
+.venv/bin/python scripts/verify_install.py 8000
+```
+
+It prints which commit is checked out, which features are in the files on
+disk, and which are in the bytes the server is actually sending. Whichever
+pair disagrees names the fix.
 
 Zero cost and fully offline: every outbound channel is disabled by default and
 records instead of sending, `RADAR_ALLOW_NETWORK` gates all egress, and no
