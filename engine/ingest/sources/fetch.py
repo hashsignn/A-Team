@@ -78,6 +78,8 @@ def collect(spec: SourceSpec, retrieved_at: datetime) -> tuple[list[dict], FeedR
             retrieved_at=retrieved_at,
             source_tier=spec.source_tier,
             url=spec.resolved_url,
+            nature=spec.nature.value,
+            cost=spec.cost.value,
         )
 
     if spec.fixture:
@@ -94,6 +96,8 @@ def collect(spec: SourceSpec, retrieved_at: datetime) -> tuple[list[dict], FeedR
                 retrieved_at=retrieved_at,
                 source_tier=spec.source_tier,
                 url=spec.resolved_url,
+                nature=spec.nature.value,
+                cost=spec.cost.value,
             )
 
     return [], _absent(spec, error)
@@ -162,4 +166,6 @@ def _absent(spec: SourceSpec, detail: str) -> FeedReport:
         records=0,
         source_tier=spec.source_tier,
         url=spec.url if spec.cost is not Cost.PAID else None,
+        nature=spec.nature.value,
+        cost=spec.cost.value,
     )

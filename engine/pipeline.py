@@ -268,6 +268,8 @@ def _collect_sources(
                 detail=spec.why_not_runnable(),
                 unlocks_if_connected=spec.unlocks_if_connected,
                 source_tier=spec.source_tier,
+                nature=spec.nature.value,
+                cost=spec.cost.value,
             )
         )
     return items, reports

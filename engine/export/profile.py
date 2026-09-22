@@ -330,6 +330,12 @@ def _sources(context) -> dict:
                 "records": r.records,
                 "source_tier": r.source_tier,
                 "url": r.url,
+                "nature": r.nature,
+                "cost": r.cost,
+                # The field that decides who pays for a model call. An
+                # instrument measured a number and a threshold table reads it
+                # for free; a report said a thing and needs reading.
+                "reaches_a_model": None if r.nature is None else r.nature == "report",
             }
             for r in sorted(context.reports, key=lambda r: order[r.status])
         ],

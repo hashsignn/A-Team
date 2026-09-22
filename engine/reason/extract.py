@@ -86,10 +86,12 @@ RULES, IN ORDER OF HOW MUCH THEY MATTER
    threatened, balloted or forecast. This distinction drives the whole
    lead-time calculation, so be exact about it.
 
-6. delay_days is a triple (low, likely, high) in DAYS of delay to a shipment
-   passing through an affected node. Base it on what the report says about
-   duration. If duration is genuinely unknown, say so in duration_confidence
-   and give a wide band rather than a narrow guess.
+6. delay_days is a three-point estimate in DAYS of delay to a shipment
+   passing through an affected node: optimistic, likely, pessimistic, in that
+   order of size. Base it on what the report says about duration. If duration
+   is genuinely unknown, say so in duration_confidence and give a WIDE band
+   rather than a narrow guess — a narrow band on an unknown is a lie the
+   simulation will believe.
 
 You are not scoring anything. Do not rate severity, urgency or priority.
 Report what happened and what it touches; the system computes the rest.
@@ -181,10 +183,16 @@ def to_item_fields(extraction: Extraction, item: dict, clock: Clock) -> dict:
         "probability_basis": extraction.probability_basis,
         "verbatim_quote": extraction.verbatim_quote,
         "what_happened": extraction.what_happened,
+        # optimistic / likely / pessimistic — the names DelayTriple actually
+        # uses. This read .low and .high until an end-to-end test ran the
+        # rescue path with a stubbed model and it raised AttributeError: a
+        # latent break that could only ever have fired on a machine that had
+        # a model installed, which is to say not on any machine that ran the
+        # test suite.
         "delay_days": [
-            extraction.delay_days.low,
+            extraction.delay_days.optimistic,
             extraction.delay_days.likely,
-            extraction.delay_days.high,
+            extraction.delay_days.pessimistic,
         ],
         "extracted": True,
         "extracted_at": clock.as_of,
