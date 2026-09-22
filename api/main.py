@@ -463,8 +463,76 @@ async def stream_reports() -> StreamingResponse:
 
 @app.get("/api/model")
 def model_status() -> JSONResponse:
-    """What is running, so the UI can say so rather than fail silently."""
-    return JSONResponse(llm_mod.report())
+    """What is running, and what it is allowed to decide.
+
+    Carries the two stage models separately, because "which model" is two
+    questions here: a small one answers the yes/no over hundreds of headlines,
+    a bigger one reads the handful that survive. A single "model: qwen2.5"
+    line would hide the design that makes the cost argument work.
+    """
+    from engine.reason import funnel as funnel_mod  # noqa: PLC0415
+
+    status = llm_mod.detect()
+    payload = dict(llm_mod.report(status))
+    payload["stages"] = {
+        "triage": {
+            "model": llm_mod.TRIAGE_MODEL if status.available else None,
+            "job": "one yes/no per headline — could this affect freight?",
+            "may": "remove an item from the queue, and nothing else",
+        },
+        "extract": {
+            "model": llm_mod.EXTRACT_MODEL if status.available else None,
+            "job": "read one survivor and return structured JSON",
+            "may": "claim what happened, where and for how long — never score it",
+        },
+    }
+    payload["funnel"] = funnel_mod.report(funnel_mod.FunnelCost(), status)["note"]
+    return JSONResponse(payload)
+
+
+@app.get("/api/sources")
+def sources_status() -> JSONResponse:
+    """Every configured source, what it costs, and whether it is live.
+
+    Separate from /api/inputs because this answers a different question: not
+    "is the board complete" but "what is this deployment allowed to call, and
+    what would it cost". A planner asking whether the tool phones home should
+    get a straight answer from one endpoint.
+    """
+    from engine.ingest import sources as source_pkg  # noqa: PLC0415
+
+    config = load_config()
+    loaded = config.files.get("sources")
+    try:
+        specs = source_pkg.load_sources(loaded.path if loaded else None)
+    except source_pkg.SourceConfigError as exc:
+        return JSONResponse({"error": str(exc), "sources": []}, status_code=500)
+
+    return JSONResponse({
+        "network_enabled": source_pkg.network_allowed(),
+        "network_note": (
+            "Nothing reaches the internet until RADAR_ALLOW_NETWORK=1. Every "
+            "source falls back to a recorded fixture and says so."
+        ),
+        "billable_sources": 0,
+        "sources": [
+            {
+                "key": s.key,
+                "label": s.label,
+                "nature": s.nature.value,
+                "reaches_a_model": s.nature is source_pkg.Nature.REPORT,
+                "cost": s.cost.value,
+                "source_tier": s.source_tier,
+                "enabled": s.enabled,
+                "runnable": s.runnable,
+                "blocked_because": s.why_not_runnable() or None,
+                "builtin": s.builtin,
+                "families": list(s.families),
+                "notes": s.notes,
+            }
+            for s in sorted(specs, key=lambda s: (not s.builtin, s.key))
+        ],
+    })
 
 
 @app.get("/api/health")

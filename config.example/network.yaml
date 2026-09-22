@@ -372,6 +372,26 @@ nodes:
   # Maritime chokepoints — graph nodes so the gate can intersect them.
   # A chokepoint is never an origin or destination; it is transited.
   # ---------------------------------------------------------------
+  # The one chokepoint on this network with NO maritime alternative.
+  # Suez has the Cape. Malacca has Sunda and Lombok. Hormuz has nothing:
+  # every cargo in or out of the Gulf passes through it, and the only
+  # bypass is a pipeline that does not carry containers. That empty
+  # `alternatives` list is a domain fact, and it is what makes a Hormuz
+  # event a DAMAGE pathway rather than a delay one — there is no longer
+  # route to take, so freight behind it is stranded, not slowed.
+  - id: CHOKE_HORMUZ
+    name: Strait of Hormuz
+    kind: chokepoint
+    country: OM
+    lat: 26.570
+    lon: 56.250
+    modes: [sea]
+    on_river: false
+    inland: false
+    throughput_share: 0.0
+    chokepoint: true
+    alternatives: []
+
   - id: CHOKE_SUEZ
     name: Suez Canal
     kind: chokepoint

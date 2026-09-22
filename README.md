@@ -1007,6 +1007,216 @@ where a multiplicative score must choose between a false Red and silently
 dropping a four-day delay. Here it produces a third, correct answer — and the
 test asserts *both* halves: no cargo risk, and a real delay.
 
+## External sources, and the shock they exist to catch
+
+Nine feeds ship wired. **Every one is free, keyless, and needs no
+registration.** Nothing in the catalogue can cost money — a paid source cannot
+be enabled by editing config, and a test fails the build if one ever ships
+enabled.
+
+| Source | Family | Tier | Nature |
+|---|---|---|---|
+| **GDELT 2.0 DOC** | geopolitical, labour, port ops | 2 | report |
+| GDACS (EU JRC) | force majeure, climate | 1 | report |
+| ReliefWeb (UN OCHA) | force majeure, geopolitical | 2 | report |
+| CISA KEV | cyber | 1 | report |
+| Autobahn A5 / A61 / A3 | infrastructure | 1 | report |
+| USGS earthquakes | force majeure | 1 | **instrument** |
+| Open-Meteo marine | climate | 1 | **instrument** |
+
+Two more — ENTSO-E and OpenSanctions — are free but need a free registration,
+so they ship **disabled** and say exactly which variable to set.
+
+**Network is off by default.** Nothing reaches the internet until
+`RADAR_ALLOW_NETWORK=1`; every source falls back to a recorded fixture and says
+so on `/inputs`. A tool that quietly starts calling nine external services on
+first run is one nobody can deploy inside a corporate network.
+
+### Nature: the field that decides who pays for a model call
+
+`instrument`
+: Something measured a number. A gauge reads 78 cm, a seismometer reads M6.1.
+  A threshold table maps it to a variable, exactly and for free. **These never
+  reach a model** — paying one to re-derive arithmetic it cannot check buys a
+  worse answer.
+
+`report`
+: Somebody *said* a thing. The claim needs reading. **This is what the funnel
+  is for.**
+
+That one field is why the model bill is small.
+
+### Adding a source is a block of YAML
+
+`config/sources.yaml` is the whole integration surface. Name the URL, name
+where the items are, name which field means what — timeouts, retries, fixture
+fallback, the honest `/inputs` status, the funnel and the challenger all come
+for free. Nothing in `engine/` changes.
+
+```yaml
+custom:
+  - key: tms_events
+    label: "Transport management system — exception events"
+    nature: report
+    source_tier: 1                       # your own system, watching your own freight
+    url: "${TMS_BASE_URL}/api/v1/exceptions"
+    items_path: "data.events"
+    auth: {kind: bearer, env: TMS_BEARER_TOKEN}   # the NAME, never the value
+    fields:
+      headline: "summary"
+      identifier: "eventId"
+      node_hint: "location.unlocode"
+      starts: "effectiveFrom"
+```
+
+Three worked examples ship disabled: a TMS exception stream, a DATEX II
+national access point, and a minimal carrier notice feed.
+
+**A credential can never appear in this file.** The loader refuses a spec
+containing `token:`, `secret:` or `password:` outright, and accepts only the
+*name* of an environment variable. `.gitignore` protects a file somebody might
+still email; a value that was never in the file cannot be emailed.
+
+---
+
+## The funnel: what reaches a model, and what a model may decide
+
+```
+~50,000  items      server-side query        free, zero bytes transferred
+   ~400  items      deterministic gate       free, microseconds
+   ~200  items      instrument split         free — measured numbers leave here
+    ~40  items      STAGE 1  triage          small model, one yes/no
+     ~8  items      STAGE 2  extraction      strong model, structured JSON
+     ~8  verdicts   deterministic challenge  free, auditable
+```
+
+Each layer is cheaper than the one below and removes more. **The expensive
+reader only ever sees what four free filters could not dismiss.**
+
+### The noise filter is not a model, on purpose
+
+Three reasons, in the order they bite:
+
+1. **Cost.** GDELT alone is tens of thousands of items a day.
+2. **Reproducibility.** A hindcast must replay a past day and produce that
+   day's board. Sampling at the top of the funnel makes every past board
+   un-replayable.
+3. **Silence.** The one that matters. A deterministic filter that is wrong
+   leaves a rule you can read and a count you can see. A model that drops an
+   item leaves *nothing* — no trace, no count, no way to find out. **The most
+   dangerous filter is the one that fails invisibly.**
+
+The GDELT query does the first layer server-side, built from this deployment's
+own chokepoints and ports, so the items we do not want are never sent.
+
+### Two models, different sizes, split by cost not by job
+
+**Stage 1 — triage** answers one question: could this affect the physical
+movement of freight? Nearly a classification task, so a 3B does it about as
+well as a 70B — and it must be small, because it runs the most times.
+
+**Stage 2 — extraction** reads the survivor properly and returns JSON: what
+happened, where, when, how long, how likely, which of the 45 ledger variables
+it activates, and what it quotes.
+
+Splitting them is cheaper than one mid-sized model doing both, and better at
+each end.
+
+### Rules that keep it honest
+
+- **Triage fails OPEN.** No model, a timeout, a crash — the item passes. *A
+  filter that deletes evidence when it breaks is worse than no filter.*
+- **Triage may only REMOVE.** A "yes" buys a full read and nothing more.
+  Nothing a model says at stage 1 reaches the board.
+- **A budget, always** — and the overflow passes through *unfiltered*, never
+  silently dropped.
+- **The challenger stays deterministic.** An LLM judging an LLM costs a second
+  call and fails on the same sentences as the first; two confident wrong
+  answers look like corroboration.
+- **The model never scores.** It turns a sentence into structured claims about
+  what happened. What that is *worth* is computed, from config, by code a
+  planner can read.
+
+---
+
+## The Hormuz scenario
+
+> "Iran announces closure of the Strait of Hormuz to commercial shipping."
+
+This is the class of event the product exists for, and the class **no API
+predicts.** Weather is forecast days out by a free endpoint. A strait closed by
+announcement arrives as a sentence, or not at all.
+
+Run it — no model required, no network required:
+
+```bash
+.venv/bin/python -m pytest tests/test_funnel.py -q     # 29 tests
+```
+
+What the chain does, with everything deterministic:
+
+| Layer | Result |
+|---|---|
+| GDELT query | asks about Hormuz server-side; the item is returned |
+| Place resolution | `"Strait of Hormuz"` → `CHOKE_HORMUZ`, no coordinates needed |
+| Router | matches `GEO_CONFLICT` |
+| Gate | window widened from the ledger's 60 days, strikes 3 Gulf shipments |
+| Board | `LANE_GULF_01` raised to **yellow, 20 h to act, CHF 16,101** |
+
+Those figures are **at the pinned as-of `2026-09-18T06:00Z`**, which is the
+instant the fixture was written for. Open the board on today's wall clock and
+the same item is several days old, so the lane reads lower — correctly, since
+the ladder measures *time to act*, not how dramatic the event is. Pin the
+as-of to reproduce the numbers above:
+
+```
+http://localhost:8000/?as_of=2026-09-18T06:00:00%2B00:00
+```
+
+### Why a second Hormuz headline needs the model
+
+```
+"Iran announces closure of Strait of Hormuz…"              → GEO_CONFLICT  (free)
+"Unprecedented maritime interdiction regime declared…"     → ABSTAIN
+```
+
+Same meaning. No shared vocabulary. **That is not a gap to be closed by adding
+another keyword** — the next shock will use different words again. So an
+abstention on an item that already cleared the geographic filter is not
+dropped: it is held as a **rescue candidate** and sent to the funnel, which
+asks the one question a keyword list structurally cannot answer. With no model
+running, rescue does nothing and these drop exactly as they did before.
+
+### Jebel Ali is the point
+
+Nothing in that sentence mentions **Jebel Ali**, and Jebel Ali is where the
+freight is. Concluding *"therefore the consignments behind Hormuz are
+stranded — stranded rather than delayed, because there is no second route into
+the Gulf"* is inference over a network the text has never heard of. That is
+what stage 2 is bought for.
+
+`CHOKE_HORMUZ.alternatives` is `[]`. Suez has the Cape; Malacca has Sunda and
+Lombok; **Hormuz has nothing.** That empty list is a domain fact, and it is
+what makes a Hormuz event a *damage* pathway rather than a delay one.
+
+### Two real bugs this scenario found
+
+**The gate expired the closure before any ship reached it.** An open-ended
+event was widened by a global three-day constant, so a strait closure on
+18 September ended on the 21st while the freight arrived on 10 October. The
+ledger already declared `GEO_CONFLICT` as lasting 60 days — that figure was
+simply being ignored. The fallback now reads the ledger, floored at three days
+and capped at 120.
+
+**A motorway closure landed on a Rhine barge leg.** "A5 closed after HGV fire"
+matches `FOR_FIRE`, which is declared for every mode. The variable is right to
+be generic; the *source* knows better, so a spec may now declare the modes it
+can possibly speak about. A source narrows a variable and never widens it, and
+a contradiction is ignored rather than obeyed — an empty intersection would
+remove the event from the gate entirely, which is a drop disguised as a filter.
+
+---
+
 ## Integration contracts
 
 - **`schemas/event_radar_taxonomy.json`** — generated by

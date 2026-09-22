@@ -291,15 +291,55 @@ def test_the_execute_view_omits_the_decision_making(board, context):
 
 def test_it_names_which_legs_are_affected_not_just_the_shipment(board, context):
     """A Rhine low-water event hits the barge legs and leaves the road leg
-    alone. Someone executing needs to know which hop is the problem."""
+    alone. Someone executing needs to know which hop is the problem.
+
+    Asserted PER EVENT rather than over the union of every event on the
+    shipment. Once real sources are wired, several unrelated disruptions can
+    legitimately cover every leg between them — an Autobahn closure on the road
+    hop and low water on the barge hops is three-of-three affected and entirely
+    correct. Counting the union tested how busy the board was; this tests what
+    the docstring actually claims, which is that ONE event lands only on the
+    legs whose mode it can affect.
+    """
     view = C.lane_view(board, context, LANE)
     touched = next(c for c in view["consignments"] if c["touched"])
-    execute = C.execute_view(board, context, touched["shipment_id"])
+    sid = touched["shipment_id"]
+    execute = C.execute_view(board, context, sid)
     assert execute["legs"]
     assert execute["affected_legs"], "a touched shipment must name a hit leg"
-    assert len(execute["affected_legs"]) < len(execute["legs"]), (
-        "not every leg should be affected, or the per-leg gate is not working"
+
+    shipment = next(s for s in context.shipments if s.shipment_id == sid)
+    mode_of = {i: leg.mode.value for i, leg in enumerate(shipment.legs)}
+    events = {e.event_id: e for e in context.events}
+
+    by_event: dict[str, set[int]] = {}
+    for hit in context.hits:
+        if hit.shipment_id == sid:
+            by_event.setdefault(hit.event_id, set()).add(hit.leg_index)
+
+    assert by_event, "a touched shipment must have at least one gate hit"
+    for event_id, legs in by_event.items():
+        event = events[event_id]
+        allowed = {m.value for m in event.modes_affected}
+        for index in legs:
+            assert mode_of[index] in allowed, (
+                f"{event_id} ({sorted(allowed)}) landed on leg {index}, which is "
+                f"{mode_of[index]} — the per-leg modal gate is not working"
+            )
+
+    low_water = next(
+        (eid for eid, e in by_event.items()
+         if "WAT_LOW_WATER" in events[eid].active_variables),
+        None,
     )
+    if low_water is not None:
+        barge_legs = {i for i, m in mode_of.items() if m == "barge"}
+        assert by_event[low_water] <= barge_legs, (
+            "low water reached a leg that is not a barge leg"
+        )
+        assert by_event[low_water] != set(mode_of), (
+            "low water claimed every leg, including the road hop"
+        )
 
 
 def test_the_deadline_is_labelled_as_a_decision_not_a_delivery(board, context):

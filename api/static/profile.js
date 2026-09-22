@@ -538,6 +538,33 @@ const STATUS_WORD = {
   absent: 'absent',
 };
 
+/* What a source costs, said plainly. "free" is the interesting word here and
+ * it is worth the pixels: the whole catalogue is free, and a planner reading
+ * this screen should not have to take that on trust from a README. */
+const COST_WORD = {
+  free: 'free · no key',
+  free_with_key: 'free · needs a free account',
+  paid: 'PAID',
+};
+
+/* Green for the ones that cost nothing and need nothing, amber for the ones
+ * that are still free but need a registration first. There is no red variant
+ * because there are no paid sources — a test fails the build if one ever
+ * ships enabled, so a red tag here would be unreachable code on a screen. */
+const COST_TAG = {
+  free: 'tag--ok',
+  free_with_key: 'tag--warn',
+  paid: 'tag--warn',
+};
+
+/* report vs instrument. This one field decides whether a source ever costs a
+ * model call, so it belongs on the screen next to the source, not buried in a
+ * design document. */
+const NATURE_WORD = {
+  report: 'read by a model',
+  instrument: 'measured — no model',
+};
+
 function renderSources(s) {
   const feeds = s.feeds.map((f) => `
     <div class="feed">
@@ -546,6 +573,8 @@ function renderSources(s) {
         <span class="feed-name">${esc(f.label)}</span>
         ${f.records ? `<span class="muted num">${num(f.records)} records</span>` : ''}
         <span class="muted">tier ${esc(f.source_tier)}</span>
+        ${f.cost ? `<span class="tag ${COST_TAG[f.cost] || 'tag--off'}">${esc(COST_WORD[f.cost] || f.cost)}</span>` : ''}
+        ${f.nature ? `<span class="muted">${esc(NATURE_WORD[f.nature] || f.nature)}</span>` : ''}
       </div>
       <div class="feed-detail">${esc(f.detail)}</div>
       ${f.status !== 'connected' && f.unlocks_if_connected
@@ -560,11 +589,23 @@ function renderSources(s) {
     <td class="muted">${esc(t.description || t.note || '')}</td>
   </tr>`);
 
+  const priced = s.feeds.filter((f) => f.cost);
+  const billable = priced.filter((f) => f.cost === 'paid').length;
+  const modelled = priced.filter((f) => f.reaches_a_model).length;
+
+  const costLine = priced.length
+    ? `<p class="rpanel-note"><b>${priced.length} external source(s) configured, `
+      + `${billable} of them billable.</b> Nothing reaches the internet until `
+      + `<code>RADAR_ALLOW_NETWORK=1</code>; until then every one falls back to a `
+      + `recorded sample and says so above. ${modelled} are read by a model; the `
+      + `rest are measurements a threshold table reads for free.</p>`
+    : '';
+
   $('tab-sources').innerHTML =
     section('Inputs',
       'Three states, never two: <b>connected</b>, <b>example stand-in</b> or '
       + '<b>absent</b>. An absent feed says what connecting it would unlock, so '
-      + 'the gap is a scoping decision rather than a silent hole.', feeds) +
+      + 'the gap is a scoping decision rather than a silent hole.', costLine + feeds) +
     (tiers.length
       ? section('Source tiers',
         'How much corroboration a claim needs before it is allowed to move a '

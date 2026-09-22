@@ -52,6 +52,12 @@ class FeedReport:
     source_tier: int = 1
     url: str | None = None
 
+    # Set by the source layer. Both answer questions a planner asks out loud
+    # and that a status word alone cannot: "does this one cost anything", and
+    # "does this one get read by a model or just measured".
+    nature: str | None = None          # report | instrument
+    cost: str | None = None            # free | free_with_key | paid
+
     @property
     def is_live(self) -> bool:
         return self.status is FeedStatus.CONNECTED

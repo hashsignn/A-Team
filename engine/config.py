@@ -154,9 +154,12 @@ _FILES = (
     "scoring",
     "thresholds",
     "contacts",
+    "sources",
 )
 
-_OPTIONAL = {"company_profile"}
+# sources.yaml is optional: with no file, the built-in free catalogue is
+# the configuration, and that is complete and runnable on its own.
+_OPTIONAL = {"company_profile", "sources"}
 
 
 def load_config(

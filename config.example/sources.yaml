@@ -1,0 +1,174 @@
+# =====================================================================
+# SOURCES — every external feed the radar reads.
+#
+# This file is the whole integration surface. Adding a feed is a block of
+# YAML here; nothing in engine/ needs to change, and nobody needs to write
+# Python. That is deliberate — integration at a company this size is done by
+# people with an endpoint and a two-week window, and any design that makes
+# them open a Python file does not get done.
+#
+# NOTHING HERE COSTS MONEY.
+# Every built-in below is free. The ones needing a free registration ship
+# DISABLED, and a paid source cannot be enabled by editing this file at all.
+#
+# NETWORK IS OFF BY DEFAULT.
+# Set RADAR_ALLOW_NETWORK=1 to let any of this reach the internet. Without it
+# every source falls back to its recorded fixture and says so on /inputs.
+# A tool that silently starts calling nine external services the first time
+# it runs is one that cannot be deployed inside a corporate network.
+#
+# NEVER PUT A CREDENTIAL IN THIS FILE.
+# Auth is declared as the NAME of an environment variable. The loader refuses
+# a spec containing `token:`, `secret:` or `password:` outright. .gitignore
+# protects a file somebody might still email; a value that was never in the
+# file cannot be emailed.
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# BUILT-INS — adjust what ships. You may change only these five keys:
+#   enabled · params · headers · source_tier · fixture · url
+# To change how a built-in is PARSED, copy it into `custom:` under a new key.
+# ---------------------------------------------------------------------
+builtin:
+
+  # The shock catcher. Everything else here reports what a sensor measured or
+  # an agency declared; this is the only source that catches a sentence.
+  gdelt_doc:
+    enabled: true
+    # Narrow or widen the server-side filter. The default query is built from
+    # this deployment's own chokepoints and ports — see catalog.build_gdelt_query.
+    params:
+      timespan: "3d"      # 15min | 1h | 24h | 3d | 1w — how far back to sweep
+      maxrecords: "250"   # GDELT caps at 250 per call
+
+  # PREDICTIVE, not a shock feed. Wave height five days out is the class of
+  # risk an API already forecasts — it is cheap and worth having, but it is
+  # not what the reasoning layer exists for. Turn it off if it is noise.
+  open_meteo_marine:
+    enabled: true
+
+  # A watchlist, not an outage feed. Says a vendor's software is being
+  # exploited, never that your terminal is down.
+  cisa_kev:
+    enabled: true
+
+  # Free, but each needs a free registration. Off until the variable is set;
+  # enabling without the variable leaves them ABSENT with the reason shown.
+  entsoe_outages:
+    enabled: false        # needs ENTSOE_TOKEN      — transparency.entsoe.eu
+  opensanctions:
+    enabled: false        # needs OPENSANCTIONS_KEY — opensanctions.org
+
+# ---------------------------------------------------------------------
+# CUSTOM — anything else, including Sika's own systems.
+#
+# REQUIRED   key · label · url · fields.headline
+# OPTIONAL   items_path · nature · source_tier · date_format · params ·
+#            headers · auth · families · fixture · enabled · notes ·
+#            unlocks_if_connected
+#
+# FIELD PATHS are dotted, with list indexes:
+#     properties.title            geometry.coordinates[1]
+#     const:Sika TMS              data.events[0].id
+# A path that does not resolve yields nothing and drops that one item. It
+# never takes the feed down.
+#
+# NATURE decides whether a model ever sees this source:
+#     report      somebody said a thing  -> goes through the funnel
+#     instrument  something measured a number -> threshold table, no model
+# ---------------------------------------------------------------------
+custom:
+
+  # -------------------------------------------------------------------
+  # 1. A TMS / ERP event stream. The shape most in-house systems already have.
+  #    Disabled because the URL below does not exist until Sika sets it.
+  # -------------------------------------------------------------------
+  - key: tms_events
+    label: "Transport management system — exception events"
+    enabled: false
+    nature: report
+    source_tier: 1          # your own system observing your own freight
+    url: "${TMS_BASE_URL}/api/v1/exceptions"
+    items_path: "data.events"
+    date_format: iso
+    auth:
+      kind: bearer          # bearer | header | query | none
+      env: TMS_BEARER_TOKEN # the NAME of the variable. Never the value.
+    params:
+      status: "open"
+      limit: "100"
+    families: [port_ops, capacity, mechanical]
+    fields:
+      headline: "summary"
+      body: "description"
+      identifier: "eventId"
+      published: "reportedAt"
+      starts: "effectiveFrom"
+      ends: "effectiveTo"
+      node_hint: "location.unlocode"
+      source_name: "const:Sika TMS"
+      url: "link"
+    unlocks_if_connected: >
+      Your own carrier exceptions, at tier 1. This is the highest-value
+      integration on the list: it observes the actual consignment rather than
+      inferring from a region, which is what every public feed above is doing.
+    notes: >
+      Set TMS_BASE_URL and TMS_BEARER_TOKEN in .env, then flip enabled to true.
+      The radar only ever GETs. It never posts to a TMS — the outbound payload
+      is exposed at GET /api/v1/shipment-alerts for a separate process to send,
+      so the write credential never enters the radar's address space.
+
+  # -------------------------------------------------------------------
+  # 2. A DATEX II National Access Point. Every EU member state runs one under
+  #    the ITS Directive; most are free behind a free registration. Copy this
+  #    block per country and change the URL, the key and the paths.
+  # -------------------------------------------------------------------
+  - key: nap_road_incidents
+    label: "National Access Point — road incidents (DATEX II)"
+    enabled: false
+    nature: report
+    source_tier: 1
+    url: "${NAP_BASE_URL}/incidents.json"
+    items_path: "situations"
+    date_format: iso
+    auth:
+      kind: header
+      env: NAP_API_KEY
+      name: "X-API-Key"
+    families: [infrastructure]
+    fields:
+      headline: "situationRecord.generalPublicComment"
+      body: "situationRecord.impact.description"
+      identifier: "id"
+      lat: "situationRecord.location.latitude"
+      lon: "situationRecord.location.longitude"
+      published: "situationRecord.situationRecordCreationTime"
+      starts: "situationRecord.validity.start"
+      ends: "situationRecord.validity.end"
+      source_name: "const:NAP"
+    unlocks_if_connected: >
+      Closures and roadworks in one more country. Germany is already covered
+      keylessly by the autobahn_* built-ins; this is for CH, FR, IT, AT, NL.
+    notes: >
+      Find your country's NAP at datex2.eu/datex-ii-nap-map. Most publish XML
+      by default — request the JSON representation, or put a converter in
+      front. This loader reads JSON only.
+
+  # -------------------------------------------------------------------
+  # 3. A supplier or carrier portal exposing a simple JSON list. The minimum
+  #    viable custom source: four lines of mapping.
+  # -------------------------------------------------------------------
+  - key: carrier_notices
+    label: "Carrier service notices"
+    enabled: false
+    nature: report
+    source_tier: 2
+    url: "${CARRIER_NOTICES_URL}"
+    items_path: "notices"
+    fields:
+      headline: "title"
+      body: "text"
+      published: "date"
+    unlocks_if_connected: >
+      Blank sailings and schedule changes announced by the carrier, rather
+      than discovered when a container does not arrive.
