@@ -219,3 +219,23 @@ def test_a_plan_id_is_unique_so_tabs_and_panels_pair_up(solution):
     DOM id. Two plans sharing an id makes one tab unreachable."""
     ids = [p["plan_id"] for p in solution["plans"]]
     assert len(ids) == len(set(ids))
+
+
+def test_an_option_says_whether_the_vehicles_exist(context):
+    """The capacity board is a screen further down; the button is on this row.
+
+    ``capacity_note`` is optional by design — a note on every option is a note
+    nobody reads — but when present it has to be a sentence, because it is
+    rendered as one.
+    """
+    from engine.fast import view as fast_view
+    notes = [
+        option["capacity_note"]
+        for row in fast_view.route_summaries(context)
+        for option in row["options"]
+        if option.get("capacity_note")
+    ]
+    assert notes, "no option on the whole board reports its fleet"
+    for note in notes:
+        assert note.endswith("."), note
+        assert len(note) < 160, "this renders on one row, not three"

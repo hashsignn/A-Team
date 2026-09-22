@@ -98,6 +98,12 @@ const FastUI = (() => {
       ? esc(option.detail || '')
       : `${esc(option.owner)} owns this lever — we can ask, not execute.`;
 
+    /* Whether the vehicles exist. Sits on the row rather than only on the
+       capacity board below, because this is the row with the button on it. */
+    const fleet = option.capacity_note
+      ? `<span class="act__fleet">${esc(option.capacity_note)}</span>`
+      : '';
+
     return `
       <button type="button"
               class="act${primary && own ? ' act--primary' : ''}${own ? '' : ' act--ask'}"
@@ -107,6 +113,7 @@ const FastUI = (() => {
           <span class="act__label">${esc(option.label)}</span>
           <span class="act__meta">${esc(meta)}${esc(covers)}</span>
           <span class="act__why">${why}</span>
+          ${fleet}
         </span>
         <span class="act__go">${own ? 'Do it' : 'Who to call'}</span>
       </button>`;

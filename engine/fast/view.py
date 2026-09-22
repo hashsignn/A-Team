@@ -180,6 +180,90 @@ def _vetoed_rows(rankings: list[fast.Ranking], limit: int = 4) -> list[dict]:
     return list(seen.values())[:limit]
 
 
+def _capacity_note(
+    option: dict,
+    shipments: list[Shipment],
+    context: RunContext,
+    capacities: dict[str, capacity.ModeCapacity],
+    derate: dict[str, float],
+    blocked: set[str],
+) -> str | None:
+    """What this option costs in vehicles, when that is the binding part.
+
+    The board below answers "is there enough of it" for the lane as a whole.
+    This row is what a planner actually presses, and until now it could rank a
+    road reroute first for being fastest and cheapest per kilometre while the
+    corridor had a fifth of the trucks it would need. Being right one screen
+    further down is not much use when the button is on this one.
+
+    Three different things can be wrong and they are not interchangeable:
+    the mode is not running, the mode cannot be made ready inside the time
+    left, or the mode is running and there is simply not enough of it. The
+    last is the 4flow argument and the first two are lead time, so they are
+    said separately rather than collapsed into "no capacity".
+
+    Only said when it binds. A note on every option is a note nobody reads,
+    and most reroutes are a handful of vehicles nobody has to think about.
+    """
+    modes = [m for m in option.get("modes", []) if m in capacities]
+    if not modes:
+        return None
+
+    ids = set(option.get("shipment_ids") or [])
+    moving = [s for s in shipments if s.shipment_id in ids]
+    if not moving:
+        return None
+    tonnes = sum(
+        capacity.tonnes_of(context.config, s.product_family) for s in moving
+    )
+    horizon = max(
+        (capacity.hours_of_slack(s, context.clock) for s in moving), default=0.0
+    )
+
+    # (severity, message). Severity orders the complaints, not the modes:
+    # a mode that is not running beats one that is merely oversubscribed,
+    # whatever the size of its units.
+    found: list[tuple[float, str]] = []
+    for mode in modes:
+        cap = capacities[mode]
+        if mode in blocked:
+            found.append((3.0, f"{mode.capitalize()} is not running on this "
+                                "corridor right now."))
+            continue
+        if cap.loading_hours(horizon) <= 0:
+            found.append((
+                2.0,
+                f"{mode.capitalize()} has to be arranged "
+                f"{cap.hours_to_ready:.0f} h ahead, and only "
+                f"{max(0.0, horizon):.0f} h remain.",
+            ))
+            continue
+        needed = cap.units_to_replace(tonnes)
+        have = int(cap.available_units(horizon) * derate.get(mode, 1.0))
+        if needed > have:
+            unit = capacity.unit_name(mode, needed)
+            if have == 0:
+                # Whole units only: half a sailing inside the window is a
+                # sailing you miss, so "0 available" is a real answer and
+                # not a rounding artefact worth apologising for.
+                found.append((
+                    1.9,
+                    f"{mode.capitalize()} runs {cap.units_per_week:.0f} times "
+                    f"a week and none of those departures falls inside "
+                    f"{horizon:,.0f} h.",
+                ))
+            else:
+                found.append((
+                    min(1.8, 1.0 + (needed / have) / 100.0),
+                    f"Needs about {needed} {unit}; the corridor has "
+                    f"{have} inside {horizon:,.0f} h.",
+                ))
+
+    if not found:
+        return None
+    return max(found, key=lambda pair: pair[0])[1]
+
+
 def _delay_days(rankings: list[fast.Ranking], risks: list) -> float:
     """The delay the lane is carrying right now if nobody acts."""
     if not risks:
@@ -226,7 +310,18 @@ def route_summaries(context: RunContext, ledger: Ledger | None = None) -> list[d
         at_risk = len({s.shipment_id for s, _, _ in rows})
         total = sum(1 for s in context.shipments if s.lane_id == lane_id)
 
-        best = grouped[0] if grouped else None
+        lane_ships = [s for s, _, _ in rows]
+        blocked, derate = _mode_pressure(context, lane_ships)
+        capacities = capacity.modes(config)
+        option_rows = [g.as_dict() for g in grouped]
+        for payload in option_rows:
+            note = _capacity_note(
+                payload, lane_ships, context, capacities, derate, blocked
+            )
+            if note:
+                payload["capacity_note"] = note
+
+        best = option_rows[0] if option_rows else None
         executed = [
             e.as_dict(context.clock.as_of)
             for e in ledger.recent(50)
@@ -247,8 +342,8 @@ def route_summaries(context: RunContext, ledger: Ledger | None = None) -> list[d
                 "causes": causes,
                 "customers": sorted({r.customer for r in risks}),
                 # The one thing to press, already chosen.
-                "best": best.as_dict() if best else None,
-                "options": [g.as_dict() for g in grouped[:OPTION_LIMIT]],
+                "best": best,
+                "options": option_rows[:OPTION_LIMIT],
                 "options_total": len(grouped),
                 "vetoed": _vetoed_rows(rankings),
                 "expired": len([o for r in rankings for o in r.expired]),
@@ -258,8 +353,7 @@ def route_summaries(context: RunContext, ledger: Ledger | None = None) -> list[d
                 # half, a lane with enough slack to absorb the delay reports
                 # that it is fine because somebody could ring the customer.
                 "can_hold_the_date": bool(
-                    best and best.example.restores_delivery
-                    and best.on_time_count == len(best.shipment_ids)
+                    best and best["restores_delivery"] and best["on_time"]
                 ),
             }
         )

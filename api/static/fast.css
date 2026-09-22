@@ -482,3 +482,17 @@ details.fold .fold__body { padding: 0 15px 15px; font-size: 13px; }
   white-space: nowrap;
 }
 .ptab__pick { margin-left: 6px; font-size: 9px; padding: 1px 5px; }
+
+/* Whether the vehicles exist, on the row that carries the button. A reroute
+   that is fastest and cheapest per kilometre and needs a fleet the corridor
+   has not got is not a better option, and the planner should not have to
+   scroll to the capacity board to find that out. */
+.act__fleet {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--lvl-yellow);
+}
+.act--primary .act__fleet { color: var(--lvl-yellow); }
