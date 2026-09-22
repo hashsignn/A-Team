@@ -52,7 +52,7 @@ function observedNow() {
 }
 
 const state = { status: null, load: 'intact', sending: false, role: 'driver',
-                fix: null, photos: [] };
+                fix: null, photos: [], token: null };
 
 /* Who can report, and what it means for the planner.
  *
@@ -73,6 +73,44 @@ const ROLES = [
       + 'will not release a re-route.' },
 ];
 const ROLE_KEY = 'radar.driver.role';
+const TOKEN_KEY = 'radar.driver.token';
+
+/* THE CREDENTIAL.
+ *
+ * Handed over once, as a link: ?k=<token>. The app keeps it and removes it
+ * from the address bar immediately.
+ *
+ * A token in a URL is a real trade-off and worth naming. It can end up in a
+ * server log, a proxy log or a browser history, so it is stripped from the
+ * visible URL the moment it is read, and the planner can revoke it in one
+ * command. It is still the only channel that works for handing a credential
+ * to somebody standing next to a truck: a login form means a password, a
+ * password means a reset flow, and a reset flow means the driver cannot file
+ * the report they stopped to file.
+ *
+ * Kept in localStorage, which is per-origin and survives the app being
+ * closed. It can throw in a private window, so every read and write is
+ * guarded — a driver with no storage can still file, they just re-open the
+ * link each time. */
+function readToken() {
+  try { return localStorage.getItem(TOKEN_KEY) || null; }
+  catch { return null; }
+}
+function saveToken(value) {
+  try { localStorage.setItem(TOKEN_KEY, value); } catch { /* private window */ }
+}
+function captureToken() {
+  const fromLink = new URLSearchParams(location.search).get('k');
+  if (fromLink) {
+    saveToken(fromLink);
+    state.token = fromLink;
+    const url = new URL(location.href);
+    url.searchParams.delete('k');
+    history.replaceState(null, '', url);      // out of the address bar at once
+  } else {
+    state.token = readToken();
+  }
+}
 
 function readRole() {
   try { return localStorage.getItem(ROLE_KEY) || 'driver'; }
@@ -98,8 +136,10 @@ function renderRoles() {
     btn.addEventListener('click', () => {
       state.role = btn.dataset.role;
       saveRole(state.role);
-      renderRoles();
+      captureToken();
+  renderRoles();
   renderPhotos();
+  renderAuth();
   $('f-photo').addEventListener('change', (e) => addPhotos(e.target.files));
     });
   });
@@ -143,7 +183,10 @@ async function drain() {
     try {
       const res = await fetch('/api/v1/reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(state.token ? { 'X-Report-Token': state.token } : {}),
+        },
         body: JSON.stringify(row.payload),
       });
       if (res.status === 201) {
@@ -154,6 +197,15 @@ async function drain() {
         // forever is a report the driver thinks was delivered.
         const body = await res.json().catch(() => ({}));
         logRejected(row, body.detail || 'refused');
+      } else if (res.status === 401) {
+        // The credential is missing, wrong, or was revoked. Retrying will
+        // never help either, and this is the failure most likely to go
+        // unnoticed: the queue would grow quietly while the driver believed
+        // every report had landed. So it comes out, and it says what to do.
+        logRejected(row, 'this phone is not authorised — ask the planner for '
+                       + 'a new link, then send again');
+        state.authFailed = true;
+        renderAuth();
       } else {
         remaining.push(row);
       }
@@ -323,7 +375,10 @@ async function addPhotos(files) {
     try {
       const res = await fetch('/api/v1/photos', {
         method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          ...(state.token ? { 'X-Report-Token': state.token } : {}),
+        },
         body: file,
       });
       const body = await res.json();
@@ -413,8 +468,10 @@ window.addEventListener('offline', renderNet);
     document.querySelector('.dv-main').prepend(banner);
   }
   renderNet();
+  captureToken();
   renderRoles();
   renderPhotos();
+  renderAuth();
   $('f-photo').addEventListener('change', (e) => addPhotos(e.target.files));
   renderQueue();
   const shipment = params.get('shipment') || recall();
@@ -430,3 +487,33 @@ window.addEventListener('offline', renderNet);
   // report itself online while sitting behind a captive portal.
   setInterval(drain, 20000);
 })();
+
+
+/* Whether this phone can file at all, said before the driver fills the form.
+ *
+ * Checked on open rather than on send: somebody who has stopped at a lock to
+ * report a problem should find out that their link expired BEFORE they type
+ * it out, not after. */
+async function renderAuth() {
+  const banner = document.getElementById('dv-auth');
+  if (!banner) return;
+  if (state.authFailed) {
+    banner.hidden = false;
+    banner.className = 'dv-auth dv-auth--bad';
+    banner.innerHTML = '<b>This phone is not authorised.</b> Ask the planner '
+      + 'for a new link. Anything already typed is kept.';
+    return;
+  }
+  try {
+    const res = await fetch('/api/v1/reports?limit=1', {
+      headers: state.token ? { 'X-Report-Token': state.token } : {},
+    });
+    if (res.status === 401) {
+      state.authFailed = true;
+      return renderAuth();
+    }
+    banner.hidden = true;
+  } catch {
+    banner.hidden = true;     // offline is not unauthorised
+  }
+}

@@ -128,6 +128,13 @@ class FieldReport:
     lon: float | None = None
     accuracy_m: float | None = None
 
+    # Set by the API from the CREDENTIAL, never from the payload. A
+    # self-declared name is worth nothing on the one endpoint that can
+    # release a re-route; `authenticated` is what tells a planner whether
+    # `reported_by` means anything.
+    driver_key: str | None = None
+    authenticated: bool = False
+
     # Photo ids, not photo bytes. An append-only JSONL with base64 images in
     # it stops being a file anyone can open, and the log is evidence: it has
     # to stay readable with `cat` in five years.
@@ -147,6 +154,8 @@ class FieldReport:
             "reported_by": self.reported_by,
             "confirms_disruption": self.confirms_disruption,
             "role": self.role,
+            "driver_key": self.driver_key,
+            "authenticated": self.authenticated,
             "lat": self.lat,
             "lon": self.lon,
             "accuracy_m": self.accuracy_m,
@@ -300,6 +309,8 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
         reported_by=_clean(payload.get("reported_by"), MAX_TEXT),
         confirms_disruption=bool(payload.get("confirms_disruption")),
         role=role,
+        driver_key=_clean(payload.get("driver_key"), 32),
+        authenticated=bool(payload.get("authenticated")),
         lat=lat,
         lon=lon,
         accuracy_m=accuracy,
@@ -355,6 +366,8 @@ def read_all(log: Path | None = None) -> list[FieldReport]:
                 lon=raw.get("lon"),
                 accuracy_m=raw.get("accuracy_m"),
                 photos=tuple(raw.get("photos") or ()),
+                driver_key=raw.get("driver_key"),
+                authenticated=bool(raw.get("authenticated")),
                 confirms_disruption=bool(raw.get("confirms_disruption")),
             ))
         except (json.JSONDecodeError, KeyError, ValueError, TypeError):
