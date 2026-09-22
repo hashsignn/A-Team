@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route — Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="icon" href="data:,">
+<script src="/theme.js?v=__ASSETV__"></script>
+</head>
+<body class="rt-body">
+
+<header class="topbar topbar--sub">
+  <a class="ctl ctl--ghost" href="/">&larr; All routes</a>
+  <div class="rt-head">
+    <span class="level-chip" id="rt-chip"></span>
+    <h1 id="rt-name">…</h1>
+    <p class="directive" id="rt-directive"></p>
+  </div>
+  <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+</header>
+
+<main class="rt-main">
+
+  <!-- The four numbers, once. They were scattered across three surfaces and
+       repeated on two of them. -->
+  <section class="rt-stats" id="rt-stats"></section>
+
+  <!-- ============================================================
+       THE CONVOY — the point of this page.
+
+       Each leg of the route, drawn as the vehicles moving along it, one
+       icon per consignment, coloured by its own state. "Nine trucks, two
+       of them stuck" is something a planner can act on; "a lane at Alert"
+       is not.
+       ============================================================ -->
+  <section class="rt-block">
+    <div class="rt-block-head">
+      <h2>What is on this route</h2>
+      <div class="rt-key">
+        <span><i class="veh-key veh-key--ok"></i> on plan</span>
+        <span><i class="veh-key veh-key--risk"></i> decision needed</span>
+        <span><i class="veh-key veh-key--hit"></i> already hit</span>
+        <span class="muted">click one for its ID and what was reported</span>
+      </div>
+    </div>
+    <div class="convoy" id="convoy"></div>
+  </section>
+
+  <!-- One consignment, when you click it. Replaces nothing; appears below. -->
+  <section class="rt-block" id="rt-vehicle-block" hidden>
+    <div class="rt-block-head"><h2 id="rt-vehicle-title">Consignment</h2></div>
+    <div id="rt-vehicle"></div>
+  </section>
+
+  <div class="rt-two">
+    <section class="rt-block">
+      <div class="rt-block-head">
+        <h2>Risk matrix</h2>
+        <span class="block-note">shaded by CHF at stake</span>
+      </div>
+      <div id="rt-matrix"></div>
+      <div class="mx-legend">
+        <span><i class="mx-dot mx-dot--solid"></i> options still open</span>
+        <span><i class="mx-dot mx-dot--hollow"></i> too late to act</span>
+        <span><i class="mx-swatch"></i> deeper = more CHF</span>
+      </div>
+    </section>
+
+    <section class="rt-block">
+      <div class="rt-block-head">
+        <h2>Risk in effect</h2>
+        <span class="block-note">days of delay contributed</span>
+      </div>
+      <div class="evm-radar">
+        <svg id="rt-radar" role="img" aria-label="Active risk families"></svg>
+      </div>
+      <div class="radar-legend" id="rt-radar-legend"></div>
+    </section>
+  </div>
+
+  <!-- The only thing to do from here, and it is unmissable. -->
+  <a class="rt-next" id="rt-next" href="#">
+    <span>
+      <b>See the alternatives</b>
+      <em id="rt-next-note">what can still be changed, and what each costs</em>
+    </span>
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </a>
+</main>
+
+<script src="/charts.js?v=__ASSETV__"></script>
+<script src="/route.js?v=__ASSETV__"></script>
+</body>
+</html>
