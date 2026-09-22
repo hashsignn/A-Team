@@ -26,6 +26,7 @@ from engine.act.playbook import best_option, options_for
 from engine.clock import Clock
 from engine.config import Config, load_config
 from engine.gate.intersect import gate
+from engine.ingest import flows as flows_mod
 from engine.ingest.feeds import load_feed_items, social_promotion_status
 from engine.ingest.observations import FeedReport, FeedStatus, IngestBundle
 from engine.ingest.synthetic import generate_shipments, in_scope
@@ -117,17 +118,42 @@ def run(
     if not options.include_delivered:
         shipments = [s for s in shipments if in_scope(s, clock)]
 
+    # Two rows, not one, because there are now two different claims to make.
+    # The consignments are ours; the lane mix may be Sika's. Folding both into
+    # a single "synthetic" line would either overstate the first or bury the
+    # second.
+    flow_mix = flows_mod.load()
+    calibrated = (
+        " — lane mix calibrated against Sika's own order history"
+        if flow_mix.available else ""
+    )
     bundle.add(
         FeedReport(
             key="shipment_book",
             label="Internal shipment book",
             status=FeedStatus.FIXTURE,
-            detail=f"{len(shipments)} SYNTHETIC shipments — generated, not Sika data",
+            detail=(
+                f"{len(shipments)} SYNTHETIC shipments — generated, not Sika "
+                f"data{calibrated}"
+            ),
             unlocks_if_connected=(
                 "The planner supplies a CSV/JSON export. Integration with ERP or "
                 "TMS is explicitly out of scope; this is a file, not a connector."
             ),
             records=len(shipments),
+            retrieved_at=clock.as_of,
+        )
+    )
+
+    report = flow_mix.report()
+    bundle.add(
+        FeedReport(
+            key=report["key"],
+            label=report["label"],
+            status=FeedStatus.CONNECTED if flow_mix.available else FeedStatus.ABSENT,
+            detail=report["detail"],
+            unlocks_if_connected=report["unlocks_if_connected"],
+            records=flow_mix.documents,
             retrieved_at=clock.as_of,
         )
     )

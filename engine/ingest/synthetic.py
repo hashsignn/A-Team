@@ -16,6 +16,7 @@ from datetime import timedelta
 
 from engine.clock import Clock
 from engine.config import Config
+from engine.ingest import flows as flows_mod
 from engine.schemas import (
     ContractType,
     CustomerImpactTier,
@@ -76,9 +77,16 @@ def generate_shipments(
     lanes = config.lanes
     shipments: list[Shipment] = []
 
-    # Weight the anchor lane up: the Rhine demo needs enough shipments on it
-    # for the per-event matrix to have something to show.
-    weights = [3.0 if lane["focus"] == "rhine" else 1.0 for lane in lanes]
+    # How often each lane is drawn. With Sika's flow export present this is
+    # their real document count per country pair; without it, the old rule.
+    #
+    # The old rule was a thumb on the scale and said so: it weighted the Rhine
+    # up 3x because the demo needed shipments there. Calibrating against the
+    # export replaces that with evidence — and the first thing it did was drop
+    # the Rhine to nothing, because those lanes ended at Rotterdam and Sika
+    # ships nothing TO the Netherlands. Rotterdam is transit. The corridor
+    # earns its share back through the through-lanes, from real volume.
+    weights = flows_mod.lane_weights(config)
 
     for i in range(count):
         lane = rng.choices(lanes, weights=weights, k=1)[0]

@@ -17,7 +17,13 @@ from engine.export.route import route_view
 from engine.pipeline import RunOptions, run
 
 AS_OF = Clock.at("2026-09-18T06:00:00+00:00")
-LANE = "LANE_RHINE_01"
+# The Rhine anchor. NOT LANE_RHINE_01 any more: that lane ends at Rotterdam,
+# and Sika's own flow export has zero intercompany documents to the
+# Netherlands, so once the book was calibrated against it the lane drew no
+# shipments at all. Rotterdam is transit in their real flow. LANE_ASIA_08 is
+# the same corridor modelled properly — Düdingen, Basel, the Rhine, Rotterdam,
+# and on to Shanghai — and it carries real volume.
+LANE = "LANE_ASIA_08"
 
 
 @pytest.fixture(scope="module")

@@ -373,7 +373,13 @@ def test_a_real_disruption_in_the_same_feed_does_reach_the_board(config):
     """The other half. A filter that rejects everything also rejects nothing
     of value, and would pass the test above."""
     context = run(clock=AS_OF, config=config,
-                  options=RunOptions(shipment_count=125, seed=7))
+    # 700, not 125. The book is now weighted by Sika's real order volume, and
+    # only 4.9% of their intercompany documents go to the Gulf. At 125 the
+    # corridor draws one consignment or none, the Hormuz event touches no
+    # freight, and the gate correctly drops it — the model working, not
+    # failing. This scenario asks whether the tool can SEE such a closure, so
+    # it needs a book with freight on the corridor.
+                  options=RunOptions(shipment_count=700, seed=7))
     titles = " | ".join(e.title.lower() for e in context.events)
     assert "hormuz" in titles
     assert "antwerp" in titles

@@ -55,27 +55,33 @@ sys.path.insert(0, str(ROOT))
 
 from engine.config import load_config  # noqa: E402
 
-# Where a country's freight enters or leaves the modelled network. One entry
-# per country the export actually uses; a country with no entry is reported
-# unmapped rather than guessed at, because attaching Colombia to the nearest
-# modelled port would invent a route nobody agreed to.
-GATEWAY: dict[str, tuple[str, ...]] = {
-    # Origins — the DACH plants that supply everything in this export.
-    "CH": ("SIKA_DUD", "SIKA_ZUR"),
-    "DE": ("SIKA_STU", "SIKA_BAD"),
-    # Destinations the network can represent.
-    "CN": ("CNSHA", "CNNGB"),
-    "US": ("USNYC", "USORF", "USHOU", "USLAX"),
-    "AE": ("AEJEA",),
-    "SG": ("SGSIN",),
-    "MY": ("MYPKG",),
-    "GB": ("GBFXT", "GBSOU"),
-    "ES": ("ESVLC", "ESBCN"),
-    "IT": ("ITGOA", "ITSPE"),
-    "FR": ("FRLEH",),
-    "NL": ("NLRTM",),
-    "BE": ("BEANR",),
-}
+# Where a country's freight enters or leaves the modelled network.
+#
+# DERIVED from network.yaml rather than listed here. A hardcoded table is a
+# second copy of the network that drifts: add a port and coverage silently
+# stays where it was, which is exactly what happened the first time this ran
+# after nine gateways were added. Deriving it means the network is the only
+# place the answer lives.
+#
+# Plants and distribution sites count as origins; seaports and inland ports
+# count as destinations. A chokepoint is neither — it is transited, never
+# shipped to.
+ORIGIN_KINDS = {"plant", "distribution"}
+DESTINATION_KINDS = {"seaport", "inland_port"}
+
+
+def gateways(config) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """(origins, destinations) by ISO country code, from the network itself."""
+    origins: dict[str, list[str]] = {}
+    destinations: dict[str, list[str]] = {}
+    for node_id, node in config.nodes.items():
+        kind = node.kind.value
+        if kind in ORIGIN_KINDS:
+            origins.setdefault(node.country, []).append(node_id)
+        if kind in DESTINATION_KINDS:
+            destinations.setdefault(node.country, []).append(node_id)
+    return origins, destinations
+
 
 HEADER_ROW = 6   # 1-indexed; rows 1-5 are the filter notes Sika left on top
 
@@ -138,15 +144,16 @@ def summarise(records: list[dict]) -> dict:
     }
 
 
-def map_lane(origin: str, destination: str, known: set[str]) -> dict:
+def map_lane(origin: str, destination: str, links: tuple) -> dict:
     """Which modelled nodes this lane runs between, if any.
 
     Returns the mapping AND why it failed, because "we cannot route Colombia"
     is a finding about the network's coverage and belongs on screen, not in a
     silently shorter list.
     """
-    from_nodes = [n for n in GATEWAY.get(origin, ()) if n in known]
-    to_nodes = [n for n in GATEWAY.get(destination, ()) if n in known]
+    origins, destinations = links
+    from_nodes = origins.get(origin, [])
+    to_nodes = destinations.get(destination, [])
     if from_nodes and to_nodes:
         return {"mapped": True, "from": from_nodes, "to": to_nodes, "why": ""}
     missing = []
@@ -158,7 +165,7 @@ def map_lane(origin: str, destination: str, known: set[str]) -> dict:
             "why": "; ".join(missing)}
 
 
-def render(summary: dict, known: set[str]) -> tuple[str, dict]:
+def render(summary: dict, links: tuple) -> tuple[str, dict]:
     lanes = summary["lanes"]
     ranked = sorted(
         lanes.items(), key=lambda kv: len(kv[1]["docs"]), reverse=True
@@ -186,7 +193,7 @@ def render(summary: dict, known: set[str]) -> tuple[str, dict]:
     ]
 
     for (origin, destination), lane in ranked:
-        link = map_lane(origin, destination, known)
+        link = map_lane(origin, destination, links)
         docs = len(lane["docs"])
         if link["mapped"]:
             mapped += 1
@@ -245,8 +252,9 @@ def main() -> int:
 
     records = read(args.export)
     summary = summarise(records)
-    known = set(load_config().nodes)
-    text, stats = render(summary, known)
+    config = load_config()
+    links = gateways(config)
+    text, stats = render(summary, links)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text)

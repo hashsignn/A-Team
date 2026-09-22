@@ -133,6 +133,130 @@ nodes:
   # ---------------------------------------------------------------
   # European seaports
   # ---------------------------------------------------------------
+  # -----------------------------------------------------------------
+  # OVERSEAS GATEWAYS — added after reading Sika's own flow export
+  #
+  # Their intercompany book is DACH selling to 23 countries. The first lane
+  # set could route 43% of it; the rest had nowhere to land, and an
+  # unroutable lane is invisible rather than wrong, which is worse. These
+  # are the destination gateways for the pairs that carried the most
+  # documents: Mexico, India, Canada, Japan, Brazil, New Zealand,
+  # Australia, South Africa, Colombia.
+  #
+  # Coordinates are public geographic fact. Which port a given consignment
+  # actually clears is NOT in the export — it carries country, not port —
+  # so these are the principal gateway for each market and are declared as
+  # that rather than as Sika's routing.
+  # -----------------------------------------------------------------
+  - id: MXVER
+    name: Veracruz
+    kind: seaport
+    country: MX
+    lat: 19.190
+    lon: -96.140
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: [USHOU]
+
+  - id: INNSA
+    name: Nhava Sheva
+    kind: seaport
+    country: IN
+    lat: 18.950
+    lon: 72.950
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.03
+    alternatives: [AEJEA]
+
+  - id: CAMTR
+    name: Montreal
+    kind: seaport
+    country: CA
+    lat: 45.500
+    lon: -73.550
+    modes: [sea, rail, road]
+    on_river: true
+    river: St Lawrence
+    inland: false
+    throughput_share: 0.01
+    alternatives: [USNYC]
+
+  - id: JPYOK
+    name: Yokohama
+    kind: seaport
+    country: JP
+    lat: 35.450
+    lon: 139.650
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: [CNSHA]
+
+  - id: BRSSZ
+    name: Santos
+    kind: seaport
+    country: BR
+    lat: -23.980
+    lon: -46.300
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: []
+
+  - id: AUSYD
+    name: Sydney
+    kind: seaport
+    country: AU
+    lat: -33.860
+    lon: 151.210
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.02
+    alternatives: [NZAKL]
+
+  - id: NZAKL
+    name: Auckland
+    kind: seaport
+    country: NZ
+    lat: -36.840
+    lon: 174.760
+    modes: [sea, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.01
+    alternatives: [AUSYD]
+
+  - id: ZADUR
+    name: Durban
+    kind: seaport
+    country: ZA
+    lat: -29.870
+    lon: 31.030
+    modes: [sea, rail, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.01
+    alternatives: []
+
+  - id: COCTG
+    name: Cartagena
+    kind: seaport
+    country: CO
+    lat: 10.400
+    lon: -75.510
+    modes: [sea, road]
+    on_river: false
+    inland: false
+    throughput_share: 0.01
+    alternatives: [CHOKE_PANAMA]
+
   - id: NLRTM
     name: Rotterdam
     kind: seaport

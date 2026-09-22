@@ -18,7 +18,13 @@ from engine.export.board import build_board
 from engine.pipeline import RunOptions, run
 
 AS_OF = "2026-09-16"
-LANE = "LANE_RHINE_01"
+# The Rhine anchor. NOT LANE_RHINE_01 any more: that lane ends at Rotterdam,
+# and Sika's own flow export has zero intercompany documents to the
+# Netherlands, so once the book was calibrated against it the lane drew no
+# shipments at all. Rotterdam is transit in their real flow. LANE_ASIA_08 is
+# the same corridor modelled properly — Düdingen, Basel, the Rhine, Rotterdam,
+# and on to Shanghai — and it carries real volume.
+LANE = "LANE_ASIA_08"
 
 
 @pytest.fixture(scope="module")
@@ -62,9 +68,21 @@ def test_a_step_that_names_data_actually_carries_it(payload):
     assert step(payload, "detect.scope")["data"]["consignments"]
 
 
-def test_the_consignment_list_is_every_consignment_not_just_the_actionable(payload):
+def test_the_consignment_list_is_every_consignment_not_just_the_actionable(
+    payload, context, route
+):
+    """Compared against the book, not against "some must be unaffected".
+
+    The old assertion needed at least one consignment on the lane to be fine,
+    which is not a property of the list — on a Rhine lane during low water
+    every consignment is affected, and the list was still correct. What the
+    step actually promises is that it shows the WHOLE lane."""
     rows = step(payload, "detect.scope")["data"]["consignments"]
-    assert len(rows) > sum(1 for r in rows if r["at_risk"])
+    on_lane = {
+        s.shipment_id for s in context.shipments if s.lane_id == route["route_id"]
+    }
+    assert {r["shipment_id"] for r in rows} == on_lane
+    assert len(rows) >= sum(1 for r in rows if r["at_risk"])
 
 
 def test_the_scope_count_matches_the_header(payload, route):

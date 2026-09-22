@@ -388,3 +388,317 @@ lanes:
         mode: sea
         transit_hours: 26
         buffer_hours: 12
+
+  # =================================================================
+  # OVERSEAS LANES — added after reading Sika's own flow export
+  #
+  # The first lane set was built from the brief and covered 43% of Sika's
+  # actual intercompany order volume. The rest went to markets with nowhere
+  # to land: Mexico, India, Canada, Japan, Brazil, New Zealand, Australia,
+  # South Africa, Colombia. An unroutable lane is invisible rather than
+  # wrong, which is the more dangerous of the two.
+  #
+  # TRANSIT TIMES ARE COMPUTED, not guessed. Each leg is its real great-
+  # circle or sea-waypoint distance divided by the modal speed in fast.yaml,
+  # plus the handling time for the arrival node. The results land where
+  # published container schedules do — Europe to India 13-18 days, to Japan
+  # 30, to Auckland 35 — which is the check that the speed model is sane.
+  #
+  # WHAT IS STILL OURS, NOT SIKA'S: the port each market clears through, the
+  # mode of each leg, and the buffer. The export carries country pairs and
+  # nothing else, so these are declared and the inputs panel says so.
+  # =================================================================
+  - id: LANE_MX_01
+    name: Düdingen → Antwerp → Veracruz
+    focus: eu_latam
+    legs:
+      - from: SIKA_DUD
+        to: BEANR
+        mode: road
+        transit_hours: 27
+        buffer_hours: 6
+      - from: BEANR
+        to: MXVER
+        mode: sea
+        transit_hours: 323
+        buffer_hours: 48
+
+  - id: LANE_IN_01
+    name: Düdingen → Genoa → Suez → Nhava Sheva
+    focus: eu_india
+    legs:
+      - from: SIKA_DUD
+        to: ITGOA
+        mode: road
+        transit_hours: 23
+        buffer_hours: 6
+      - from: ITGOA
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 93
+        buffer_hours: 14
+      - from: CHOKE_SUEZ
+        to: INNSA
+        mode: sea
+        transit_hours: 197
+        buffer_hours: 30
+
+  - id: LANE_MX_02
+    name: Stuttgart → Rotterdam → Veracruz
+    focus: eu_latam
+    legs:
+      - from: SIKA_STU
+        to: NLRTM
+        mode: road
+        transit_hours: 26
+        buffer_hours: 6
+      - from: NLRTM
+        to: MXVER
+        mode: sea
+        transit_hours: 323
+        buffer_hours: 48
+
+  - id: LANE_CA_01
+    name: Zürich → Antwerp → Montreal
+    focus: eu_us
+    legs:
+      - from: SIKA_ZUR
+        to: BEANR
+        mode: rail
+        transit_hours: 30
+        buffer_hours: 6
+      - from: BEANR
+        to: CAMTR
+        mode: sea
+        transit_hours: 206
+        buffer_hours: 31
+
+  - id: LANE_JP_01
+    name: Düdingen → Rotterdam → Suez → Yokohama
+    focus: eu_asia
+    legs:
+      - from: SIKA_DUD
+        to: NLRTM
+        mode: rail
+        transit_hours: 32
+        buffer_hours: 6
+      - from: NLRTM
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 201
+        buffer_hours: 30
+      - from: CHOKE_SUEZ
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 280
+        buffer_hours: 42
+      - from: CHOKE_MALACCA
+        to: JPYOK
+        mode: sea
+        transit_hours: 212
+        buffer_hours: 32
+
+  - id: LANE_IN_02
+    name: Stuttgart → Hamburg → Suez → Nhava Sheva
+    focus: eu_india
+    legs:
+      - from: SIKA_STU
+        to: DEHAM
+        mode: rail
+        transit_hours: 30
+        buffer_hours: 6
+      - from: DEHAM
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 217
+        buffer_hours: 33
+      - from: CHOKE_SUEZ
+        to: INNSA
+        mode: sea
+        transit_hours: 197
+        buffer_hours: 30
+
+  - id: LANE_BR_01
+    name: Düdingen → Genoa → Santos
+    focus: eu_latam
+    legs:
+      - from: SIKA_DUD
+        to: ITGOA
+        mode: road
+        transit_hours: 23
+        buffer_hours: 6
+      - from: ITGOA
+        to: BRSSZ
+        mode: sea
+        transit_hours: 337
+        buffer_hours: 51
+
+  - id: LANE_NZ_01
+    name: Zürich → Rotterdam → Malacca → Auckland
+    focus: eu_oceania
+    legs:
+      - from: SIKA_ZUR
+        to: NLRTM
+        mode: rail
+        transit_hours: 31
+        buffer_hours: 6
+      - from: NLRTM
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 201
+        buffer_hours: 30
+      - from: CHOKE_SUEZ
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 280
+        buffer_hours: 42
+      - from: CHOKE_MALACCA
+        to: NZAKL
+        mode: sea
+        transit_hours: 334
+        buffer_hours: 50
+
+  - id: LANE_AU_01
+    name: Düdingen → Genoa → Suez → Sydney
+    focus: eu_oceania
+    legs:
+      - from: SIKA_DUD
+        to: ITGOA
+        mode: road
+        transit_hours: 23
+        buffer_hours: 6
+      - from: ITGOA
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 93
+        buffer_hours: 14
+      - from: CHOKE_SUEZ
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 280
+        buffer_hours: 42
+      - from: CHOKE_MALACCA
+        to: AUSYD
+        mode: sea
+        transit_hours: 289
+        buffer_hours: 43
+
+  - id: LANE_ZA_01
+    name: Düdingen → Valencia → Durban
+    focus: eu_africa
+    legs:
+      - from: SIKA_DUD
+        to: ESVLC
+        mode: road
+        transit_hours: 35
+        buffer_hours: 6
+      - from: ESVLC
+        to: CHOKE_GIB
+        mode: sea
+        transit_hours: 25
+        buffer_hours: 6
+      - from: CHOKE_GIB
+        to: ZADUR
+        mode: sea
+        transit_hours: 372
+        buffer_hours: 56
+
+  - id: LANE_CO_01
+    name: Stuttgart → Antwerp → Cartagena
+    focus: eu_latam
+    legs:
+      - from: SIKA_STU
+        to: BEANR
+        mode: road
+        transit_hours: 25
+        buffer_hours: 6
+      - from: BEANR
+        to: COCTG
+        mode: sea
+        transit_hours: 299
+        buffer_hours: 45
+
+  # =================================================================
+  # THE RHINE AS A LEG, NOT A DESTINATION
+  #
+  # LANE_RHINE_01 and _02 end at Rotterdam and Duisburg. Sika's export has
+  # ZERO intercompany documents to the Netherlands or Germany, which does not
+  # mean the Rhine is unimportant — it means those ports are TRANSIT in their
+  # real flow, and modelling them as destinations put the corridor's whole
+  # volume on lanes nobody ships.
+  #
+  # These are the through-lanes: Düdingen to the two biggest overseas markets,
+  # routed north over the river instead of south over the Alps.
+  #
+  # WHICH WAY SIKA ACTUALLY SENDS IT IS NOT IN THE EXPORT. It carries country
+  # pairs and nothing about routing. Both gateways are modelled — Rotterdam
+  # via the Rhine here, Genoa over the Alps in LANE_ASIA_01 and LANE_IN_01 —
+  # and the pair's real document count is SPLIT between them. That is a
+  # declared assumption about how freight moves, not a finding from the data,
+  # and it is made this way round deliberately: picking the Rhine because the
+  # demo needs the Rhine is the exact fudge this calibration removed.
+  # =================================================================
+  - id: LANE_ASIA_08
+    name: Düdingen → Basel → Rhine → Rotterdam → Suez → Shanghai
+    focus: rhine
+    legs:
+      - from: SIKA_DUD
+        to: CHBSL
+        mode: road
+        transit_hours: 11
+        buffer_hours: 6
+      - from: CHBSL
+        to: GAUGE_KAUB
+        mode: barge
+        transit_hours: 25
+        buffer_hours: 6
+      - from: GAUGE_KAUB
+        to: NLRTM
+        mode: barge
+        transit_hours: 45
+        buffer_hours: 7
+      - from: NLRTM
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 201
+        buffer_hours: 30
+      - from: CHOKE_SUEZ
+        to: CHOKE_MALACCA
+        mode: sea
+        transit_hours: 280
+        buffer_hours: 42
+      - from: CHOKE_MALACCA
+        to: CNSHA
+        mode: sea
+        transit_hours: 149
+        buffer_hours: 22
+
+  - id: LANE_IN_03
+    name: Düdingen → Basel → Rhine → Rotterdam → Suez → Nhava Sheva
+    focus: rhine
+    legs:
+      - from: SIKA_DUD
+        to: CHBSL
+        mode: road
+        transit_hours: 11
+        buffer_hours: 6
+      - from: CHBSL
+        to: GAUGE_KAUB
+        mode: barge
+        transit_hours: 25
+        buffer_hours: 6
+      - from: GAUGE_KAUB
+        to: NLRTM
+        mode: barge
+        transit_hours: 45
+        buffer_hours: 7
+      - from: NLRTM
+        to: CHOKE_SUEZ
+        mode: sea
+        transit_hours: 201
+        buffer_hours: 30
+      - from: CHOKE_SUEZ
+        to: INNSA
+        mode: sea
+        transit_hours: 197
+        buffer_hours: 30

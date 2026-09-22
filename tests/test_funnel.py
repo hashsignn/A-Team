@@ -45,7 +45,21 @@ def config():
 
 @pytest.fixture(scope="module")
 def context(config):
-    return run(clock=AS_OF, config=config, options=RunOptions(shipment_count=125, seed=7))
+    """A book big enough to observe the Gulf corridor.
+
+    It was 125, which worked while every lane was drawn at roughly the same
+    rate. The book is now weighted by Sika's own order volume, and only 4.9%
+    of their intercompany documents go to the Gulf — split across two lanes.
+    At 125 shipments that corridor draws one or none, the Hormuz event then
+    touches no freight, and the gate correctly drops it.
+
+    That is the model working, not failing: a closure of a strait Sika
+    barely uses IS a smaller event for them. This scenario is testing whether
+    the tool can SEE such a closure, so it needs a book with freight there —
+    hence 700, which puts ~13 on the corridor — enough for one to
+    still have an option open, which is what a deadline is.
+    """
+    return run(clock=AS_OF, config=config, options=RunOptions(shipment_count=700, seed=7))
 
 
 # =====================================================================
