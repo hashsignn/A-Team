@@ -36,6 +36,14 @@ from engine.score.severity import (
 PATH_ALTITUDE = 0.012
 
 
+def _lane_node_ids(lane: dict) -> list[str]:
+    """Origin, then every leg's destination. Order matters — it is the route."""
+    legs = lane.get("legs") or []
+    if not legs:
+        return []
+    return [legs[0]["from"], *(leg["to"] for leg in legs)]
+
+
 def build_board(context: RunContext) -> dict:
     """The whole payload: nodes, routes, radar data, ranking, posture."""
     config = context.config
@@ -149,6 +157,11 @@ def _build_route(
         "route_id": lane_id,
         "name": lane["name"],
         "focus": lane.get("focus", ""),
+        # Every node this lane touches, in order. The globe needs it to answer
+        # "what is happening at Antwerp" — a question a planner asks by
+        # pointing at Antwerp, not by reading a table of lanes and working out
+        # which ones call there.
+        "node_ids": _lane_node_ids(lane),
         "level": verdict.level.value,
         "level_label": verdict.label,
         "directive": verdict.directive,
