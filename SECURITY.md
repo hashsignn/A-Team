@@ -21,7 +21,36 @@ normal one, and it is what makes the system demonstrable on a locked-down
 laptop, in a sandbox whose egress proxy blocks every data host (which is
 exactly where this was built), and in CI.
 
-### How each external dependency is stubbed
+### Photos from the field
+
+`POST /api/v1/photos` is **unauthenticated in the prototype**, exactly like the
+reports it accompanies, and behind the same `RADAR_REPORT_TOKEN` when that is
+set. Four things make that survivable for a demo, and none of them makes it
+safe for real drivers:
+
+* **Type from content, not from the name.** JPEG, PNG and WebP identified by
+  magic bytes. A file claiming to be a JPEG and starting with `<?php` is
+  refused, and the check costs four bytes of comparison.
+* **Bounded.** 6 MB per photo, 6 photos per report. An unbounded upload is a
+  way to fill a disk; an unbounded list is a way to make one line of the
+  append-only log arbitrarily long.
+* **Content-addressed names.** The id is a SHA-256 prefix, so it is hex by
+  construction and cannot be forged into a path. The id is pattern-checked
+  *before* it touches the filesystem, because it arrives from a URL and is
+  the one place a caller could otherwise ask for `../../.env`.
+* **Not served from the static mount.** They go through a handler that
+  resolves the id itself, so nothing under `data/` is web-reachable by path.
+
+`data/photos/` is gitignored. A photo of a damaged pallet may show a face, a
+number plate or a loading bay, and none of that belongs in a public history
+where it can never be redacted.
+
+**Before real drivers:** per-driver credentials, a virus scan on upload, and
+EXIF stripping — a phone photo carries the GPS of whoever took it, which is
+not always the same thing as the freight's position and is not always theirs
+to publish.
+
+## How each external dependency is stubbed
 
 | Dependency | Cost | How it runs at zero cost |
 |---|---|---|

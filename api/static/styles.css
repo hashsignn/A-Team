@@ -1739,3 +1739,60 @@ body.has-modal { overflow: hidden; }
   .rt-stats { grid-template-columns: repeat(2, 1fr); }
   .rt-two { grid-template-columns: 1fr; }
 }
+
+/* ---- photos from the field (driver app) ---------------------------- */
+.dv-photos-field { border: 0; padding: 0; margin: 0 0 18px; }
+.dv-photos-field legend {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  padding: 0; margin-bottom: 8px;
+}
+.dv-optional { font-weight: 400; color: var(--muted); }
+.dv-photo-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 10px 16px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-1); color: var(--accent);
+  font-size: 15px; cursor: pointer;
+}
+#f-photo:disabled + .dv-thumbs { opacity: .6; }
+.dv-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.dv-thumb { position: relative; width: 74px; height: 74px; }
+.dv-thumb img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--border);
+}
+.dv-thumb-x {
+  position: absolute; top: -7px; right: -7px;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface-1);
+  color: var(--text-primary); font-size: 17px; line-height: 1; cursor: pointer;
+}
+.dv-photo-note { margin: 8px 2px 0; font-size: 12.5px; color: var(--lvl-yellow); }
+
+/* ---- distance and position on the route page ----------------------- */
+.prog { margin-bottom: 18px; }
+.prog-bar {
+  height: 10px; border-radius: 5px; overflow: hidden;
+  background: var(--surface-3); margin-bottom: 7px;
+}
+.prog-bar span { display: block; height: 100%; background: var(--accent); }
+.prog-nums { font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.where {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px 22px; margin-bottom: 20px;
+  padding: 14px 16px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.where-col { display: flex; flex-direction: column; gap: 3px; }
+.where-col .muted { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; }
+.where-col b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.where-col em { font-style: normal; font-size: 11.5px; color: var(--text-secondary); }
+.drift-bad { color: var(--lvl-red); }
+.maplink { font-size: 11.5px; margin-left: 6px; }
+
+.rep-shots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.rep-shots img {
+  width: 96px; height: 96px; object-fit: cover;
+  border-radius: 7px; border: 1px solid var(--border);
+}

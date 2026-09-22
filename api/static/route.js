@@ -73,6 +73,7 @@ function renderConvoy(v) {
           <b>${esc(leg.to_name)}</b>
         </div>
         <div class="leg-meta">
+          ${leg.km ? `<span class="muted">${Math.round(leg.km)} km</span>` : ''}
           ${leg.vehicles.length} ${esc(word)}
           ${leg.counts.affected ? `<span class="pill pill--hit">${leg.counts.affected} hit</span>` : ''}
           ${leg.counts.at_risk ? `<span class="pill pill--risk">${leg.counts.at_risk} to decide</span>` : ''}
@@ -109,6 +110,7 @@ function selectVehicle(shipmentId, legIndex) {
     'is-on', b.dataset.ship === shipmentId && +b.dataset.leg === legIndex));
 
   const WORD = { affected: 'Already hit', at_risk: 'Needs a decision', ok: 'On plan' };
+  const pr = veh.progress || {};
   const facts = [
     ['Customer', veh.customer],
     ['Carrier', veh.carrier],
@@ -117,6 +119,59 @@ function selectVehicle(shipmentId, legIndex) {
     ['Decide within', veh.lead_time_hours == null ? '—' : `${Math.round(veh.lead_time_hours)} h`],
     ['What is hitting it', veh.driving_event || 'nothing on this leg'],
   ];
+
+  /* Distance done and distance left, with the bar showing the whole journey
+   * rather than the current leg — "60% of the way to Rotterdam" is the shape
+   * of the question, and a per-leg bar resets to zero at every node, which
+   * reads as going backwards. */
+  const journey = pr.total_km ? `
+    <div class="prog">
+      <div class="prog-bar"><span style="width:${Math.min(100, pr.percent)}%"></span></div>
+      <div class="prog-nums">
+        <b>${Math.round(pr.travelled_km).toLocaleString()} km</b> travelled
+        <span class="muted">·</span>
+        <b>${Math.round(pr.remaining_km).toLocaleString()} km</b> to go
+        <span class="muted">of ${Math.round(pr.total_km).toLocaleString()} km (${pr.percent}%)</span>
+      </div>
+    </div>` : '';
+
+  /* WHERE IT IS: two claims, never merged.
+   *
+   * The plan says one thing; somebody with the freight said another. A single
+   * dot would have to pick, and whichever it picked it would be wrong half
+   * the time — a planned dot is fiction the moment a truck stops, an observed
+   * one is stale the moment it starts again. The GAP is the useful number. */
+  const seen = veh.observed_position;
+  const plan = pr.planned_position;
+  const coord = (c) => `${c.lat.toFixed(3)}, ${c.lon.toFixed(3)}`;
+  const mapLink = (c) =>
+    `<a class="maplink" target="_blank" rel="noopener"
+        href="https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lon}#map=11/${c.lat}/${c.lon}">open map</a>`;
+
+  const where = `
+    <div class="where">
+      <div class="where-col">
+        <span class="muted">WHERE THE PLAN PUTS IT</span>
+        ${plan ? `<b>${coord(plan)}</b> ${mapLink(plan)}` : '<b>—</b>'}
+        <em>interpolated along the leg; freight follows roads, not geodesics</em>
+      </div>
+      <div class="where-col">
+        <span class="muted">LAST SEEN BY SOMEBODY</span>
+        ${seen ? `<b>${coord(seen)}</b> ${mapLink(seen)}
+           <em>${esc(seen.reported_by || 'on site')},
+             ${esc(String(seen.observed_at).slice(0, 16).replace('T', ' '))} UTC${
+               seen.accuracy_m ? ` · ±${Math.round(seen.accuracy_m)} m` : ''}${
+               seen.first_hand === false ? ' · second hand' : ''}</em>`
+          : '<b>not reported</b><em>nobody with this consignment has sent a position</em>'}
+      </div>
+      <div class="where-col">
+        <span class="muted">OFF PLAN BY</span>
+        ${veh.drift_km == null
+          ? '<b>unknown</b><em>needs a position from site to compute</em>'
+          : `<b class="${veh.drift_km > 50 ? 'drift-bad' : ''}">${veh.drift_km} km</b>
+             <em>between where it should be and where it was seen</em>`}
+      </div>
+    </div>`;
 
   const reports = (veh.reports || []).length
     ? `<div class="rep-list">${veh.reports.map((r) => `
@@ -130,6 +185,11 @@ function selectVehicle(shipmentId, legIndex) {
           ${r.position ? `<div class="rep-line"><b>Where:</b> ${esc(r.position)}</div>` : ''}
           <div class="rep-line"><b>Load:</b> ${esc(r.load_state)}</div>
           ${r.note ? `<div class="rep-note">“${esc(r.note)}”</div>` : ''}
+          ${(r.photos || []).length ? `<div class="rep-shots">${r.photos.map((id) => `
+            <a href="/api/v1/photos/${esc(id)}" target="_blank" rel="noopener">
+              <img src="/api/v1/photos/${esc(id)}" alt="photo from site" loading="lazy">
+            </a>`).join('')}</div>` : ''}
+          ${r.lat != null ? `<div class="rep-line"><b>Fix:</b> ${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}${r.accuracy_m ? ` ±${Math.round(r.accuracy_m)} m` : ''}</div>` : ''}
         </div>`).join('')}</div>`
     : `<p class="socket"><b>Nothing reported from the road.</b> Whoever is with
        this consignment can file in four taps at <code>/driver</code> — and a
@@ -137,6 +197,8 @@ function selectVehicle(shipmentId, legIndex) {
 
   $('rt-vehicle-title').textContent = `${veh.shipment_id} — ${WORD[veh.status]}`;
   $('rt-vehicle').innerHTML = `
+    ${journey}
+    ${where}
     <div class="veh-facts">
       ${facts.map(([k, val]) => `
         <div><span class="muted">${esc(k)}</span><b>${esc(val)}</b></div>`).join('')}

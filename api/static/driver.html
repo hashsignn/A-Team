@@ -105,6 +105,26 @@
       </div>
     </fieldset>
 
+    <!-- PHOTOS.
+         capture="environment" opens the rear camera straight away on a phone
+         rather than the file picker: the driver is standing in front of the
+         thing they want to photograph, and a gallery chooser is two taps and
+         a decision they should not have to make. -->
+    <fieldset class="dv-photos-field">
+      <legend>Photos <span class="dv-optional">optional</span></legend>
+      <label class="dv-photo-btn" for="f-photo">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M3 8h4l2-2h6l2 2h4v12H3z" fill="none" stroke="currentColor"
+                stroke-width="1.6" stroke-linejoin="round"/>
+          <circle cx="12" cy="13" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        </svg>
+        Take a photo
+      </label>
+      <input type="file" id="f-photo" accept="image/*" capture="environment" multiple hidden>
+      <div class="dv-thumbs" id="dv-photos"></div>
+      <p class="dv-photo-note" id="dv-photo-note"></p>
+    </fieldset>
+
     <label class="dv-field">
       <span>Anything else? <em>optional</em></span>
       <textarea id="f-note" rows="2"

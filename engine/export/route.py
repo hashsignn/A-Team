@@ -32,6 +32,8 @@ decision today and the rest are fine for a week.
 
 from __future__ import annotations
 
+from engine.export import progress as progress_mod
+from engine.network.geo import Point, haversine_km
 from engine.pipeline import RunContext
 
 
@@ -111,7 +113,17 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             else:
                 status = "ok"
 
+            moved = progress_mod.progress(shipment, context.config.nodes,
+                                          context.clock.as_of)
+            seen = progress_mod.observed(reports)
             vehicles.append({
+                "progress": moved,
+                "observed_position": seen,
+                # How far the freight is from where the plan puts it. None,
+                # not zero, when nothing has been observed — a zero would
+                # read as "exactly on plan", which is the opposite of "we
+                # have no idea where this is".
+                "drift_km": progress_mod.drift_km(moved["planned_position"], seen),
                 "shipment_id": shipment.shipment_id,
                 "customer": shipment.customer,
                 "carrier": own.carrier,
@@ -132,8 +144,15 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             "at_risk": sum(1 for v in vehicles if v["status"] == "at_risk"),
             "ok": sum(1 for v in vehicles if v["status"] == "ok"),
         }
+        a_node = context.config.nodes.get(leg.from_node)
+        b_node = context.config.nodes.get(leg.to_node)
+        leg_km = (
+            haversine_km(Point(a_node.lat, a_node.lon), Point(b_node.lat, b_node.lon))
+            if a_node is not None and b_node is not None else 0.0
+        )
         legs.append({
             "index": index,
+            "km": round(leg_km, 1),
             "from": leg.from_node,
             "to": leg.to_node,
             "from_name": _node_name(context, leg.from_node),
