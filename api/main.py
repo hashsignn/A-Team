@@ -324,6 +324,29 @@ def cargo(
     return JSONResponse(cargo_mod.lane_view(board, context, route_id))
 
 
+@app.get("/api/route/{route_id}")
+def route_detail(
+    route_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """One route, and the vehicles carrying it.
+
+    The board answers "which lanes are in trouble". This answers the question
+    that follows, which is about vehicles rather than lanes: nine trucks, of
+    which two are behind a closed motorway and one has reported damage, is a
+    thing somebody can act on. A lane in trouble is not.
+    """
+    from engine.export import route as route_mod  # noqa: PLC0415
+
+    board = _board(as_of, shipments)
+    context = _context(as_of, shipments)
+    view = route_mod.route_view(board, context, route_id)
+    if view is None:
+        return JSONResponse({"error": f"no route {route_id}"}, status_code=404)
+    return JSONResponse(view)
+
+
 @app.get("/api/execute/{shipment_id}")
 def execute(
     shipment_id: str,
@@ -620,6 +643,14 @@ def profile_page() -> Response:
 @app.head("/ops")
 def ops_page() -> Response:
     return _page("ops.html")
+
+
+# A real page with a real URL, not a dialog. A planner looking at one lane
+# wants to send somebody the lane, and a modal cannot be sent.
+@app.get("/route/{route_id}")
+@app.head("/route/{route_id}")
+def route_page(route_id: str) -> Response:
+    return _page("route.html")
 
 
 @app.get("/driver")

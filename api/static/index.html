@@ -79,12 +79,7 @@
      address bar is what a person means by "a page", and each of these has
      its own.
      ============================================================ -->
-<nav class="views" id="views" aria-label="View">
-  <a class="viewtab" href="#map"    data-view="map">Map</a>
-  <a class="viewtab" href="#routes" data-view="routes">Affected routes</a>
-</nav>
-
-<section class="view" id="view-map">
+<section class="stage">
   <div class="stage-body">
 
     <!-- ---------- globe ---------- -->
@@ -131,30 +126,16 @@
              order, and what is locked), the consignment list (every shipment
              on this lane with its OWN deadline) and the execute view. -->
         <div class="d-ops">
-          <a class="ctl ctl--primary" id="link-ops" href="/ops">Open the playbook</a>
-          <a class="ctl" id="link-cargo" href="/ops#cargo">Consignments</a>
+          <a class="ctl ctl--primary ctl--wide" id="link-route" href="#">
+            Open this route
+          </a>
         </div>
 
-        <!-- Radar: families as spokes, in DAYS OF DELAY.
-             Only families actually active on this route get a spoke — a
-             sleeping family on the chart would imply it was assessed and
-             found harmless, which is a different and false statement. -->
-        <section class="block">
-          <div class="block-head">
-            <h3>Risk in effect</h3>
-            <span class="block-note">days of delay contributed</span>
-          </div>
-          <div class="radar-wrap">
-            <svg id="radar" viewBox="0 0 340 300" role="img" aria-label="Active risk families"></svg>
-          </div>
-          <div class="radar-legend" id="radar-legend"></div>
-          <div class="subcats" id="subcats"></div>
-        </section>
-
-        <section class="block" id="block-events">
-          <div class="block-head"><h3>Events on this route</h3></div>
-          <div class="events" id="d-events"></div>
-        </section>
+        <!-- The radar, the event list and the matrix are NOT here.
+             They were on this panel AND on the route page AND in a modal —
+             three copies of the same three charts, none of them big enough
+             to read. They live on /route/<id> now, which is a page you can
+             send somebody. This panel is the summary and the way in. -->
 
         <!-- "What to do" is NOT here any more. It was rendered twice —
              once in this panel and again in the response workspace — from
@@ -181,8 +162,7 @@
      answers "what do I do and who do I call", which is the third failure the
      client named and the one they said is most often skipped.
      ============================================================ -->
-<section class="view" id="view-routes">
-<div class="ranked" id="ranked">
+<section class="ranked" id="ranked">
 
   <div class="ranked-head">
     <div>
@@ -287,7 +267,6 @@
       </div>
     </aside>
   </div>
-</div>
 </section>
 
 <script src="/vendor/globe.gl.min.js?v=__ASSETV__"></script>
@@ -317,6 +296,7 @@
     guess when the board does not carry the answer.</p>
 </aside>
 
+<script src="/charts.js?v=__ASSETV__"></script>
 <script src="/app.js?v=__ASSETV__"></script>
 </body>
 </html>
