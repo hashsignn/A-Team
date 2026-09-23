@@ -31,13 +31,17 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 MARKERS = {
     "Globe stops when you touch it":  ("api/static/app.js", "pointerdown"),
     "Click a port to open its lane":  ("api/static/app.js", "busiestRouteThrough"),
-    "Large event modal":              ("api/static/app.js", "openEventModal"),
+    "Route page matrix":              ("api/static/route.js", "buildMatrixGrid"),
     "Matrix cells shaded by CHF":     ("api/static/app.js", "cellTint"),
     "Modal styling":                  ("api/static/styles.css", "evm-scrim"),
     "Who-is-reporting on the app":    ("api/static/driver.js", "renderRoles"),
     "Free source catalogue":          ("engine/ingest/sources/catalog.py", "gdelt_doc"),
     "Two-model funnel":               ("engine/reason/funnel.py", "TRIAGE_SYSTEM"),
     "Hormuz chokepoint":              ("config.example/network.yaml", "CHOKE_HORMUZ"),
+    "2D fleet map (Map branch)":      ("api/static/index.html", 'id="fleetmap"'),
+    "Map agent hooks":                ("api/static/mapagent.js", "rankRoutes"),
+    "Action Hub split shipment":      ("api/static/actionhub.js", "split-toggle"),
+    "Recovery routes engine":         ("engine/fleet/reroute.py", "sea_bypass"),
 }
 
 
@@ -98,6 +102,11 @@ def main() -> int:
             served = " yes  " if marker in (served_js or "") else " NO   "
         elif rel.endswith("styles.css"):
             served = " yes  " if marker in (served_css or "") else " NO   "
+        elif rel.startswith("api/static/"):
+            # Any other static file: ask the server for the same bytes. The
+            # page itself is served at "/", not at its filename.
+            url = "/" if rel.endswith("index.html") else "/" + rel.removeprefix("api/static/")
+            served = " yes  " if marker in (_served(url) or "") else " NO   "
         else:
             served = "  n/a "        # engine/config files are not served as assets
         if served.strip() == "NO":

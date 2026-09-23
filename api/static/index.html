@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Supply Chain Risk Radar</title>
 <link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="stylesheet" href="/vendor/maplibre-gl.css?v=__ASSETV__">
+<link rel="stylesheet" href="/map.css?v=__ASSETV__">
 <link rel="icon" href="data:,">
 <!-- Not deferred: it sets data-theme before the first paint, so the page
      never flashes the previous theme, and before app.js reads any colour. -->
@@ -82,26 +84,43 @@
 <section class="stage">
   <div class="stage-body">
 
-    <!-- ---------- globe ---------- -->
-    <div class="globe-wrap">
+    <!-- ---------- left pane: the 2D fleet map, or the globe ----------
+         Two views of the same board in the same pane, one at a time. The
+         MAP is the default: it is where individual assets live, where a
+         disrupted one opens its Action Hub, and where the ways round are
+         drawn. The globe stays one click away for the lane-level picture.
+         Both keep their size while hidden, so switching never re-lays out. -->
+    <div class="globe-wrap is-map">
       <div id="globe" role="application" aria-label="Rotating globe of freight routes"></div>
+      <div id="fleetmap" class="fleetmap" role="application"
+           aria-label="2D map of every active shipment"></div>
 
       <div class="globe-overlay globe-overlay--tl">
         <div class="posture" id="posture"></div>
       </div>
 
-      <div class="globe-overlay globe-overlay--bl">
+      <div class="viewswitch" role="group" aria-label="Left pane view">
+        <button type="button" data-view="map" class="is-on">Map</button>
+        <button type="button" data-view="globe">Globe</button>
+      </div>
+
+      <div class="globe-overlay globe-overlay--bl only-globe">
         <div class="globe-hint" id="globe-hint">Click a route to inspect it</div>
       </div>
 
-      <div class="globe-controls">
+      <div class="globe-controls only-globe">
         <button type="button" id="btn-spin" class="ctl is-on" aria-pressed="true">
           <span class="ctl-dot"></span> Rotating
         </button>
         <button type="button" id="btn-reset" class="ctl">Reset view</button>
       </div>
 
-      <div class="globe-tooltip" id="globe-tooltip" hidden></div>
+      <div class="globe-tooltip only-globe" id="globe-tooltip" hidden></div>
+
+      <!-- map-only chrome: the legend doubles as the status filter -->
+      <div class="map-legend only-map" id="map-legend" aria-label="Map legend and filters"></div>
+      <div class="map-tip only-map" id="map-tip" hidden></div>
+      <div class="map-busy only-map" id="map-busy" hidden>Loading assets…</div>
     </div>
 
     <!-- ---------- detail panel ---------- -->
@@ -296,7 +315,39 @@
     guess when the board does not carry the answer.</p>
 </aside>
 
+<!-- ============================================================
+     THE ACTION HUB — a floating, draggable glass card over the map.
+     Opened by selecting an asset (a click, or MapAgent.selectAsset from an
+     agent — the same function). Everything on it, and everything it drew on
+     the map, disappears when it closes.
+     ============================================================ -->
+<aside class="hub glass" id="hub" hidden role="dialog" aria-label="Action Hub">
+  <div class="hub-head" id="hub-head">
+    <div class="hub-title" id="hub-title"></div>
+    <button type="button" class="hub-x" id="hub-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="hub-body" id="hub-body"></div>
+</aside>
+
+<!-- The partner card, nested off the hub. -->
+<aside class="vcard glass" id="vendor-card" hidden role="dialog" aria-label="Partner">
+  <div class="vcard-head" id="vcard-head">
+    <div class="hub-title" id="vcard-title"></div>
+    <button type="button" class="hub-x" id="vcard-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="vcard-body" id="vcard-body"></div>
+</aside>
+
 <script src="/charts.js?v=__ASSETV__"></script>
 <script src="/app.js?v=__ASSETV__"></script>
+<!-- The fleet map: MapLibre GL and Chart.js are vendored from npm, like the
+     globe. mapstore holds the state, mapagent is the only thing that changes
+     it, mapview and actionhub draw it. -->
+<script src="/vendor/maplibre-gl.js?v=__ASSETV__"></script>
+<script src="/vendor/chart.umd.min.js?v=__ASSETV__"></script>
+<script src="/mapstore.js?v=__ASSETV__"></script>
+<script src="/mapagent.js?v=__ASSETV__"></script>
+<script src="/mapview.js?v=__ASSETV__"></script>
+<script src="/actionhub.js?v=__ASSETV__"></script>
 </body>
 </html>

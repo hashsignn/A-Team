@@ -644,6 +644,125 @@ def sources_status() -> JSONResponse:
     })
 
 
+# =====================================================================
+# The fleet map
+# =====================================================================
+# Thin, like everything else here: engine/fleet/ does the work. Every route
+# takes the board's as-of, so the map and the board are two views of one run.
+# Recovery routes, splits and partner queries are computations, not actions —
+# nothing is booked or written, and the playbook gate still governs whether a
+# reroute may actually be taken.
+
+
+def _map_weights(w_time: float | None, w_cost: float | None,
+                 w_risk: float | None) -> dict | None:
+    if w_time is None and w_cost is None and w_risk is None:
+        return None
+    return {"time": w_time or 0.0, "cost": w_cost or 0.0, "risk": w_risk or 0.0}
+
+
+@app.get("/api/map/assets")
+def map_assets(
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Every asset not yet delivered: position, mode, three-colour status."""
+    from engine.fleet import assets as assets_mod  # noqa: PLC0415
+
+    board = _board(as_of, shipments)
+    return JSONResponse(assets_mod.fleet_assets(board, _context(as_of, shipments)))
+
+
+@app.get("/api/map/assets/{shipment_id}")
+def map_asset(
+    shipment_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """The Action Hub: header, load, logistics, logs, matrix, radar."""
+    from engine.fleet import assets as assets_mod  # noqa: PLC0415
+
+    detail = assets_mod.asset_detail(
+        _board(as_of, shipments), _context(as_of, shipments), shipment_id)
+    if detail is None:
+        raise HTTPException(404, f"no active asset for {shipment_id!r}")
+    return JSONResponse(detail)
+
+
+@app.get("/api/map/assets/{shipment_id}/routes")
+def map_routes(
+    shipment_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+    w_time: float | None = Query(None, ge=0, le=100),
+    w_cost: float | None = Query(None, ge=0, le=100),
+    w_risk: float | None = Query(None, ge=0, le=100),
+    force: bool = Query(False, description="compute even for a green asset"),
+) -> JSONResponse:
+    """The original route and the ranked recovery candidates."""
+    from engine.fleet import reroute as reroute_mod  # noqa: PLC0415
+
+    routes = reroute_mod.recovery(
+        _board(as_of, shipments), _context(as_of, shipments), shipment_id,
+        weights=_map_weights(w_time, w_cost, w_risk), force=force)
+    if routes is None:
+        raise HTTPException(404, f"no active asset for {shipment_id!r}")
+    return JSONResponse(routes)
+
+
+@app.get("/api/map/assets/{shipment_id}/vendors")
+def map_vendors(
+    shipment_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+    radius_km: float | None = Query(None, gt=0, le=5000),
+    teu: int | None = Query(None, ge=1, le=10000),
+    w_time: float | None = Query(None, ge=0, le=100),
+    w_cost: float | None = Query(None, ge=0, le=100),
+    w_risk: float | None = Query(None, ge=0, le=100),
+) -> JSONResponse:
+    """Partners in the radius, and which recovery routes each can cover."""
+    from engine.fleet import vendors as vendors_mod  # noqa: PLC0415
+
+    found = vendors_mod.nearby(
+        _board(as_of, shipments), _context(as_of, shipments), shipment_id,
+        radius_km=radius_km, weights=_map_weights(w_time, w_cost, w_risk), teu=teu)
+    if found is None:
+        raise HTTPException(404, f"no active asset for {shipment_id!r}")
+    return JSONResponse(found)
+
+
+@app.post("/api/map/assets/{shipment_id}/split")
+def map_split(
+    shipment_id: str,
+    payload: Annotated[dict, Body()],
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Evaluate a container allocation — or, with none, the suggested one.
+
+    POST because the allocation is a body, not because anything is written:
+    this computes a plan and stores nothing.
+    """
+    from engine.fleet import split as split_mod  # noqa: PLC0415
+
+    allocation = payload.get("allocation")
+    if allocation is not None and not isinstance(allocation, dict):
+        raise HTTPException(422, "allocation must be an object of container_id -> route_id")
+    weights = payload.get("weights")
+    if weights is not None and not isinstance(weights, dict):
+        raise HTTPException(422, "weights must be an object of time/cost/risk")
+    try:
+        result = split_mod.evaluate(
+            _board(as_of, shipments), _context(as_of, shipments), shipment_id,
+            allocation=allocation, target=payload.get("target"), weights=weights)
+    except split_mod.SplitError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if result is None:
+        raise HTTPException(404, f"no active asset for {shipment_id!r}")
+    return JSONResponse(result)
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok", "cached_runs": len(_BOARDS)}
@@ -688,7 +807,7 @@ def _asset_version() -> str:
     for path in sorted(STATIC.glob("*.js")) + sorted(STATIC.glob("*.css")):
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
-    for path in sorted(STATIC.glob("vendor/*.js")):
+    for path in sorted(STATIC.glob("vendor/*.js")) + sorted(STATIC.glob("vendor/*.css")):
         digest.update(path.name.encode())
         digest.update(str(path.stat().st_size).encode())
     return digest.hexdigest()[:12]

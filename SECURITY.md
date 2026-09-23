@@ -148,6 +148,9 @@ HTTP is a credential you have given away.
 | Order book | n/a | `generate_shipments()` produces a synthetic book, flagged `synthetic: true` everywhere it surfaces |
 | Reasoning model | free locally | Ollama, or **nothing at all** — `RADAR_LLM_BACKEND=none` runs the deterministic router alone |
 | TMS | licensed | never POSTed to. The payload is exposed at `GET /api/v1/shipment-alerts` for inspection |
+| Map basemap (OpenStreetMap tiles) | free, no key | fetched by the **browser**, never the server — the one third-party request the page makes. Offline, the map draws the vendored country outlines and the legend says so. `fleet.yaml` → `basemap.tiles` points it at a self-hosted tile server |
+| Road geometry (OSRM) | free, no key | called by the server only with `RADAR_ALLOW_NETWORK=1`, like every feed; otherwise road legs use the corridor estimate, labelled. `fleet.yaml` → `routing.osrm_url` for a self-hosted OSRM |
+| Partner capacity | n/a | synthetic snapshot in `fleet.yaml`; `contacts.yaml` vendors carry capacity **unknown**, never a guessed number |
 
 A stand-in is **never silently substituted for real data.** Every one carries
 its status into the UI, the CLI and the profile page, in three states —

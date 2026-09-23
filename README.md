@@ -325,20 +325,23 @@ and it is why this lane is worth demonstrating.
 | ~100 risk variables | **45**, fully specified | Q1: no ledger exists, so this file *is* the proposal. 100 half-specified entries contradict §5.0's own claim |
 | OSMnx for road/rail routing | Buffered great-circle corridors | Overpass at runtime + geopandas/GEOS chain, for 10–15 named lanes. Ships as a visibly empty socket |
 | Shipment-level `etd`/`eta` | **Per-leg** planned windows | The temporal gate asks when the shipment transits *that node* — unanswerable without them |
-| MapLibre vendored | globe.gl + vendored topojson | A rotating globe is the ask; globe.gl is vendored from npm, not a CDN |
+| MapLibre vendored | globe.gl **and** MapLibre GL, both vendored | The globe is the lane-level picture; the 2D map (below) is where individual assets, recovery routes and partners live. Both from npm, not a CDN |
 | No global view (§12) | One-line **state strip** | Q6. Not a matrix; the per-event matrix is untouched |
 
 ### The front end
 
-FastAPI + vanilla JS + CSS. No build step, no framework, no CDN — `globe.gl`
-and `topojson-client` are vendored from npm under `api/static/vendor/`, the
-country geometry under `api/static/geo/`. The page renders with the network
-cable pulled out.
+FastAPI + vanilla JS + CSS. No build step, no framework, no CDN — `globe.gl`,
+`topojson-client`, `maplibre-gl` and `chart.js` are vendored from npm under
+`api/static/vendor/`, the country geometry under `api/static/geo/`. The page
+renders with the network cable pulled out; only the OpenStreetMap basemap
+tiles need a network, and without them the map draws the vendored outlines.
 
-**Section 1** is the full viewport: a rotating globe carrying the real route
-geometry — the Rhine legs follow the river, the deep-sea legs run through
-their chokepoints — with every line coloured by the five-level ladder.
-Clicking a line opens its radar on the right.
+**Section 1** is the full viewport. Its left pane is the **2D fleet map** by
+default — every active asset, and the recovery routes for a disrupted one —
+with a toggle to the rotating globe, which carries the real route geometry
+(the Rhine legs follow the river, the deep-sea legs run through their
+chokepoints) with every line coloured by the five-level ladder. See
+[The fleet map](#the-fleet-map).
 
 **Section 2** ranks the *routes* by the severity of the effect on them.
 Selecting one opens the response workspace beside it: the actions still open
@@ -925,6 +928,181 @@ the freight look four times as bad.
 
 ---
 
+## The fleet map
+
+The board ranks lanes. The route page draws one lane as its vehicles. The map
+puts every vehicle on one screen and answers the question a red dot raises:
+*where can it go instead, what does that cost, and who nearby can carry it?*
+
+It is the default left pane (`Map | Globe` toggle, `?view=globe` to share the
+other). MapLibre GL + OpenStreetMap raster tiles, desaturated in the renderer
+so the only saturated things on screen are assets and routes, inverted on the
+Dark theme. **No paid API anywhere**: OSM tiles, OSRM for road geometry, and
+a sea-lane graph that ships in the repo.
+
+### Assets and the three colours
+
+Every shipment not yet delivered and loading within 72 h is an asset — a
+ship, barge, train or truck icon (drawn SVG, per the current leg's mode) at
+the position **the schedule puts it**, on the leg's real geometry: a barge
+sits on the Rhine, not on the geodesic between Basel and Kaub. A field report
+with coordinates replaces it, and the card says which you are looking at. No
+GPS or AIS feed is connected, and a planned dot presented as telemetry would
+be a lie with a timestamp. Clusters are donuts of the statuses inside them.
+
+| | colour | rule |
+|---|---|---|
+| 🟢 | `#22c55e` Nominal | expected delay ≤ 30 min |
+| 🟡 | `#eab308` Minor disruption | under 4 h late |
+| 🔴 | `#ef4444` Major disruption | 4 h or more — or a field report of a stoppage or damage |
+
+**These are not the ladder.** The ladder answers *how soon must somebody
+decide*; these answer *how disrupted is this asset*. Separate tokens
+(`--status-*`), the label always beside the colour, and the ladder colours
+stay reserved. The input is the Monte Carlo's own do-nothing expected delay
+from the worst event touching the consignment — the board's float, not a new
+estimate (a test asserts it).
+
+### The Action Hub
+
+Click an asset: a draggable glass card (`backdrop-filter: blur(10px)` over
+`rgba(255,255,255,0.8)`, the dark equivalent on Dark). Asset id, crew, the
+position and where it came from, last sync; capacity utilisation in TEU with
+the low-water derate marked; the containers with their own deadlines; original
+vs revised ETA; the status log — feed, field report and schedule entries kept
+apart, never blended; a **5×5 matrix** of the hazards on the legs still ahead
+(P(late) × the bill if late — the board's two axes, banded finer, unsourced
+probability in a hatched gutter, never at a guessed column); and a **radar**
+(Chart.js) of Weather, Geopolitics, Port Congestion, Route Infrastructure and
+Mechanical Status, each spoke 0–100 from hours of expected delay, with the
+hours in the tooltip.
+
+Close it and everything it drew goes with it — routes, split, partners, the
+chart. That is a property of the state, not something each renderer has to
+remember.
+
+### Recovery routes
+
+For a yellow or red asset the card immediately calculates recovery routes
+(`engine/fleet/reroute.py`). A candidate is the original route with **one
+disrupted stretch replaced** — everything before and after keeps its planned
+legs and timings:
+
+| recipe | what a planner does | geometry |
+|---|---|---|
+| `inland_to_road` | offload to trucks, drive the stretch | OSRM when allowed, else corridor |
+| `inland_to_rail` | switch the stretch to rail | corridor |
+| `road_detour` | drive round a closure | OSRM via a waypoint beside it |
+| `sea_bypass` | sail round a closed strait | sea-lane graph with that node removed |
+| `port_swap` | load / discharge elsewhere, cover the gap over land | graph + road/rail |
+
+**Closing Suez is a node removed from a graph** (`engine/fleet/sealanes.py`:
+the network's ports and chokepoints plus open-water waypoints, every
+coordinate in the file). Dijkstra returns the Cape. Removing Hormuz leaves no
+path to Jebel Ali at all, and the card says so rather than badging a detour
+#1. Removing Panama finds a land bridge — sail to Houston, rail to Los
+Angeles — without anybody writing that rule.
+
+The original route is drawn faded, dotted and grey; alternatives solid, in
+four hues nothing else on the page uses, badged **#1 #2 #3**, offset so a
+road and a rail option on the same corridor are both visible. Hovering one
+shows the delta against the original: *"+CHF 1'286, −6.0 days, Risk: Low"*.
+
+**Ranked** on a weighted formula of Time, Cost and Risk (defaults 0.5 / 0.3 /
+0.2 in `fleet.yaml`, sliders on the card), each min-max normalised across the
+candidates **and the original**. The original is in the pool on purpose: on
+the demo board, sailing round the Cape costs 15 days to save 13 hours, and
+the card says staying scores better rather than presenting the least bad
+detour as a recommendation.
+
+* **Time**: the plan's own timings for untouched legs; the rate card's speeds
+  for new ones; a transfer at every mode change; the lever's **setup time**
+  from `scoring.yaml` (a barge-to-rail switch is 36 h before anything moves);
+  plus any live event the new route still meets — checked with the gate's own
+  three questions, mode, time and place.
+* **Cost**: a rate card (`fleet.yaml`, marked assumed) applied to the
+  original and every candidate on the same basis. Road is priced per truck,
+  everything else per TEU — which is exactly why splitting pays.
+* **Risk**: `1 − Π(1 − r)` over leg baselines, transfers, and every live
+  event still on the route (P × severity weight).
+
+Rerouting a vessel is the carrier's decision; a sea bypass says so and is
+marked `owner: carrier`. The map **proposes**. The playbook gate on `/ops` —
+confirm the disruption before rerouting — still governs what may be taken,
+and the card links to it.
+
+### Splitting a load
+
+Low water at Kaub is a derate, not a stoppage. What a planner actually does
+is take the few boxes feeding a customer's line off the barge and let the
+replenishment stock ride the river. The **Split shipment** toggle evaluates
+exactly that: it moves **only the containers that miss their own deadline on
+the original asset and make it on the target route** — nothing that would
+arrive in time anyway. A slider moves the N most urgent; clicking a box moves
+it. The map branches the shipment into one tracking line per branch
+(A · 11 boxes · 16 TEU stays on the barge, B · 1 box by rail), and the card
+shows on-time before → after and the extra cost.
+
+### Partners in the radius
+
+Selecting a disrupted asset also queries partners within the radius of it
+(120 km by road, 900 km at sea) and maps them — a phone, envelope or globe
+marker by how they take bookings. Two sources, never blended: synthetic
+partners in `fleet.yaml` with a capacity snapshot, and the `contacts.yaml`
+local vendors, whose capacity is **unknown and says so**. The partner card
+shows contact (tel:, mailto:, dispatch portal), available capacity, and which
+generated routes they can cover — **physically** (their mode, within their
+service radius) and **legally** (ADR for dangerous goods on road and rail,
+reefer for temperature-controlled). A partner that fails is listed with the
+reason, because *"ten kilometres away and not ADR-certified"* is worth knowing
+before the call.
+
+### Built for agents: state in a store, every action a named function
+
+The map's state — selected asset, routes and their ranking, the split, the
+partners — lives in one Redux-style store (`api/static/mapstore.js`, a pure
+reducer). The map (`mapview.js`) and the cards (`actionhub.js`) only render
+it. Every change goes through **`window.MapAgent`** (`mapagent.js`):
+
+```js
+await MapAgent.selectAsset('SYN-0001', { actor: 'JEVA' });  // hub + routes + partners
+await MapAgent.rankRoutes({ time: 1, cost: 0, risk: 0 });   // re-rank
+await MapAgent.toggleSplit(true);                            // the suggested split
+await MapAgent.assignContainers(['SYNU5615921'], 'ALT-RAIL');
+await MapAgent.queryVendors(null, { radiusKm: 200 });
+MapAgent.describe();   // the hooks as tool specs, ready to hand to a model
+MapAgent.journal();    // who did what: planner, JEVA or LAYA
+```
+
+A planner's click calls exactly these functions, so an agent calling them
+gets exactly what a planner would see — no refactor of the map to automate
+it. Every hook returns a Promise of the resulting state; late answers to
+superseded questions are dropped by the store; every action is journalled
+under the actor that took it, and the card shows the journal. `?asset=…`
+opens a card from a link, through the same call.
+
+Server side the same operations are plain endpoints, for agents that do not
+drive a browser: `GET /api/map/assets`, `GET /api/map/assets/{id}`,
+`…/routes?w_time=&w_cost=&w_risk=`, `…/vendors?radius_km=`, and
+`POST …/split` with `{"allocation": {container: route} | null}`. None of them
+books or writes anything.
+
+### What needs a network, and what does not
+
+| | offline | with a network |
+|---|---|---|
+| basemap | vendored country outlines, and the legend says so | OSM tiles (browser fetches them; `fleet.yaml` → `basemap.tiles` to self-host) |
+| road geometry | corridor estimate, labelled | OSRM, only with `RADAR_ALLOW_NETWORK=1`; `routing.osrm_url` for a self-hosted one |
+| sea routes, ranking, split, partners | all of it | the same |
+
+The public OSM tile and OSRM demo servers are courtesies with fair-use
+policies. Point both at your own for anything beyond a demo.
+
+```bash
+.venv/bin/python -m pytest tests/test_fleet_map.py tests/test_map_store_js.py -q
+.venv/bin/python scripts/dev_check_map.py 8600    # clicks, hovers, drags it headless
+```
+
 ## The four-layer taxonomy, and the idea that makes it compose
 
 Layer 1 is the 45-variable ledger. Layers 2–4 describe **our** side of the
@@ -1317,12 +1495,14 @@ engine/            institution-agnostic core — knows nothing about Sika
   score/           CHF, lead time, the five-level ladder
   act/             playbook, owners, contacts
   portfolio/       the convene rule
+  fleet/           the map: assets, status, recovery routes, splits, partners
 config.example/    public, synthetic, committed
   export/          board assembly, PDF pack, risk profile
 config/            gitignored — the customer's real data
 api/               thin FastAPI + the front end
   static/          index.html, profile.html, styles.css, app.js, profile.js
-  static/vendor/   globe.gl, topojson-client (npm, not CDN)
+                   map.css, mapstore.js, mapagent.js, mapview.js, actionhub.js
+  static/vendor/   globe.gl, topojson-client, maplibre-gl, chart.js (npm, not CDN)
   static/geo/      country geometry (world-atlas)
 data/fixtures/     committed sample feeds, labelled
 tests/             51 tests
@@ -1340,6 +1520,10 @@ Onboarding a new customer is a profile swap — that is true here, not a claim.
 - **The reasoning layer is specified, not wired.** The rules router runs as the
   challenger; `reason/` is the next build step.
 - **Kaub thresholds need sourcing** (above).
+- **The map's positions are the schedule's** unless a field report carries a
+  fix. No GPS/AIS feed is connected; the socket is `progress.observed()`.
+- **The map's rate card, partner list and capacities are assumed / synthetic**
+  (`config.example/fleet.yaml`). A partner capacity API is the socket.
 - **No accuracy claim is made.** The honest metric is the hindcast — did we fire
   before the carrier called? — and it has not run yet. Agreement between rules
   and model is worth shipping as a diagnostic but is *not* validation: both were

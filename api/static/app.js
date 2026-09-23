@@ -110,6 +110,9 @@ function writeParams({ as_of, shipments }) {
   const q = new URLSearchParams();
   if (as_of !== DEFAULT_AS_OF) q.set('as_of', as_of);
   if (shipments !== '150') q.set('shipments', shipments);
+  // The left pane's view belongs to the map (mapview.js); carry it across.
+  const view = new URLSearchParams(location.search).get('view');
+  if (view) q.set('view', view);
   const url = q.toString() ? `${location.pathname}?${q}` : location.pathname;
   history.replaceState(null, '', url);
 }
@@ -194,6 +197,8 @@ async function reload(asOf) {
     state.selected = null;
     if (state.globe) state.globe.pointsData(board.nodes);
     applyBoard(board);
+    // The map is the same board at the same instant — never a different one.
+    if (window.MapAgent) window.MapAgent.loadAssets({ as_of: asOf, shipments: params.shipments });
   } catch (err) {
     console.error(err);
     $('brand-sub').textContent = `could not load that instant — ${err.message}`;
@@ -394,6 +399,8 @@ function initGlobe(countries, board) {
   state.globe = globe;
   sizeGlobe();
   window.addEventListener('resize', sizeGlobe);
+  // Built after the map has already claimed the pane: start paused.
+  if (document.querySelector('.globe-wrap.is-map')) globe.pauseAnimation();
 
   el.addEventListener('mousemove', (e) => {
     const tip = $('globe-tooltip');
@@ -438,6 +445,18 @@ function initGlobe(countries, board) {
     globe.pointOfView({ lat: 34, lng: 12, altitude: 2.35 }, 900);
   });
 }
+
+/* The map (mapview.js) shares the left pane. While it is showing, the globe
+ * stops drawing frames: a WebGL scene nobody can see still costs a laptop
+ * its fan. */
+window.RadarGlobe = {
+  pause() { if (state.globe) state.globe.pauseAnimation(); },
+  resume() {
+    if (!state.globe) return;
+    state.globe.resumeAnimation();
+    sizeGlobe();
+  },
+};
 
 function sizeGlobe() {
   const el = $('globe');
@@ -617,6 +636,9 @@ function select(routeId, { fly } = {}) {
   renderResponse(r);
   markTableRow(routeId);
   linkOps(routeId);
+  // Highlight the lane on the 2D map too. No camera move: the map is showing
+  // assets, and a table click should not drag it away from them.
+  if (window.MapAgent) window.MapAgent.focusLane(routeId);
 
   if (fly && state.globe && r.legs.length) {
     const pts = r.legs.flatMap((l) => l.path);

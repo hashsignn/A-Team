@@ -1,0 +1,531 @@
+# Fleet map — live asset status, rerouting, split loads and the partner network.
+#
+# PROVENANCE DISCIPLINE, as everywhere else in config/: every number carries a
+# `source`. `client spec` means it came from the brief for the map layer;
+# `assumed` means we picked it and it is the planning team's to argue with.
+#
+# Everything here is read by engine/fleet/. Nothing in this file changes the
+# board, the ladder or the Monte Carlo: the map is a projection of numbers the
+# board already computed, plus the one thing the board never had — geometry
+# for the routes it did NOT plan.
+
+# -------------------------------------------------------------------
+# LIVE STATUS — the three colours on the map
+# -------------------------------------------------------------------
+# These are NOT the five-level ladder. The ladder answers "how soon must
+# somebody decide"; this answers "how disrupted is this asset". Different
+# question, so different tokens (--status-*), and the ladder colours stay
+# reserved for the ladder.
+#
+# The input is the expected delay at destination from the worst single event
+# touching the asset's remaining legs — the Monte Carlo's own do-nothing mean,
+# not a new estimate.
+status:
+  colours:                       # source: client spec
+    green: "#22c55e"             # nominal — on schedule
+    yellow: "#eab308"            # minor disruption
+    red: "#ef4444"               # major disruption / stoppage
+  nominal_max_hours: 0.5         # source: assumed — below this a delay is schedule noise
+  minor_max_hours: 4             # source: client spec — "< 4 hours delayed" is Yellow
+  # A field report with one of these statuses is a stoppage, whatever the
+  # model expects. Somebody looking at the freight outranks a forecast.
+  stoppage_report_statuses: [held, stopped]
+  damage_load_states: [damaged]
+
+# Which shipments are on the map. Delivered freight is not an asset any more;
+# freight booked for next month has no vehicle yet.
+visibility:
+  staging_window_hours: 72       # source: assumed — loading at origin within 3 days
+
+# -------------------------------------------------------------------
+# RATE CARD — prices the ROUTE, not the lever
+# -------------------------------------------------------------------
+# The board prices actions (engine/act/playbook.py) for the value-of-acting
+# arithmetic. This prices the physical alternative — kilometres, vehicles,
+# transfers — so that routes the playbook never planned can be compared on
+# one basis. All values source: assumed.
+modes:
+  road:
+    speed_kmh: 48                # over the clock, team driving, rest included
+    detour_factor: 1.25          # road km over great-circle km
+    chf_per_vehicle_km: 2.10
+    teu_per_vehicle: 2
+    baseline_risk: 0.06
+  rail:
+    speed_kmh: 34
+    detour_factor: 1.20
+    chf_per_teu_km: 0.42
+    baseline_risk: 0.05
+  barge:
+    speed_kmh: 11
+    detour_factor: 1.00          # river geometry is already the river
+    chf_per_teu_km: 0.22
+    baseline_risk: 0.07
+  sea:
+    speed_kmh: 31                # ~17 kn
+    detour_factor: 1.00          # sea-lane geometry is already the lane
+    chf_per_teu_km: 0.06
+    baseline_risk: 0.06
+
+transfer:
+  hours: 6                       # source: assumed — crane / cross-dock at a terminal
+  chf_per_teu: 160               # source: assumed
+  risk: 0.03                     # source: assumed — every handover is a chance to lose time
+
+# Which lever each kind of alternative needs, for its setup time. A rail
+# switch cannot start moving the freight until the path is booked; that time
+# is added to the route rather than ignored.
+levers:
+  inland_to_road: road_reroute
+  inland_to_rail: barge_to_rail_switch
+  road_detour: road_reroute
+  sea_bypass: sea_reroute
+  port_swap: sea_rebook
+
+# -------------------------------------------------------------------
+# RANKING — Time, Cost, Risk
+# -------------------------------------------------------------------
+# Each candidate is min-max normalised against the others AND the original
+# route, then weighted. Lower is better. The weights are the planner's to
+# set; the map exposes them and so does the agent hook.
+ranking:
+  weights: {time: 0.5, cost: 0.3, risk: 0.2}   # source: assumed
+  badges: 3                                     # source: client spec — #1, #2, #3
+  risk_labels:                                  # source: assumed
+    - {max: 0.25, label: Low}
+    - {max: 0.50, label: Medium}
+    - {max: 1.01, label: High}
+  severity_weight: {minor: 0.35, moderate: 0.60, severe: 0.85}   # source: assumed
+
+# -------------------------------------------------------------------
+# THE ACTION HUB CHARTS
+# -------------------------------------------------------------------
+# The radar's five axes are the client's; which ledger families feed each is
+# ours. Labour sits under Geopolitics because the ledger's labour variables are
+# industrial action — a political act, not a congestion statistic.
+radar:
+  axes:                                   # source: client spec
+    - {key: weather, label: Weather, families: [climate, force_majeure]}
+    - {key: geopolitics, label: Geopolitics, families: [geopolitical, labour]}
+    - {key: port_congestion, label: Port Congestion, families: [port_ops, capacity, cyber]}
+    - {key: route_infrastructure, label: Route Infrastructure, families: [infrastructure, waterway]}
+    - {key: mechanical, label: Mechanical Status, families: [mechanical]}
+  # Index = 100 x (1 - exp(-hours / scale)). 24 h of expected delay reads 63.
+  scale_hours: 24                         # source: assumed
+
+# 5 x 5, probability against the bill IF late — the board's own two axes,
+# banded finer. An unsourced probability goes in a gutter, never at a band.
+matrix:
+  probability_bands:                      # P(this shipment is late)
+    - {id: P1, label: Rare, max_p: 0.2}
+    - {id: P2, label: Unlikely, max_p: 0.4}
+    - {id: P3, label: Possible, max_p: 0.6}
+    - {id: P4, label: Likely, max_p: 0.8}
+    - {id: P5, label: Almost certain, max_p: 1.01}
+  impact_bands:                           # CHF if late, most severe first
+    - {id: I5, label: Severe, min_chf: 100000}
+    - {id: I4, label: Major, min_chf: 40000}
+    - {id: I3, label: Moderate, min_chf: 10000}
+    - {id: I2, label: Minor, min_chf: 2000}
+    - {id: I1, label: Negligible, min_chf: 0}
+
+# -------------------------------------------------------------------
+# ROAD GEOMETRY — OSRM, optional
+# -------------------------------------------------------------------
+# Only called when RADAR_ALLOW_NETWORK=1, like every other outbound request.
+# Without it, road legs are drawn on the corridor estimate and say so.
+# Point `url` at a self-hosted OSRM for anything beyond a demo: the public
+# server is a courtesy with a fair-use policy, not a service.
+routing:
+  osrm_url: "https://router.project-osrm.org"
+  timeout_s: 4
+
+# -------------------------------------------------------------------
+# BASEMAP — served to the browser, never fetched by the server
+# -------------------------------------------------------------------
+# OpenStreetMap raster tiles, desaturated in the renderer so routes and
+# assets are the brightest things on screen. With no network the map draws
+# the vendored country outlines instead and says so.
+basemap:
+  tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"]
+  attribution: "© OpenStreetMap contributors"
+  max_zoom: 18
+
+# -------------------------------------------------------------------
+# PARTNER NETWORK — SYNTHETIC
+# -------------------------------------------------------------------
+# Every company, number and capacity below is invented, placed at real
+# coordinates. Capacity is a snapshot, not a feed: a partner capacity API is
+# the socket this list stands in for. The contacts.yaml local vendors are
+# folded in beside these at their node, with capacity UNKNOWN — an absence
+# never becomes a value.
+#
+# channel decides the marker: phone | email | portal.
+vendors:
+  radius_km:                              # source: assumed — "immediate radius"
+    road: 120
+    rail: 150
+    barge: 150
+    sea: 900
+  fallback_nearest: 3                     # shown, flagged, when nothing is in range
+  partners:
+    - id: P_KAUB_TRUCK
+      name: "Mittelrhein Trucking (synthetic)"
+      kind: trucking
+      channel: phone
+      city: Oberwesel
+      lat: 50.107
+      lon: 7.727
+      modes: [road]
+      capacity: {available: 3, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 90
+      adr_certified: true
+      reefer: false
+      phone: "+49 00 000 50 01"
+      email: "dispatch@mittelrhein-synthetic.invalid"
+      portal: null
+    - id: P_KOB_RAIL
+      name: "Koblenz Rail Freight (synthetic)"
+      kind: rail_operator
+      channel: portal
+      city: Koblenz
+      lat: 50.357
+      lon: 7.598
+      modes: [rail]
+      capacity: {available: 12, unit: wagon slots, teu_per_unit: 2}
+      service_radius_km: 120
+      adr_certified: true
+      reefer: false
+      phone: "+49 00 000 50 02"
+      email: "paths@koblenz-rail-synthetic.invalid"
+      portal: "https://portal.koblenz-rail-synthetic.invalid/book"
+    - id: P_MAINZ_TRUCK
+      name: "Rheinhessen Haulage (synthetic)"
+      kind: trucking
+      channel: email
+      city: Mainz
+      lat: 49.992
+      lon: 8.247
+      modes: [road]
+      capacity: {available: 5, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 110
+      adr_certified: false
+      reefer: true
+      phone: "+49 00 000 50 03"
+      email: "ops@rheinhessen-synthetic.invalid"
+      portal: null
+    - id: P_MANN_BARGE
+      name: "Mannheim Light-Draught Barge Pool (synthetic)"
+      kind: barge_operator
+      channel: phone
+      city: Mannheim
+      lat: 49.487
+      lon: 8.466
+      modes: [barge]
+      capacity: {available: 2, unit: light barges, teu_per_unit: 48}
+      service_radius_km: 200
+      adr_certified: true
+      reefer: false
+      phone: "+49 00 000 50 04"
+      email: "pool@mannheim-barge-synthetic.invalid"
+      portal: null
+    - id: P_KA_RAIL
+      name: "Oberrhein Intermodal (synthetic)"
+      kind: rail_operator
+      channel: portal
+      city: Karlsruhe
+      lat: 49.010
+      lon: 8.404
+      modes: [rail]
+      capacity: {available: 20, unit: wagon slots, teu_per_unit: 2}
+      service_radius_km: 140
+      adr_certified: true
+      reefer: true
+      phone: "+49 00 000 50 05"
+      email: "booking@oberrhein-synthetic.invalid"
+      portal: "https://book.oberrhein-synthetic.invalid"
+    - id: P_BSL_TRUCK
+      name: "Basler Strassentransport (synthetic)"
+      kind: trucking
+      channel: email
+      city: Basel
+      lat: 47.560
+      lon: 7.610
+      modes: [road]
+      capacity: {available: 4, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 120
+      adr_certified: true
+      reefer: true
+      phone: "+41 00 000 50 06"
+      email: "dispo@basler-synthetic.invalid"
+      portal: null
+    - id: P_DUI_WH
+      name: "Ruhr Cross-Dock (synthetic)"
+      kind: warehouse
+      channel: phone
+      city: Duisburg
+      lat: 51.420
+      lon: 6.770
+      modes: [road, rail, barge]
+      capacity: {available: 380, unit: pallet slots, teu_per_unit: 0.05}
+      service_radius_km: 60
+      adr_certified: true
+      reefer: false
+      phone: "+49 00 000 50 07"
+      email: "yard@ruhr-crossdock-synthetic.invalid"
+      portal: null
+    - id: P_RTM_TRUCK
+      name: "Maasvlakte Drayage (synthetic)"
+      kind: trucking
+      channel: email
+      city: Rotterdam
+      lat: 51.953
+      lon: 4.050
+      modes: [road]
+      capacity: {available: 8, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 150
+      adr_certified: true
+      reefer: true
+      phone: "+31 00 000 50 08"
+      email: "planning@maasvlakte-synthetic.invalid"
+      portal: null
+    - id: P_ANR_TRUCK
+      name: "Scheldt Road Logistics (synthetic)"
+      kind: trucking
+      channel: phone
+      city: Antwerp
+      lat: 51.240
+      lon: 4.420
+      modes: [road]
+      capacity: {available: 6, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 130
+      adr_certified: false
+      reefer: false
+      phone: "+32 00 000 50 09"
+      email: "dispatch@scheldt-synthetic.invalid"
+      portal: null
+    - id: P_ANR_WH
+      name: "Kallo Warehousing (synthetic)"
+      kind: warehouse
+      channel: portal
+      city: Kallo
+      lat: 51.258
+      lon: 4.278
+      modes: [road, barge]
+      capacity: {available: 900, unit: pallet slots, teu_per_unit: 0.05}
+      service_radius_km: 50
+      adr_certified: true
+      reefer: true
+      phone: "+32 00 000 50 10"
+      email: "inbound@kallo-synthetic.invalid"
+      portal: "https://portal.kallo-synthetic.invalid"
+    - id: P_HAM_RAIL
+      name: "Elbe Rail Shuttle (synthetic)"
+      kind: rail_operator
+      channel: portal
+      city: Hamburg
+      lat: 53.530
+      lon: 9.970
+      modes: [rail]
+      capacity: {available: 15, unit: wagon slots, teu_per_unit: 2}
+      service_radius_km: 160
+      adr_certified: true
+      reefer: true
+      phone: "+49 00 000 50 11"
+      email: "shuttle@elbe-rail-synthetic.invalid"
+      portal: "https://shuttle.elbe-rail-synthetic.invalid"
+    - id: P_STU_TRUCK
+      name: "Neckar Spedition (synthetic)"
+      kind: trucking
+      channel: phone
+      city: Stuttgart
+      lat: 48.800
+      lon: 9.210
+      modes: [road]
+      capacity: {available: 4, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 120
+      adr_certified: true
+      reefer: false
+      phone: "+49 00 000 50 12"
+      email: "dispo@neckar-synthetic.invalid"
+      portal: null
+    - id: P_ZUR_RAIL
+      name: "Limmat Rail Cargo (synthetic)"
+      kind: rail_operator
+      channel: email
+      city: Zürich
+      lat: 47.390
+      lon: 8.515
+      modes: [rail]
+      capacity: {available: 10, unit: wagon slots, teu_per_unit: 2}
+      service_radius_km: 130
+      adr_certified: true
+      reefer: false
+      phone: "+41 00 000 50 13"
+      email: "cargo@limmat-synthetic.invalid"
+      portal: null
+    - id: P_GOA_TRUCK
+      name: "Liguria Autotrasporti (synthetic)"
+      kind: trucking
+      channel: phone
+      city: Genoa
+      lat: 44.420
+      lon: 8.900
+      modes: [road]
+      capacity: {available: 5, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 140
+      adr_certified: true
+      reefer: true
+      phone: "+39 00 000 50 14"
+      email: "viaggi@liguria-synthetic.invalid"
+      portal: null
+    - id: P_LEH_RAIL
+      name: "Seine Axis Intermodal (synthetic)"
+      kind: rail_operator
+      channel: portal
+      city: Le Havre
+      lat: 49.480
+      lon: 0.140
+      modes: [rail, road]
+      capacity: {available: 9, unit: wagon slots, teu_per_unit: 2}
+      service_radius_km: 150
+      adr_certified: true
+      reefer: false
+      phone: "+33 00 000 50 15"
+      email: "ops@seine-axis-synthetic.invalid"
+      portal: "https://book.seine-axis-synthetic.invalid"
+    - id: P_ALG_FEEDER
+      name: "Algeciras Feeder Services (synthetic)"
+      kind: forwarder
+      channel: email
+      city: Algeciras
+      lat: 36.130
+      lon: -5.440
+      modes: [sea]
+      capacity: {available: 60, unit: TEU on next sailing, teu_per_unit: 1}
+      service_radius_km: 1500
+      adr_certified: true
+      reefer: true
+      phone: "+34 00 000 50 16"
+      email: "feeder@algeciras-synthetic.invalid"
+      portal: null
+    - id: P_PSD_AGENT
+      name: "Port Said Ship Agency (synthetic)"
+      kind: forwarder
+      channel: email
+      city: Port Said
+      lat: 31.260
+      lon: 32.300
+      modes: [sea]
+      capacity: {available: 140, unit: TEU on a Cape-routed service, teu_per_unit: 1}
+      service_radius_km: 1200
+      adr_certified: true
+      reefer: true
+      phone: "+20 00 000 50 17"
+      email: "agency@portsaid-synthetic.invalid"
+      portal: null
+    - id: P_SLL_HUB
+      name: "Salalah Transshipment Desk (synthetic)"
+      kind: forwarder
+      channel: phone
+      city: Salalah
+      lat: 16.940
+      lon: 54.000
+      modes: [sea]
+      capacity: {available: 80, unit: TEU on feeder, teu_per_unit: 1}
+      service_radius_km: 1500
+      adr_certified: true
+      reefer: false
+      phone: "+968 00 000 50 18"
+      email: "desk@salalah-synthetic.invalid"
+      portal: null
+    - id: P_JEA_FWD
+      name: "Jebel Ali Forwarding (synthetic)"
+      kind: forwarder
+      channel: email
+      city: Jebel Ali
+      lat: 25.010
+      lon: 55.060
+      modes: [sea, road]
+      capacity: {available: 30, unit: TEU, teu_per_unit: 1}
+      service_radius_km: 600
+      adr_certified: true
+      reefer: true
+      phone: "+971 00 000 50 19"
+      email: "fwd@jebelali-synthetic.invalid"
+      portal: null
+    - id: P_CPT_AGENT
+      name: "Cape Bunkering & Agency (synthetic)"
+      kind: forwarder
+      channel: phone
+      city: Cape Town
+      lat: -33.900
+      lon: 18.430
+      modes: [sea]
+      capacity: {available: 40, unit: TEU slots, teu_per_unit: 1}
+      service_radius_km: 1500
+      adr_certified: true
+      reefer: true
+      phone: "+27 00 000 50 20"
+      email: "agency@cape-synthetic.invalid"
+      portal: null
+    - id: P_SIN_FEEDER
+      name: "Straits Feeder Lines (synthetic)"
+      kind: forwarder
+      channel: portal
+      city: Singapore
+      lat: 1.265
+      lon: 103.840
+      modes: [sea]
+      capacity: {available: 120, unit: TEU on feeder, teu_per_unit: 1}
+      service_radius_km: 1500
+      adr_certified: true
+      reefer: true
+      phone: "+65 00 000 50 21"
+      email: "slots@straits-synthetic.invalid"
+      portal: "https://slots.straits-synthetic.invalid"
+    - id: P_SHA_TRUCK
+      name: "Yangtze Delta Trucking (synthetic)"
+      kind: trucking
+      channel: email
+      city: Shanghai
+      lat: 31.230
+      lon: 121.470
+      modes: [road]
+      capacity: {available: 12, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 300
+      adr_certified: true
+      reefer: true
+      phone: "+86 00 000 50 22"
+      email: "dispatch@yangtze-synthetic.invalid"
+      portal: null
+    - id: P_COL_RAIL
+      name: "Colón Rail Land Bridge (synthetic)"
+      kind: rail_operator
+      channel: portal
+      city: Colón
+      lat: 9.350
+      lon: -79.900
+      modes: [rail]
+      capacity: {available: 40, unit: TEU per day, teu_per_unit: 1}
+      service_radius_km: 900
+      adr_certified: true
+      reefer: false
+      phone: "+507 00 000 50 23"
+      email: "landbridge@colon-synthetic.invalid"
+      portal: "https://landbridge.colon-synthetic.invalid"
+    - id: P_LAX_DRAY
+      name: "San Pedro Bay Drayage (synthetic)"
+      kind: trucking
+      channel: phone
+      city: Long Beach
+      lat: 33.760
+      lon: -118.210
+      modes: [road]
+      capacity: {available: 10, unit: trucks, teu_per_unit: 2}
+      service_radius_km: 200
+      adr_certified: true
+      reefer: true
+      phone: "+1 000 000 5024"
+      email: "dray@sanpedro-synthetic.invalid"
+      portal: null

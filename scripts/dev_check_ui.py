@@ -69,7 +69,7 @@ def main() -> int:
 
         page.on("console", _console)
 
-        page.goto(f"http://localhost:{PORT}/", wait_until="load", timeout=90_000)
+        page.goto(f"http://localhost:{PORT}/?view=globe", wait_until="load", timeout=90_000)
         # The globe needs a few frames to build geometry and settle.
         page.wait_for_timeout(9_000)
 
@@ -347,7 +347,7 @@ def main() -> int:
         # =============================================================
         # THEMES, MATRIX, ASSISTANT
         # =============================================================
-        page.goto(f"http://localhost:{PORT}/", wait_until="load", timeout=90_000)
+        page.goto(f"http://localhost:{PORT}/?view=globe", wait_until="load", timeout=90_000)
         page.wait_for_timeout(8_000)
 
         for theme in ("light", "blue", "sika", "dark"):

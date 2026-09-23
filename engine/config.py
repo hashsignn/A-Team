@@ -98,6 +98,12 @@ class Config:
     def contacts(self) -> dict:
         return self.raw("contacts")
 
+    @property
+    def fleet(self) -> dict:
+        """The map layer's settings, or {} when no fleet.yaml is present."""
+        loaded = self.files.get("fleet")
+        return (loaded.data or {}) if loaded else {}
+
     # ---------------------------------------------------------------
     def delay_triple(self, variable_id: str, severity: str) -> DelayTriple:
         """The three-point estimate for a variable at a severity.
@@ -155,11 +161,15 @@ _FILES = (
     "thresholds",
     "contacts",
     "sources",
+    "fleet",
 )
 
 # sources.yaml is optional: with no file, the built-in free catalogue is
 # the configuration, and that is complete and runnable on its own.
-_OPTIONAL = {"company_profile", "sources"}
+#
+# fleet.yaml is optional for the same reason: engine/fleet/ carries defaults for
+# every key, so a customer overlay written before the map existed still loads.
+_OPTIONAL = {"company_profile", "sources", "fleet"}
 
 
 def load_config(

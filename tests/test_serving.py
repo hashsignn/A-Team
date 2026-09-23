@@ -137,8 +137,42 @@ def test_the_board_page_carries_every_control_that_was_shipped():
         ('id="btn-ask"', "assistant button"),
         ('id="ask-panel"', "assistant panel"),
         ('id="link-profile"', "risk profile link"),
+        ('id="fleetmap"', "2D fleet map"),
+        ('mapstore.js', "map state store"),
+        ('mapagent.js', "map agent hooks"),
+        ('maplibre-gl.js', "vendored MapLibre"),
+        ('id="hub"', "Action Hub"),
+        ('id="vendor-card"', "partner card"),
+        ('data-view="globe"', "map / globe toggle"),
     ):
         assert marker in html, f"{feature} missing from the served page"
+
+
+def test_the_map_libraries_are_vendored_not_fetched():
+    """The page renders with the network cable pulled out. A CDN script tag
+    would make the map the one part of the board that does not."""
+    html = _page("index.html").body.decode()
+    external = re.findall(r'<script[^>]+src="(https?://[^"]+)"', html)
+    assert not external, f"scripts loaded from the network: {external}"
+    for name in ("maplibre-gl.js", "maplibre-gl.css", "chart.umd.min.js"):
+        assert (STATIC / "vendor" / name).exists(), name
+    for licence in ("LICENSE.maplibre-gl", "LICENSE.chart.js"):
+        assert (STATIC / "vendor" / licence).exists(), licence
+
+
+def test_a_vendored_stylesheet_swap_busts_the_cache(tmp_path, monkeypatch):
+    """maplibre-gl.css is referenced with a version like everything else; a
+    library upgrade that changed only the CSS must still change it."""
+    import api.main as main
+
+    fake = tmp_path / "static"
+    (fake / "vendor").mkdir(parents=True)
+    (fake / "app.js").write_text("x")
+    (fake / "vendor" / "lib.css").write_text("a{}")
+    monkeypatch.setattr(main, "STATIC", fake)
+    before = main._asset_version()
+    (fake / "vendor" / "lib.css").write_text("a{color:red}")
+    assert main._asset_version() != before
 
 
 def test_the_profile_page_carries_its_controls():
