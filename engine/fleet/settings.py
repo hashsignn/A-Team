@@ -78,10 +78,42 @@ DEFAULTS: dict = {
         ],
     },
     "routing": {"osrm_url": "https://router.project-osrm.org", "timeout_s": 4},
+    # Tried in order by the browser, which moves to the next when one refuses.
+    # Both are keyless: there is no account to bill and no key to leak.
+    #
+    # NOT tile.openstreetmap.org. Those are volunteer-run servers whose usage
+    # policy rules out an app like this one, and an app they have blocked is
+    # answered with a picture of the words "Access blocked" — served as an
+    # ordinary image, so the map could not even tell that it had failed. The
+    # board showed a wall of them.
     "basemap": {
-        "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        "attribution": "© OpenStreetMap contributors",
-        "max_zoom": 18,
+        "providers": [
+            {
+                "name": "CARTO Positron",
+                "tiles": [
+                    f"https://{host}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}.png"
+                    for host in "abcd"
+                ],
+                "attribution": (
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">'
+                    'OpenStreetMap</a> contributors &copy; '
+                    '<a href="https://carto.com/attributions">CARTO</a>'
+                ),
+                "max_zoom": 19,
+            },
+            {
+                "name": "Esri World Light Gray",
+                "tiles": [
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+                    "World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                ],
+                "attribution": (
+                    "Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap "
+                    "contributors, and the GIS User Community"
+                ),
+                "max_zoom": 16,
+            },
+        ],
     },
     "vendors": {
         "radius_km": {"road": 120, "rail": 150, "barge": 150, "sea": 900},
@@ -101,6 +133,47 @@ def _merge(base: dict, override: dict) -> dict:
     return out
 
 
+def basemap(block: dict | None) -> dict:
+    """The basemap as an ordered list of providers, whatever shape it came in.
+
+    ``tiles:`` at the top level is the older, single-provider form — and the
+    one somebody self-hosting will write. It is honoured on its own: a
+    company pointing the map at its own tile server does not want the
+    browser falling back to a third party the moment that server is slow.
+    A provider with no usable tile template is dropped rather than handed to
+    the browser to fail on.
+    """
+    block = block or {}
+    if block.get("tiles"):
+        candidates = [{
+            "name": block.get("name") or "Custom tiles",
+            "tiles": block["tiles"],
+            "attribution": block.get("attribution", ""),
+            "max_zoom": block.get("max_zoom", 18),
+        }]
+    else:
+        candidates = list(block.get("providers") or [])
+
+    providers = []
+    for entry in candidates:
+        if not isinstance(entry, dict):
+            continue
+        tiles = entry.get("tiles")
+        tiles = [tiles] if isinstance(tiles, str) else list(tiles or [])
+        tiles = [t for t in tiles if isinstance(t, str) and "{z}" in t]
+        if not tiles:
+            continue
+        providers.append({
+            "name": str(entry.get("name") or "Tiles"),
+            "tiles": tiles,
+            "attribution": str(entry.get("attribution") or ""),
+            "max_zoom": int(entry.get("max_zoom") or 18),
+        })
+    return {"providers": providers}
+
+
 def settings(config: Config) -> dict:
     """The effective fleet settings for this config."""
-    return _merge(DEFAULTS, config.fleet)
+    out = _merge(DEFAULTS, config.fleet)
+    out["basemap"] = basemap(out.get("basemap"))
+    return out

@@ -333,8 +333,11 @@ and it is why this lane is worth demonstrating.
 FastAPI + vanilla JS + CSS. No build step, no framework, no CDN — `globe.gl`,
 `topojson-client`, `maplibre-gl` and `chart.js` are vendored from npm under
 `api/static/vendor/`, the country geometry under `api/static/geo/`. The page
-renders with the network cable pulled out; only the OpenStreetMap basemap
-tiles need a network, and without them the map draws the vendored outlines.
+renders with the network cable pulled out; only the basemap tiles need a
+network (CARTO Positron, then Esri World Light Gray if CARTO refuses — both
+keyless), and without them the map draws the vendored outlines. Not
+OpenStreetMap's own tile servers: they refuse apps like this one with a tile
+reading "Access blocked", which is what the map first showed.
 
 **Section 1** is the full viewport. Its left pane is the **2D fleet map** by
 default — every active asset, and the recovery routes for a disrupted one —
@@ -1091,7 +1094,7 @@ books or writes anything.
 
 | | offline | with a network |
 |---|---|---|
-| basemap | vendored country outlines, and the legend says so | OSM tiles (browser fetches them; `fleet.yaml` → `basemap.tiles` to self-host) |
+| basemap | vendored country outlines, and the legend says so | CARTO Positron tiles, Esri World Light Gray if CARTO refuses (browser fetches them, no key; `fleet.yaml` → `basemap.tiles` to self-host, used alone) |
 | road geometry | corridor estimate, labelled | OSRM, only with `RADAR_ALLOW_NETWORK=1`; `routing.osrm_url` for a self-hosted one |
 | sea routes, ranking, split, partners | all of it | the same |
 

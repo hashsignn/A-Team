@@ -143,13 +143,34 @@ routing:
 # -------------------------------------------------------------------
 # BASEMAP — served to the browser, never fetched by the server
 # -------------------------------------------------------------------
-# OpenStreetMap raster tiles, desaturated in the renderer so routes and
-# assets are the brightest things on screen. With no network the map draws
-# the vendored country outlines instead and says so.
+# Raster tiles, desaturated in the renderer so routes and assets are the
+# brightest things on screen. Providers are tried IN ORDER: when one refuses
+# (it answers errors and nothing else) the browser moves to the next, and
+# with no network at all the map draws the vendored country outlines and
+# says so. Both below are keyless — no account, no bill, nothing to leak.
+#
+# Not tile.openstreetmap.org: those are volunteer servers whose usage policy
+# rules out apps like this one, and they answer a blocked app with an image
+# reading "Access blocked" — which the map cannot tell from a real tile.
+#
+# To self-host, replace the list with a single entry, or use the short form
+#   basemap: {tiles: ["https://tiles.example.internal/{z}/{x}/{y}.png"]}
+# which is used ALONE — no fallback to a third party.
 basemap:
-  tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"]
-  attribution: "© OpenStreetMap contributors"
-  max_zoom: 18
+  providers:
+    - name: "CARTO Positron"
+      tiles:
+        - "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+        - "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+        - "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+        - "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      max_zoom: 19
+    - name: "Esri World Light Gray"
+      tiles:
+        - "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+      attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS User Community"
+      max_zoom: 16
 
 # -------------------------------------------------------------------
 # PARTNER NETWORK — SYNTHETIC

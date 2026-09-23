@@ -532,3 +532,58 @@ def test_weights_that_are_not_numbers_weigh_nothing(board, context, fleet):
     routes = reroute.recovery(board, context, a["id"],
                               weights={"time": "fast", "cost": None, "risk": 1})
     assert routes["weights"] == {"time": 0.0, "cost": 0.0, "risk": 1.0}
+
+
+# =====================================================================
+# The basemap
+# =====================================================================
+
+
+def test_the_basemap_never_asks_openstreetmaps_own_servers():
+    """They refuse apps like this one with an image reading "Access blocked",
+    served as a normal tile — the board showed a wall of them, and the map
+    could not tell that anything had failed."""
+    providers = settings(load_config())["basemap"]["providers"]
+    assert len(providers) >= 2, "one provider refusing must not leave the map bare"
+    for provider in providers:
+        for url in provider["tiles"]:
+            assert "tile.openstreetmap.org" not in url, provider["name"]
+
+
+def test_every_basemap_provider_is_keyless_and_attributed():
+    """Nothing to bill and nothing to leak: no key in any URL, https only,
+    and the attribution each provider's terms ask for."""
+    for provider in settings(load_config())["basemap"]["providers"]:
+        assert provider["attribution"], provider["name"]
+        for url in provider["tiles"]:
+            assert url.startswith("https://"), url
+            assert all(t in url for t in ("{z}", "{x}", "{y}")), url
+            assert not any(k in url.lower() for k in ("key=", "token=", "access_token")), url
+
+
+def test_a_self_hosted_tile_server_is_used_alone():
+    """The short `tiles:` form is what somebody self-hosting writes, and they
+    do not want the browser falling back to a third party."""
+    from engine.fleet.settings import basemap
+
+    own = basemap({"tiles": ["https://tiles.example.internal/{z}/{x}/{y}.png"],
+                   "providers": [{"name": "CARTO", "tiles": ["https://c/{z}/{x}/{y}.png"]}]})
+    assert [p["tiles"] for p in own["providers"]] == [
+        ["https://tiles.example.internal/{z}/{x}/{y}.png"]
+    ]
+
+
+def test_a_provider_with_no_tile_template_is_dropped():
+    from engine.fleet.settings import basemap
+
+    kept = basemap({"providers": [{"name": "empty"}, {"name": "broken", "tiles": ["https://x/"]},
+                                  {"name": "good", "tiles": "https://g/{z}/{x}/{y}.png"}]})
+    assert [p["name"] for p in kept["providers"]] == ["good"]
+
+
+def test_the_map_is_told_the_providers_in_order():
+    from api import main
+
+    meta = json.loads(main.map_assets(as_of=AS_OF.as_of.isoformat(), shipments=150).body)["meta"]
+    names = [p["name"] for p in meta["basemap"]["providers"]]
+    assert names == [p["name"] for p in settings(load_config())["basemap"]["providers"]]

@@ -11,14 +11,18 @@ planner would use it.
 It is also driven through ``window.MapAgent``, the way an agent would. The
 contract is that both routes produce the same state, so both are exercised.
 
-Tile requests to tile.openstreetmap.org are NOT errors here: this checker has
+Tile requests to the basemap providers are NOT errors here: this checker has
 to pass with the network cable pulled out, which is when the map falls back to
-the vendored country outlines — and the legend has to say so.
+the vendored country outlines — and the legend has to say so. The fallback
+itself is checked on a second page whose tile requests are answered here, not
+by the providers: one refusing, the next serving a tile.
 """
 
 from __future__ import annotations
 
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -28,7 +32,28 @@ OUT = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("/tmp/shots-map")
 OUT.mkdir(parents=True, exist_ok=True)
 BASE = f"http://localhost:{PORT}"
 
-TILE_HOSTS = ("tile.openstreetmap.org",)
+TILE_HOSTS = ("basemaps.cartocdn.com", "server.arcgisonline.com", "tile.openstreetmap.org")
+
+
+
+def _grey_tile(size: int = 256, level: int = 200) -> bytes:
+    """A plain grey PNG tile, built rather than pasted.
+
+    A PNG copied in by hand with one wrong byte fails its checksum, the map
+    cannot decode it, and the provider "serving" it then looks as if it were
+    refusing too — which is how this check first failed.
+    """
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(kind + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", crc)
+
+    row = b"\x00" + bytes([level] * 3) * size
+    header = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(row * size)) + chunk(b"IEND", b""))
+
+
+TILE_PNG = _grey_tile()
 
 
 def _ignorable(text: str) -> bool:
@@ -318,9 +343,63 @@ def main() -> int:
         check(page.locator("#hub").is_visible(), "[link] ?asset= did not open the hub",
               f"?asset={chosen} opens its Action Hub")
 
+        _check_basemap_fallback(browser, check)
         browser.close()
 
     return _report(errors)
+
+
+def _legend_note(page) -> str:
+    return page.evaluate(
+        "(document.querySelector('#map-legend .lg-note') || {}).textContent || ''")
+
+
+def _check_basemap_fallback(browser, check) -> None:
+    """A refusing provider is replaced by the next, and none is OSM's own.
+
+    Answered here rather than by the providers, so it runs the same with and
+    without a network: the first provider refuses every tile, the second
+    serves one. Then every provider refuses, which is the offline case.
+    """
+    asked: list[str] = []
+
+    def serve(route):
+        url = route.request.url
+        asked.append(url)
+        if "basemaps.cartocdn.com" in url or "tile.openstreetmap.org" in url:
+            route.fulfill(status=403, body="refused")
+        else:
+            route.fulfill(status=200, content_type="image/png", body=TILE_PNG)
+
+    page = browser.new_page(viewport={"width": 1280, "height": 860})
+    page.route("**/*", lambda route: serve(route)
+               if any(h in route.request.url for h in TILE_HOSTS) else route.continue_())
+    page.goto(f"{BASE}/", wait_until="load", timeout=90_000)
+    page.wait_for_function("window.__fleetmap && window.__fleetmap.getLayer('asset-icons')",
+                           timeout=60_000)
+    page.wait_for_function(
+        "(document.querySelector('#map-legend .lg-note') || {}).textContent"
+        ".includes('Esri World Light Gray tiles, desaturated')", timeout=30_000)
+    note = _legend_note(page)
+    check("CARTO Positron did not answer" in note,
+          f"[basemap] the legend did not say the first provider refused: {note!r}",
+          "a refusing tile provider is replaced by the next, and the legend says so")
+    check(not any("tile.openstreetmap.org" in u for u in asked),
+          "[basemap] tiles were asked of OpenStreetMap's own servers",
+          "no tile is asked of OpenStreetMap's volunteer servers")
+    page.close()
+
+    page = browser.new_page(viewport={"width": 1280, "height": 860})
+    page.route("**/*", lambda route: route.fulfill(status=403, body="refused")
+               if any(h in route.request.url for h in TILE_HOSTS) else route.continue_())
+    page.goto(f"{BASE}/", wait_until="load", timeout=90_000)
+    page.wait_for_function(
+        "(document.querySelector('#map-legend .lg-note') || {}).textContent"
+        ".includes('Offline outline')", timeout=30_000)
+    check(page.evaluate("!!window.__fleetmap.getLayer('land')"),
+          "[basemap] every provider refused and the country outlines are missing",
+          "every provider refusing leaves the offline outline, and the legend says so")
+    page.close()
 
 
 def _report(errors: list[str]) -> int:

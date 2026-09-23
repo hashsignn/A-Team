@@ -8,11 +8,17 @@
  *
  * BASEMAP
  * -------
- * OpenStreetMap raster tiles, desaturated in the renderer (MapLibre's raster
- * paint properties) so the assets and routes are the only saturated things on
- * screen; inverted on the dark theme. UNDER them, always, the vendored
- * country outlines — so with the network cable pulled out the map still has
- * a world on it, and the legend says which one you are looking at.
+ * Raster tiles from a list of keyless providers (fleet.yaml), tried in
+ * order: one that answers nothing but errors is replaced by the next.
+ * Desaturated in the renderer (MapLibre's raster paint properties) so the
+ * assets and routes are the only saturated things on screen; inverted on
+ * the dark theme. UNDER them, always, the vendored country outlines — so
+ * with the network cable pulled out the map still has a world on it, and
+ * the legend says which one you are looking at.
+ *
+ * Not OpenStreetMap's own tile servers: they refuse apps like this one, and
+ * refuse them with an image of the words "Access blocked" delivered as a
+ * normal tile, which nothing here could tell from a map.
  *
  * NO TEXT IN WEBGL
  * ----------------
@@ -33,6 +39,10 @@
   const STATUSES = ['green', 'yellow', 'red'];
   const MODES = ['sea', 'barge', 'rail', 'road'];
   const CLUSTER_MAX_ZOOM = 6;
+  // Errors from a provider, with no tile loaded yet, before the next is
+  // tried. More than one, because a single miss is routine; few enough that
+  // a provider refusing everything is replaced within the first screenful.
+  const BASEMAP_SWITCH_AFTER = 4;
   const HOME = { center: [22, 34], zoom: 2.1 };
 
   /* Mode glyphs in a 24x24 box, drawn white on the status disc. Drawn, not
@@ -161,7 +171,10 @@
     const view = {
       map: null, ready: false, prev: null,
       clusters: new Map(), routeMarkers: [], vendorMarkers: new Map(), branchMarkers: [],
-      hazard: null, fittedFor: null, tilesFailed: 0, tilesOk: false,
+      hazard: null, fittedFor: null,
+      // Which basemap provider is drawing, and how it is going. `refused`
+      // names the ones given up on, for the legend.
+      tiles: { index: -1, errors: 0, ok: false, offline: false, refused: [], meta: null },
       hoverAsset: null,
     };
 
@@ -237,16 +250,15 @@
       // Tile failures are expected offline. They are reported in the legend,
       // not thrown at the console as if something were broken.
       map.on('error', (e) => {
-        if (e && e.sourceId === 'osm') {
-          view.tilesFailed += 1;
-          renderLegend(store.getState());
+        if (e && typeof e.sourceId === 'string' && e.sourceId.startsWith('basemap-')) {
+          onTileError(e.sourceId);
         } else if (e && e.error) {
           console.warn('[map]', e.error.message || e.error);
         }
       });
       map.on('sourcedata', (e) => {
-        if (e.sourceId === 'osm' && e.tile && !view.tilesOk) {
-          view.tilesOk = true;
+        if (e.sourceId === basemapSource(view.tiles.index) && e.tile && !view.tiles.ok) {
+          view.tiles.ok = true;
           renderLegend(store.getState());
         }
       });
@@ -302,14 +314,59 @@
       }
     }
 
+    // ---------------------------------------------------------------
+    // Basemap — the first provider that answers
+    // ---------------------------------------------------------------
+    function providersOf(meta) {
+      const b = meta && meta.basemap;
+      if (!b) return [];
+      if (Array.isArray(b.providers)) return b.providers;
+      return b.tiles ? [{ name: 'Tiles', ...b }] : [];     // an older server's shape
+    }
+
+    /* One source id per provider, so a replaced provider's late errors —
+     * its requests are still in flight when it is removed — are recognised
+     * as its own and never counted against the one that replaced it. */
+    const basemapSource = (index) => `basemap-${index}`;
+
     function ensureBasemap(meta) {
+      const t = view.tiles;
+      if (!view.ready || !meta || t.index >= 0 || t.offline) return;
+      t.meta = meta;
+      useProvider(0);
+    }
+
+    function useProvider(index) {
       const map = view.map;
-      if (!view.ready || !meta || !meta.basemap || map.getSource('osm')) return;
-      map.addSource('osm', {
-        type: 'raster', tiles: meta.basemap.tiles, tileSize: 256,
-        maxzoom: meta.basemap.max_zoom || 18, attribution: meta.basemap.attribution,
+      const t = view.tiles;
+      const list = providersOf(t.meta);
+      if (t.index >= 0) {
+        if (list[t.index]) t.refused.push(list[t.index].name);
+        if (map.getLayer('basemap')) map.removeLayer('basemap');
+        if (map.getSource(basemapSource(t.index))) map.removeSource(basemapSource(t.index));
+      }
+      Object.assign(t, { index, errors: 0, ok: false });
+      const provider = list[index];
+      if (!provider) {
+        t.offline = true;               // the vendored outlines stay underneath
+        renderLegend(store.getState());
+        return;
+      }
+      map.addSource(basemapSource(index), {
+        type: 'raster', tiles: provider.tiles, tileSize: 256,
+        maxzoom: provider.max_zoom || 18, attribution: provider.attribution,
       });
-      map.addLayer({ id: 'osm', type: 'raster', source: 'osm', paint: rasterPaint() }, 'lanes');
+      map.addLayer({ id: 'basemap', type: 'raster', source: basemapSource(index), paint: rasterPaint() }, 'lanes');
+      renderLegend(store.getState());
+    }
+
+    function onTileError(sourceId) {
+      const t = view.tiles;
+      // A provider that has drawn a tile keeps its place: a missing tile
+      // here and there is not a refusal.
+      if (sourceId !== basemapSource(t.index) || t.ok || t.offline) return;
+      t.errors += 1;
+      if (t.errors >= BASEMAP_SWITCH_AFTER) useProvider(t.index + 1);
     }
 
     async function addIcons(map) {
@@ -743,11 +800,15 @@
       const booked = state.assets.items.filter((a) => a.phase === 'booked').length;
       const labels = (state.assets.meta && state.assets.meta.status_labels) || { green: 'Nominal', yellow: 'Minor disruption', red: 'Major disruption' };
       const th = (state.assets.meta && state.assets.meta.thresholds) || { minor_max_hours: 4 };
-      const basemap = view.tilesOk
-        ? '<b>OpenStreetMap</b> tiles, desaturated.'
-        : view.tilesFailed
-          ? '<b>Offline outline</b> — tiles unreachable, so the vendored country shapes are drawn instead.'
-          : '<b>OpenStreetMap</b> tiles loading; country outlines underneath.';
+      const t = view.tiles;
+      const current = providersOf(t.meta || (state.assets && state.assets.meta))[Math.max(0, t.index)];
+      const refused = t.refused.length
+        ? ` ${t.refused.map((n) => esc(n)).join(' and ')} did not answer.` : '';
+      const basemap = t.offline
+        ? `<b>Offline outline</b> — no tile provider answered, so the vendored country shapes are drawn instead.${refused}`
+        : t.ok && current
+          ? `<b>${esc(current.name)}</b> tiles, desaturated.${refused}`
+          : `<b>${esc(current ? current.name : 'Map')}</b> tiles loading; country outlines underneath.${refused}`;
       host.innerHTML = `
         <div class="map-legend-row">
           ${['red', 'yellow', 'green'].map((s) => `
@@ -792,8 +853,8 @@
         map.setPaintProperty('land', 'fill-color', tokenOf('--map-land'));
         map.setPaintProperty('land-line', 'line-color', tokenOf('--map-border'));
       }
-      if (map.getLayer('osm')) {
-        for (const [k, v] of Object.entries(rasterPaint())) map.setPaintProperty('osm', k, v);
+      if (map.getLayer('basemap')) {
+        for (const [k, v] of Object.entries(rasterPaint())) map.setPaintProperty('basemap', k, v);
       }
       map.setPaintProperty('lanes', 'line-color', tokenOf('--map-lane'));
       map.setPaintProperty('route-original', 'line-color', tokenOf('--map-original'));
