@@ -270,6 +270,7 @@ async function boot() {
           ? 'Nothing measurable is contributing delay here.'
           : 'Nothing reported is contributing delay here.',
       });
+      Charts.wireGauges(host);
     }
   }
   const driving = (v.events || []).find((e) => e.event_id === v.driving_event_id)

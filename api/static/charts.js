@@ -166,32 +166,104 @@ const Charts = (() => {
     const keys = radar.axis_keys || [];
     if (!keys.length) return `<p class="gauge-none">${escC(empty)}</p>`;
 
+    const subs = radar.subcategories || {};
+    let quiet = 0;
+
     const rows = keys.map((key, i) => {
       const days = (radar.days || [])[i] || 0;
       const level = (radar.intensity || [])[i] || 0;
       const band = (radar.dominant || [])[i];
       const lit = days > 0 ? Math.max(1, Math.round(level * GAUGE_PIPS)) : 0;
+      if (days <= 0) quiet += 1;
 
       const pips = Array.from({ length: GAUGE_PIPS }, (_, k) =>
         `<i class="pip${k < lit ? ' pip--on' : ''}"></i>`).join('');
 
+      const inner = `
+        <span class="gauge__icon" aria-hidden="true">${FAMILY_GLYPH[key] || '◆'}</span>
+        <span class="gauge__name">${escC((radar.axes || [])[i] || key)}</span>
+        <span class="gauge__pips" role="img"
+              aria-label="${days > 0 ? `${days} days of delay` : 'no contribution'}"
+              >${pips}</span>
+        <span class="gauge__val">${days > 0 ? `${days.toFixed(1)} d` : '—'}</span>`;
+
+      // A family contributing nothing has nothing to open. Rendering it as a
+      // button anyway would promise a panel that turns out to be empty, and
+      // a control that does nothing when pressed is worse than no control.
+      if (days <= 0) {
+        return `<div class="gauge gauge--quiet">${inner}
+                  <span class="gauge__chev" aria-hidden="true"></span>
+                </div>`;
+      }
+
       return `
-        <div class="gauge${days > 0 ? '' : ' gauge--quiet'}"
-             style="${band ? `--pip: ${BAND_COLOR[band]};` : ''}">
-          <span class="gauge__icon" aria-hidden="true">${FAMILY_GLYPH[key] || '◆'}</span>
-          <span class="gauge__name">${escC((radar.axes || [])[i] || key)}</span>
-          <span class="gauge__pips" role="img"
-                aria-label="${days > 0 ? `${days} days of delay` : 'no contribution'}"
-                >${pips}</span>
-          <span class="gauge__val">${days > 0 ? `${days.toFixed(1)} d` : '—'}</span>
+        <div class="gauge-wrap">
+          <button type="button" class="gauge gauge--open"
+                  style="${band ? `--pip: ${BAND_COLOR[band]};` : ''}"
+                  aria-expanded="false" data-family="${escC(key)}">
+            ${inner}
+            <span class="gauge__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="gauge__detail" data-for="${escC(key)}" hidden>
+            ${whyHTML(subs[key] || [])}
+          </div>
         </div>`;
     });
 
-    const quiet = keys.length - rows.filter((_, i) =>
-      ((radar.days || [])[i] || 0) > 0).length;
     return rows.join('') + (quiet
       ? `<p class="gauge-foot">${quiet} more checked, contributing nothing.</p>`
       : '');
+  }
+
+  /* What is actually behind a lit family: the variables inside it, and for
+   * each the events that raised it. "Labour, 2.3 days" is a number a planner
+   * has to take on trust. "Labour, 2.3 days, because the Antwerp dockers
+   * voted to strike and the hauliers blockaded the gates" is a number they
+   * can check — and the chart has always known the second sentence. */
+  function whyHTML(entries) {
+    if (!entries.length) {
+      return '<p class="why-none">No variable detail recorded for this family.</p>';
+    }
+    return `<ul class="why">${entries.map((v) => `
+      <li class="why__var">
+        <div class="why__head">
+          <span class="why__name">${escC(v.name)}</span>
+          <span class="why__days">${(v.days || 0).toFixed(1)} d</span>
+        </div>
+        ${v.description ? `<p class="why__desc">${escC(v.description)}</p>` : ''}
+        ${(v.events || []).length ? `
+          <ul class="why__events">
+            ${v.events.map((e) => `
+              <li>
+                <span class="why__dot why__dot--${escC(e.severity)}"></span>
+                <span class="why__title">${escC(e.title)}</span>
+                <span class="why__meta">${(e.days || 0).toFixed(1)} d${
+                  e.confidence ? ` · confidence ${escC(e.confidence)}` : ''}</span>
+              </li>`).join('')}
+          </ul>` : `
+          <p class="why-none">Assessed as exposed, with no event raising it
+             right now.</p>`}
+        <p class="why__kind">${v.sourceable
+          ? 'Measured — an instrument reports this; the level can be read today.'
+          : 'Reported — no instrument publishes this; it is known only when somebody reports it.'
+        }</p>
+      </li>`).join('')}</ul>`;
+  }
+
+  /* Event delegation on the host, so re-rendering the gauges does not leave
+   * a listener behind on every row that was replaced. */
+  function wireGauges(host) {
+    if (!host || host.dataset.wired === '1') return;
+    host.dataset.wired = '1';
+    host.addEventListener('click', (event) => {
+      const button = event.target.closest('.gauge--open');
+      if (!button || !host.contains(button)) return;
+      const open = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', String(!open));
+      const panel = button.parentElement
+        && button.parentElement.querySelector('.gauge__detail');
+      if (panel) panel.hidden = open;
+    });
   }
 
   function impactRows(grid) {
@@ -314,7 +386,11 @@ const Charts = (() => {
           <tr>
             <th class="mx-corner"><span>impact if late</span></th>
             ${cols.map((c) => `<th>${escC(c.label)}</th>`).join('')}
-            ${unsourced.length ? `<th class="mx-unsourced-h">${escC(grid.unsourced_band.label)}</th>` : ''}
+            ${unsourced.length ? `<th class="mx-unsourced-h"
+                title="Nobody publishes a likelihood for these. A strike ballot
+has no percentage attached; a gauge reading does. Rather than invent one and
+put it on the axis, they are held here — the impact is known, the odds are
+not.">${escC(grid.unsourced_band.label)}</th>` : ''}
           </tr>
         </thead>
         <tbody>
@@ -329,9 +405,11 @@ const Charts = (() => {
         </tbody>
         <tfoot>
           <tr><td></td>
-            <td colspan="${cols.length + (unsourced.length ? 1 : 0)}" class="mx-xaxis">
-              P(this shipment is late) →
-            </td></tr>
+            <td colspan="${cols.length}" class="mx-xaxis">
+              how likely this shipment is to be late →
+            </td>
+            ${unsourced.length ? `<td class="mx-xaxis mx-xaxis--off">off the axis</td>` : ''}
+          </tr>
         </tfoot>
       </table>`;
   }
@@ -342,6 +420,6 @@ const Charts = (() => {
     return String(Math.round(n));
   }
 
-  return { drawRadar, familyGauges, impactRows, dots, cellTint,
+  return { drawRadar, familyGauges, wireGauges, impactRows, dots, cellTint,
            buildMatrixGrid, shortChf };
 })();

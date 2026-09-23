@@ -84,7 +84,13 @@ def test_unsourceable_probability_gets_its_own_band_not_a_midpoint(config):
     """The bug this whole discipline exists to prevent."""
     band_id, label = matrix.probability_band(None, config)
     assert band_id == matrix.UNSOURCED_BAND_ID
-    assert "unsourced" in label.lower()
+    # The label is copy and may be reworded for whoever is reading it; what
+    # may not change is that it is not one of the axis labels, because that
+    # is what would let an absence pass as a value.
+    assert label.strip()
+    assert label not in {
+        matrix.probability_band(p, config)[1] for p in (0.0, 0.3, 0.6, 0.9)
+    }
 
     # And critically: it must NOT land where 0.5 would.
     midpoint_band, _ = matrix.probability_band(0.5, config)

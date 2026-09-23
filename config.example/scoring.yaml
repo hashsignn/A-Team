@@ -103,7 +103,10 @@ matrix:
   # Events whose probability cannot be sourced are NOT placed on the
   # probability axis. They go in a separate band drawn outside the grid.
   # BRIEF §8.1: an absence must never become a value.
-  unsourced_band_label: "P unsourced"
+  # Worded for somebody who has never read this file. "P unsourced" is
+  # exact and unreadable: it made a planner ask what the column was, which
+  # is a column doing the opposite of its job.
+  unsourced_band_label: "no odds published"
 
 # -------------------------------------------------------------------
 # THE CONVENE RULE — answers Sika Q6

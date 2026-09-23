@@ -1150,10 +1150,13 @@ a.ctl { text-decoration: none; }
   text-align: center; padding-top: 4px;
 }
 .mx-legend {
-  display: flex; gap: 14px; margin-top: 10px;
+  display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px;
   font-size: 10px; color: var(--muted);
 }
-.mx-legend span { display: inline-flex; align-items: center; gap: 5px; }
+/* Keys are short phrases and must not be broken across lines to make room
+   for the sentence below them — a legend that wraps mid-phrase reads as
+   damage rather than as a key. */
+.mx-legend > span { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 .mx-note {
   font-size: 10px; color: var(--muted); line-height: 1.5; margin-top: 8px;
 }
@@ -2173,4 +2176,83 @@ body.has-modal { overflow: hidden; }
 
 @media (max-width: 900px) {
   .rt-radars { grid-template-columns: 1fr; }
+}
+
+/* ---- a lit family opens to say why ----------------------------------
+   The chart could say "labour, 2.3 days" and not why. The data to answer
+   that was always in the payload and never rendered, so the number had to
+   be taken on trust. It opens in place rather than in a dialog: a planner
+   comparing two families should not have to close one to look at the
+   other. */
+.gauge-wrap { border-radius: 6px; }
+.gauge-wrap:has(.gauge[aria-expanded="true"]) { background: var(--surface-2); }
+
+button.gauge {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+button.gauge:hover { background: var(--surface-2); }
+button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.gauge { grid-template-columns: 16px minmax(0, 1fr) auto auto 12px; }
+.gauge__chev {
+  font-size: 9px; color: var(--muted); text-align: center;
+  transition: transform .12s ease;
+}
+.gauge[aria-expanded="true"] .gauge__chev { transform: rotate(180deg); }
+
+.gauge__detail { padding: 2px 8px 10px 24px; }
+
+.why { list-style: none; margin: 0; padding: 0; }
+.why__var { padding: 7px 0; border-top: 1px solid var(--border); }
+.why__var:first-child { border-top: 0; }
+.why__head { display: flex; justify-content: space-between; gap: 10px; }
+.why__name { font-size: 12px; font-weight: 600; }
+.why__days { font-family: var(--mono); font-size: 11px; color: var(--text-secondary); }
+.why__desc { margin: 3px 0 0; font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+
+.why__events { list-style: none; margin: 6px 0 0; padding: 0; }
+.why__events li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 7px; align-items: baseline;
+  padding: 2px 0; font-size: 11px;
+}
+.why__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.why__dot--severe   { background: var(--band-severe); }
+.why__dot--moderate { background: var(--band-moderate); }
+.why__dot--minor    { background: var(--band-minor); }
+.why__title { color: var(--text-primary); }
+.why__meta { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+.why__kind { margin: 6px 0 0; font-size: 10.5px; color: var(--muted); font-style: italic; }
+.why-none { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+
+/* The unsourced column needs a sentence, not a label. "P unsourced" was
+   exact and unreadable — it made a planner ask what the column was, which
+   is a column doing the opposite of its job. */
+/* Selector matches `.mx-legend > span` on specificity and must beat it:
+   that rule pins every key to `flex: 0 0 auto` so short phrases never wrap
+   mid-sentence, which is right for a key and wrong for the sentence under
+   it. A flex item also will not shrink below its content's min-content
+   width unless told to, so without min-width the line runs off the card
+   instead of wrapping inside it. */
+.mx-legend > span.mx-explain {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.mx-xaxis--off {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
 }

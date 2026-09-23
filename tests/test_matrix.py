@@ -151,9 +151,22 @@ def test_the_unsourced_band_is_declared_outside_the_probability_axis(config):
 
 
 def test_probability_band_of_none_is_the_unsourced_band(config):
+    """The band, not the wording.
+
+    This used to require the literal word "unsourced" in the label, which
+    froze the copy: the column is read by planners, "P unsourced" made one
+    ask what it meant, and a label nobody understands is a label doing the
+    opposite of its job. What must not move is the BAND — that an absent
+    probability keeps its own place and never borrows one on the axis.
+    """
     band_id, label = M.probability_band(None, config)
     assert band_id == M.UNSOURCED_BAND_ID
-    assert "unsourced" in label.lower()
+    assert label.strip(), "the column still has to be labelled something"
+
+    axis = {M.probability_band(p, config)[1] for p in (0.0, 0.3, 0.6, 0.9)}
+    assert label not in axis, (
+        "the unsourced column must not be labelled like a probability band"
+    )
 
 
 # =====================================================================

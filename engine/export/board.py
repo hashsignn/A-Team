@@ -515,10 +515,34 @@ def _radar(assessments: list, lane: dict, context: RunContext, keep=None) -> dic
             entry = subs[var.family].setdefault(
                 var_id,
                 {"id": var_id, "name": var.name, "days": 0.0, "severity": band,
-                 "description": var.description.strip()},
+                 "description": var.description.strip(),
+                 "sourceable": bool(var.probability_sourceable),
+                 "events": []},
             )
             entry["days"] += days
             entry["severity"] = band
+            # WHY this variable is lit. The loop has always known — it is
+            # iterating the assessments that raised it — and threw it away,
+            # which left the chart able to say "labour, 2.3 days" and unable
+            # to say "because the Antwerp dockers voted to strike". The
+            # second sentence is the one a planner needs before they believe
+            # the first.
+            known = {e["event_id"] for e in entry["events"]}
+            if assessment.event.event_id not in known:
+                entry["events"].append({
+                    "event_id": assessment.event.event_id,
+                    "title": assessment.event.title,
+                    "severity": band,
+                    "starts_at": assessment.event.starts_at.isoformat(),
+                    "confidence": getattr(
+                        assessment.event.confidence, "value",
+                        str(assessment.event.confidence),
+                    ),
+                    "days": 0.0,
+                })
+            for row in entry["events"]:
+                if row["event_id"] == assessment.event.event_id:
+                    row["days"] = round(row["days"] + days, 2)
 
     eligible = _eligible_families(lane, context, keep)
     for family in eligible:
