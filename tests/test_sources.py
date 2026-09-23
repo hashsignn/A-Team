@@ -276,14 +276,14 @@ def test_a_builtin_cannot_have_its_parsing_overridden(tmp_path):
     """Changing how a built-in parses would silently diverge from the fixture
     it is tested against. Copy it into custom: under a new key instead."""
     path = tmp_path / "sources.yaml"
-    path.write_text("builtin:\n  gdelt_doc:\n    fields:\n      headline: nope\n")
+    path.write_text("builtin:\n  gdelt_doc:\n    fields:\n      headline: nope\n", encoding="utf-8")
     with pytest.raises(SourceConfigError, match="cannot override"):
         load_sources(path)
 
 
 def test_patching_an_unknown_builtin_names_the_real_ones(tmp_path):
     path = tmp_path / "sources.yaml"
-    path.write_text("builtin:\n  gdlet_doc:\n    enabled: false\n")
+    path.write_text("builtin:\n  gdlet_doc:\n    enabled: false\n", encoding="utf-8")
     with pytest.raises(SourceConfigError) as exc:
         load_sources(path)
     assert "gdelt_doc" in str(exc.value)

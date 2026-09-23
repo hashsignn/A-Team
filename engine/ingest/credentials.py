@@ -104,7 +104,7 @@ def load(store: Path | None = None) -> dict[str, dict]:
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise CredentialError(f"{path} could not be read: {exc}") from exc
     if not isinstance(data, dict):
@@ -240,6 +240,6 @@ def _write(path: Path, records: dict) -> None:
     temporary = path.with_suffix(".tmp")
     temporary.touch(mode=0o600, exist_ok=True)
     temporary.chmod(0o600)
-    temporary.write_text(json.dumps(records, indent=1, sort_keys=True))
+    temporary.write_text(json.dumps(records, indent=1, sort_keys=True), encoding="utf-8")
     temporary.replace(path)
     path.chmod(0o600)

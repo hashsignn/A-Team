@@ -138,7 +138,7 @@ def main() -> int:
     missing_disk = missing_served = 0
     for name, (rel, marker) in MARKERS.items():
         path = ROOT / rel
-        on_disk = path.exists() and marker in path.read_text(errors="replace")
+        on_disk = path.exists() and marker in path.read_text(errors="replace", encoding="utf-8")
         missing_disk += not on_disk
 
         if index is None:

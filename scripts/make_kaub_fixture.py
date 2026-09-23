@@ -103,7 +103,7 @@ def build() -> dict:
 if __name__ == "__main__":
     OUT.parent.mkdir(parents=True, exist_ok=True)
     data = build()
-    OUT.write_text(json.dumps(data, indent=1))
+    OUT.write_text(json.dumps(data, indent=1), encoding="utf-8", newline="\n")
     last = data["readings"][-1]
     week_ago = data["readings"][-7 * READINGS_PER_DAY]
     slope = (last["cm"] - week_ago["cm"]) / 7.0

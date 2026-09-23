@@ -23,7 +23,7 @@ def config():
 
 def write(tmp_path, body: str):
     path = tmp_path / "flows.yaml"
-    path.write_text(textwrap.dedent(body))
+    path.write_text(textwrap.dedent(body), encoding="utf-8")
     return path
 
 
@@ -61,7 +61,7 @@ def test_without_an_export_the_old_rule_is_unchanged(config, tmp_path):
 
 def test_a_corrupt_export_is_an_absent_one_not_a_crash(tmp_path):
     path = tmp_path / "flows.yaml"
-    path.write_text("{ this is not: [valid")
+    path.write_text("{ this is not: [valid", encoding="utf-8")
     assert F.load(path).available is False
 
 

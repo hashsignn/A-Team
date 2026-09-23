@@ -124,7 +124,7 @@ custom:
       node_hint: "location.unlocode"
       url: "link"
       source_name: "const:Customer TMS"
-""")
+""", encoding="utf-8")
     return path
 
 

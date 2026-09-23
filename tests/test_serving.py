@@ -68,12 +68,12 @@ def test_the_version_changes_when_an_asset_changes(tmp_path, monkeypatch):
 
     fake = tmp_path / "static"
     fake.mkdir()
-    (fake / "app.js").write_text("console.log(1);")
-    (fake / "styles.css").write_text("body{}")
+    (fake / "app.js").write_text("console.log(1);", encoding="utf-8")
+    (fake / "styles.css").write_text("body{}", encoding="utf-8")
     monkeypatch.setattr(main, "STATIC", fake)
 
     first = main._asset_version()
-    (fake / "app.js").write_text("console.log(2);")
+    (fake / "app.js").write_text("console.log(2);", encoding="utf-8")
     second = main._asset_version()
     assert first != second
 
@@ -89,12 +89,12 @@ def test_the_version_covers_every_served_asset_type(tmp_path, monkeypatch):
 
     fake = tmp_path / "static"
     fake.mkdir()
-    (fake / "app.js").write_text("x")
-    (fake / "styles.css").write_text("body{color:red}")
+    (fake / "app.js").write_text("x", encoding="utf-8")
+    (fake / "styles.css").write_text("body{color:red}", encoding="utf-8")
     monkeypatch.setattr(main, "STATIC", fake)
 
     before = main._asset_version()
-    (fake / "styles.css").write_text("body{color:blue}")
+    (fake / "styles.css").write_text("body{color:blue}", encoding="utf-8")
     assert main._asset_version() != before
 
 

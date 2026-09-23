@@ -35,12 +35,12 @@ def test_the_token_is_not_stored(hans, store):
     somebody copies the file."""
     _, token = hans
     secret = token.split(".", 1)[1]
-    assert secret not in store.read_text()
+    assert secret not in store.read_text(encoding="utf-8")
 
 
 def test_only_a_hash_is_stored(hans, store):
     import json
-    record = next(iter(json.loads(store.read_text()).values()))
+    record = next(iter(json.loads(store.read_text(encoding="utf-8")).values()))
     assert set(record) == {"name", "carrier", "created_at", "revoked_at", "secret_sha256"}
     assert len(record["secret_sha256"]) == 64
 
@@ -90,7 +90,7 @@ def test_the_right_secret_under_the_wrong_key_fails(hans, store):
 
 def test_an_unreadable_store_refuses_rather_than_admits(tmp_path):
     broken = tmp_path / "drivers.json"
-    broken.write_text("{ this is not json")
+    broken.write_text("{ this is not json", encoding="utf-8")
     assert C.verify("aaaaaaaaaaaa.whatever", broken) is None
 
 
@@ -148,7 +148,7 @@ def test_a_broken_store_fails_closed(tmp_path):
     """Failing open on a broken credentials file is how an outage becomes an
     incident."""
     broken = tmp_path / "drivers.json"
-    broken.write_text("[]")          # a list, not an object
+    broken.write_text("[]", encoding="utf-8")          # a list, not an object
     assert C.in_force(broken) is True
 
 

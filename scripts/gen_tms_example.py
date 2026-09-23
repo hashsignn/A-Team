@@ -125,7 +125,7 @@ def main() -> int:
         return 1
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    OUT.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {OUT}")
     print(f"  band={payload['alert']['band']} score={payload['alert']['score']}")
     print(f"  clashes={[c['rule'] for c in payload['assessment']['clashes_resolved']]}")

@@ -59,7 +59,7 @@ def load(path: Path | str | None) -> list[SourceSpec]:
         return list(specs.values())
 
     try:
-        document = yaml.safe_load(file.read_text()) or {}
+        document = yaml.safe_load(file.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
         raise SourceConfigError(f"{file} is not valid YAML: {exc}") from exc
     if not isinstance(document, dict):

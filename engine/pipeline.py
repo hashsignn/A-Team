@@ -378,14 +378,24 @@ def _to_events(
         # they did before. No model is a supported state, not a degraded one.
         routed = routed_by_item[item["item_id"]]
         if routed.abstained:
+            # A stale item is not a rescue candidate. This branch used to skip
+            # the temporal layer altogether, which cost twice: the triage
+            # budget is a handful of model calls, and spending it on last
+            # month's news is how this month's goes unread — and whatever it
+            # kept would have gone on the board as live.
+            closed = _closed_before(item, clock)
+            if closed:
+                router_notes[item["item_id"]] = closed
+                continue
             router_notes[item["item_id"]] = routed.abstain_reason or "no match"
             rescue_candidates.append(item)
             continue
         counts["after_type"] += 1
 
         # Layer 3: temporal. Could it touch anything in flight or planned?
-        if item["ends_at"] is not None and item["ends_at"] < clock.as_of:
-            router_notes[item["item_id"]] = "event window closed before as-of"
+        closed = _closed_before(item, clock)
+        if closed:
+            router_notes[item["item_id"]] = closed
             continue
         counts["after_temporal"] += 1
 
@@ -421,6 +431,35 @@ def _to_events(
             )
 
     return _cluster(events), counts, router_notes, unpromoted
+
+
+def _closed_before(item: dict, clock: Clock) -> str | None:
+    """Why an item no longer describes anything live — or None if it might.
+
+    A source that states an end is believed. One that states no end is given
+    the mapper's default window from the moment it was reported. That second
+    case is every news index: GDELT reports that something happened and never
+    that it stopped, so without the fallback an article stays open forever.
+
+    The mapper has always computed that fallback (``default_ends_at``) and
+    nothing ever read it. That was invisible while the news fetch only reached
+    back three days, because a three-day-old article with no stated end is
+    plausibly still live. It stops being invisible the moment the fetch
+    reaches back two months: every strike since July would sit on the board as
+    a disruption happening now.
+    """
+    ends = item.get("ends_at")
+    if ends is not None:
+        return "event window closed before as-of" if ends < clock.as_of else None
+    fallback = item.get("default_ends_at")
+    if fallback is not None and fallback < clock.as_of:
+        reported = item.get("starts_at") or item.get("published_at")
+        when = f" {reported:%Y-%m-%d}" if reported is not None else ""
+        return (
+            f"reported{when} with no end stated, and past its default window "
+            "by the as-of"
+        )
+    return None
 
 
 def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:

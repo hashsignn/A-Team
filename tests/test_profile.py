@@ -119,7 +119,7 @@ def test_a_node_with_no_alternative_is_empty_not_invented(profile):
 def test_an_edit_lands_in_the_customer_dir_not_the_example(config, tmp_path):
     out = P.apply_edits(config, {"alert_levels": {"red_hours": 8}}, tmp_path)
     assert out["applied"] == ["alert_levels.red_hours"]
-    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text())
+    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
     assert written["alert_levels"]["red_hours"] == 8
     # and the committed stand-in is untouched
     assert config.scoring["alert_levels"]["red_hours"] != 8
@@ -129,7 +129,7 @@ def test_the_whole_scoring_file_is_written_not_just_the_edit(config, tmp_path):
     """A partial overlay would load as a config missing everything it did not
     mention, which fails at scoring time rather than at load time."""
     P.apply_edits(config, {"alert_levels": {"red_hours": 5}}, tmp_path)
-    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text())
+    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
     assert set(written) == set(config.scoring)
     assert written["min_action_hours"] == config.scoring["min_action_hours"]
 
@@ -143,7 +143,7 @@ def test_a_key_outside_the_allow_list_is_reported_rejected(config, tmp_path):
         tmp_path,
     )
     assert out["rejected"] == ["alert_levels.simulation_seed"]
-    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text())
+    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
     assert "simulation_seed" not in written["alert_levels"]
 
 
@@ -204,7 +204,7 @@ def test_convene_thresholds_and_agreement_are_editable(config, tmp_path):
         tmp_path,
     )
     assert not out["problems"]
-    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text())
+    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
     assert written["convene_rule"]["thresholds"]["exposure_chf"] == 90_000
     assert written["convene_rule"]["agreed_on"] == "2026-10-01"
 
@@ -273,7 +273,7 @@ def test_a_cleared_agreement_date_becomes_null_not_an_empty_string(config, tmp_p
     from engine.portfolio import convene
 
     P.apply_edits(config, {"convene_meta": {"agreed_on": "  "}}, tmp_path)
-    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text())
+    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
     assert written["convene_rule"]["agreed_on"] is None
 
     edited = load_config(customer_dir=tmp_path)
@@ -290,7 +290,7 @@ def test_a_numeric_field_is_stored_as_a_number_a_date_as_text(config, tmp_path):
         {"convene_meta": {"meeting_cadence_days": "14", "agreed_on": "2026-10-01"}},
         tmp_path,
     )
-    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text())
+    written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
     assert written["convene_rule"]["meeting_cadence_days"] == 14
     assert str(written["convene_rule"]["agreed_on"]).startswith("2026-10-01")
 

@@ -1,14 +1,29 @@
 #!/usr/bin/env python3
-"""Run the funnel once with a model, and keep the answers.
+"""Run the funnel once with a model, over the recorded sources, and keep the answers.
 
-    # on the machine that HAS a model
-    RADAR_RECORD_REASONING=1 RADAR_ALLOW_NETWORK=1 \
-      .venv/bin/python scripts/record_reasoning.py --as-of 2026-09-16
+    # 1. freeze the sources, anywhere with the network
+    RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py \
+        --all --as-of 2026-09-22 --days 60
 
-    git add data/reasoning && git commit -m "Record the reasoning layer"
+    # 2. on the machine that HAS a model — with the network OFF
+    RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py \
+        --as-of 2026-09-22
+
+    git add data/fixtures data/reasoning && git commit -m "Record sources and reasoning"
 
     # everywhere else — Codespace, laptop, a stage with no wifi
     python run.py serve        # no model needed; the answers replay
+
+WHY THE NETWORK IS OFF FOR STEP 2
+=================================
+An answer is keyed by the prompt, and the prompt is built from the headline.
+The Codespace builds its prompts from data/fixtures. So the answers have to
+be recorded over data/fixtures too — with the network on, every source is
+fetched live instead, the answers are for whatever the internet said at that
+minute, and on replay every one of them misses. Nothing fails; nothing
+replays. This script refuses to run with RADAR_ALLOW_NETWORK set for exactly
+that reason, and reports which fixtures are real recordings before it spends
+any model time.
 
 WHY THIS WORKS
 ==============
@@ -33,6 +48,8 @@ first time you run after editing one.
 from __future__ import annotations
 
 import argparse
+import json
+import platform
 import sys
 from pathlib import Path
 
@@ -41,8 +58,59 @@ sys.path.insert(0, str(ROOT))
 
 from engine.clock import Clock  # noqa: E402
 from engine.config import load_config  # noqa: E402
+from engine.ingest.sources import CATALOG, network_allowed  # noqa: E402
 from engine.pipeline import RunOptions, run  # noqa: E402
 from engine.reason import cache, llm  # noqa: E402
+
+FIXTURES = ROOT / "data" / "fixtures"
+RECORDED = "RECORDED FROM THE LIVE SOURCE"
+
+
+def fixture_status(spec) -> tuple[str, bool]:
+    """What a source's fixture is, and whether it is a real recording.
+
+    Read from the file, because the file is what step 2 will actually reason
+    over. The commonest way to waste a recording is to run step 2 before the
+    fixtures from step 1 have been pulled onto this machine, and the only
+    symptom would be answers recorded for the sample headlines.
+    """
+    path = FIXTURES / spec.fixture if spec.fixture else None
+    if path is None or not path.exists():
+        return "no fixture", False
+    try:
+        blob = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return f"unreadable ({exc.__class__.__name__})", False
+    note = blob.get("_fixture_note", "") if isinstance(blob, dict) else ""
+    if not str(note).startswith(RECORDED):
+        return "still the SAMPLE shipped with the repo", False
+    when = str(blob.get("_recorded_at", ""))[:10] or "date not stamped"
+    window = blob.get("_window")
+    if isinstance(window, dict):
+        gaps = len(window.get("missing") or [])
+        return (
+            f"recorded {when}: {window.get('days', 0):g} days, "
+            f"{window.get('records', 0):,} records"
+            + (f", {gaps} day(s) missing" if gaps else "")
+        ), True
+    return f"recorded {when}, snapshot", True
+
+
+def network_refusal() -> list[str]:
+    """Why this must not run with the network on, and how to turn it off."""
+    if platform.system() == "Windows":
+        unset = "set RADAR_ALLOW_NETWORK="
+    else:
+        unset = "unset RADAR_ALLOW_NETWORK"
+    return [
+        "RADAR_ALLOW_NETWORK is set, so every source would be fetched live",
+        "instead of read from data/fixtures. The answers would be recorded for",
+        "whatever the internet says right now, and the Codespace — which reads",
+        "data/fixtures — would miss every one of them on replay.",
+        "",
+        "Turn it off in this window and run again:",
+        f"  {unset}",
+    ]
 
 
 def main() -> int:
@@ -50,19 +118,11 @@ def main() -> int:
     parser.add_argument("--as-of", default="2026-09-16",
                         help="the instant to record, pinned and reproducible")
     parser.add_argument("--shipments", type=int, default=220)
-    parser.add_argument(
-        "--window-days", type=float, default=None,
-        help="how far back to ask sources that can answer about a past "
-             "window (GDELT indexes to 2017). Needs RADAR_ALLOW_NETWORK=1; "
-             "without it every source serves its fixture and this does "
-             "nothing.")
     parser.add_argument("--dry-run", action="store_true",
                         help="report what would be recorded, write nothing")
     args = parser.parse_args()
 
     if not cache.recording() and not args.dry_run:
-        import platform
-
         print("Recording is off. Re-run with:")
         if platform.system() == "Windows":
             print(f"  set {cache.RECORD_ENV}=1")
@@ -74,6 +134,11 @@ def main() -> int:
         print("write answers into the repository.")
         return 1
 
+    if network_allowed():
+        for line in network_refusal():
+            print(line)
+        return 2
+
     status = llm.detect()
     print(f"backend : {status.backend.value}")
     print(f"model   : {status.model or '—'}")
@@ -84,26 +149,32 @@ def main() -> int:
         print(" one for this machine.)")
         return 1
 
+    print("network : off — sources are read from data/fixtures")
+    print("fixtures:")
+    archive_is_sample = False
+    for spec in CATALOG:
+        if not spec.runnable or not spec.fixture:
+            continue
+        what, real = fixture_status(spec)
+        print(f"  {spec.key:20s} {what}")
+        if spec.window is not None and not real:
+            archive_is_sample = True
+    if archive_is_sample:
+        print("\n  The news fixture is still the sample, so the answers would be")
+        print("  recorded for the sample headlines. If you recorded sources on")
+        print("  another machine, pull them here first:")
+        print("    git pull origin claude/elegant-clarke-711wkt")
+    print()
+
     before = cache.report()
     print(f"on disk : {before['entries']} answer(s) already recorded")
     print(f"\nRunning the funnel at {args.as_of} over "
           f"{args.shipments} shipments…")
 
-    from engine.ingest.sources import network_allowed
-
-    if args.window_days and not network_allowed():
-        print("\n--window-days asks sources for a PAST window, but egress is")
-        print("off, so every source will serve its fixture and the window will")
-        print("do nothing. Set RADAR_ALLOW_NETWORK=1 as well, or drop the flag.")
-        return 1
-
     context = run(
         clock=Clock.at(args.as_of),
         config=load_config(),
-        options=RunOptions(
-            shipment_count=args.shipments,
-            source_window_days=args.window_days,
-        ),
+        options=RunOptions(shipment_count=args.shipments),
     )
 
     live = [r for r in context.reports if r.status.value == "connected"]
@@ -134,7 +205,8 @@ def main() -> int:
     print(f"  {gained} new answer(s), {after['entries']} in total")
     print(f"  from {', '.join(after['models'])}")
     print("\nCommit it, and the demo runs anywhere with no model:")
-    print("  git add data/reasoning && git commit -m 'Record the reasoning layer'")
+    print("  git add data/fixtures data/reasoning")
+    print('  git commit -m "Record sources and reasoning"')
     return 0
 
 

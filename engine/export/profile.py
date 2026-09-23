@@ -464,7 +464,7 @@ def apply_edits(config: Config, edits: dict, customer_dir: Path | None = None) -
             "# config.example/scoring.yaml, which stays pristine.\n"
             "# Delete it (or press Reset) to fall back to the public stand-in.\n\n"
             + yaml.safe_dump(scoring, sort_keys=False, allow_unicode=True)
-        )
+        , encoding="utf-8")
 
     return {
         "applied": applied,

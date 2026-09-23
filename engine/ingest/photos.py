@@ -107,7 +107,7 @@ def store(data: bytes, directory: Path | None = None) -> dict:
     if orientation != UPRIGHT:
         (folder / f"{photo_id}.json").write_text(
             json.dumps({"orientation": orientation})
-        )
+        , encoding="utf-8")
 
     return {
         "photo_id": photo_id,
@@ -126,7 +126,7 @@ def orientation_for(photo_id: str, directory: Path | None = None) -> int:
     if not sidecar.exists():
         return UPRIGHT
     try:
-        value = int(json.loads(sidecar.read_text()).get("orientation", UPRIGHT))
+        value = int(json.loads(sidecar.read_text(encoding="utf-8")).get("orientation", UPRIGHT))
     except (OSError, ValueError, TypeError):
         return UPRIGHT
     return value if 1 <= value <= 8 else UPRIGHT

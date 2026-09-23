@@ -188,7 +188,7 @@ def load_config(
                 f"or {example_dir}"
             )
 
-        with path.open() as handle:
+        with path.open(encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
         cfg.files[name] = LoadedFile(
             name=name, path=path, is_example=is_example, data=data

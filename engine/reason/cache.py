@@ -112,7 +112,7 @@ class Store:
             if not self.path.exists():
                 return
             try:
-                data = json.loads(self.path.read_text())
+                data = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 # A corrupt recording is a missing recording, not a crash. The
                 # pipeline has a live path and an unavailable path; it does not
@@ -152,7 +152,7 @@ class Store:
             {"schema": SCHEMA, "stage": self.stage,
              "entries": dict(sorted(self.entries.items()))},
             indent=1, ensure_ascii=False, sort_keys=False,
-        ) + "\n")
+        ) + "\n", encoding="utf-8", newline="\n")
         self.dirty = False
         return self.path
 
@@ -206,7 +206,7 @@ def report() -> dict:
     newest = ""
     for path in sorted(STORE.glob("*.json")) if STORE.exists() else []:
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         entries = data.get("entries", {})

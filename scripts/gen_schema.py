@@ -23,9 +23,9 @@ OUT = ROOT / "schemas" / "event_radar_taxonomy.json"
 
 
 def build() -> dict:
-    tx = yaml.safe_load((ROOT / "config.example" / "taxonomy.yaml").read_text())
+    tx = yaml.safe_load((ROOT / "config.example" / "taxonomy.yaml").read_text(encoding="utf-8"))
     variables = yaml.safe_load(
-        (ROOT / "config.example" / "variables.yaml").read_text()
+        (ROOT / "config.example" / "variables.yaml").read_text(encoding="utf-8")
     )["variables"]
 
     def enum(names, extra="unmapped"):
@@ -221,13 +221,13 @@ def build() -> dict:
 def main() -> int:
     text = json.dumps(build(), indent=2, ensure_ascii=False) + "\n"
     if "--check" in sys.argv:
-        if not OUT.exists() or OUT.read_text() != text:
+        if not OUT.exists() or OUT.read_text(encoding="utf-8") != text:
             print(f"{OUT} is stale — run: python scripts/gen_schema.py")
             return 1
         print(f"{OUT} is up to date")
         return 0
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text)
+    OUT.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {OUT}")
     return 0
 

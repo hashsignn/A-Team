@@ -178,7 +178,7 @@ def test_a_call_with_no_stage_is_never_cached(live, monkeypatch):
 def test_a_corrupt_recording_is_a_missing_one_not_a_crash(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "STORE", tmp_path / "reasoning")
     (tmp_path / "reasoning").mkdir()
-    (tmp_path / "reasoning" / "triage.json").write_text("{not json")
+    (tmp_path / "reasoning" / "triage.json").write_text("{not json", encoding="utf-8")
     cache._STORES.clear()
     assert cache.lookup("triage", SYSTEM, PROMPT) is None
 
@@ -189,7 +189,7 @@ def test_a_recording_from_an_older_schema_is_ignored(tmp_path, monkeypatch):
     (tmp_path / "reasoning" / "triage.json").write_text(json.dumps({
         "schema": cache.SCHEMA - 1, "stage": "triage",
         "entries": {"abc": {"payload": {"verdict": "yes", "confidence": 1.0}}},
-    }))
+    }), encoding="utf-8")
     cache._STORES.clear()
     assert cache.lookup("triage", SYSTEM, PROMPT) is None
 
@@ -235,6 +235,6 @@ def test_the_file_is_written_sorted_so_a_diff_is_reviewable(live, monkeypatch):
         llm.parse_with_provenance(Answer, SYSTEM, f"{PROMPT} {i}", stage="triage")
     written = cache.flush()
 
-    data = json.loads(written[0].read_text())
+    data = json.loads(written[0].read_text(encoding="utf-8"))
     keys = list(data["entries"])
     assert keys == sorted(keys)

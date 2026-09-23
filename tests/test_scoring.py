@@ -311,7 +311,7 @@ def test_engine_never_reads_the_wall_clock():
     offenders: list[str] = []
 
     for path in engine.rglob("*.py"):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue

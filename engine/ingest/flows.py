@@ -107,7 +107,7 @@ def load(path: Path | None = None) -> Flows:
         )
 
     try:
-        raw = yaml.safe_load(path.read_text()) or {}
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError) as exc:
         # A malformed file is a missing file. The generator has a working
         # fallback and does not need a third state.

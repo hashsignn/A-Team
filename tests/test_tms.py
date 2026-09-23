@@ -87,12 +87,12 @@ def test_the_committed_config_contains_no_secrets():
     """config.example/ is public and committed. It is also the file a hurried
     person would paste a real key into."""
     for path in (ROOT / "config.example").glob("*.yaml"):
-        problems = tms.audit_for_secrets({"file": path.read_text()})
+        problems = tms.audit_for_secrets({"file": path.read_text(encoding="utf-8")})
         assert not problems, f"{path.name}: {problems}"
 
 
 def test_gitignore_covers_the_files_that_would_carry_credentials():
-    ignored = (ROOT / ".gitignore").read_text()
+    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8")
     for pattern in (".env", "config/"):
         assert pattern in ignored, f"{pattern} is not gitignored"
 
@@ -103,7 +103,7 @@ def test_gitignore_covers_the_files_that_would_carry_credentials():
 
 
 def test_every_alert_validates_against_the_published_schema(alerts):
-    schema = json.loads((ROOT / "schemas" / "event_radar_taxonomy.json").read_text())
+    schema = json.loads((ROOT / "schemas" / "event_radar_taxonomy.json").read_text(encoding="utf-8"))
     layer1 = set(schema["properties"]["layer1_event"]["properties"]["variable_id"]["enum"])
     layer2 = set(schema["properties"]["layer2_asset"]["properties"]["asset_id"]["enum"])
     layer3 = set(schema["properties"]["layer3_channel"]["properties"]["channel_id"]["enum"])

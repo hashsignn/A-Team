@@ -125,7 +125,7 @@ def test_a_damaged_trailing_line_does_not_destroy_the_history(log):
     """The log is append-only and can be truncated mid-write by a crash. One
     bad line must not make the whole record unreadable."""
     _file(log, observed_at="2026-09-18T05:00:00+00:00")
-    with log.open("a") as handle:
+    with log.open("a", encoding="utf-8") as handle:
         handle.write('{"report_id": "truncated", "shipm')
     assert len(R.read_all(log)) == 1
 

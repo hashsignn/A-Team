@@ -148,6 +148,13 @@ set RADAR_RECORD_REASONING=1
 `scripts/check_models.py` is platform-aware: the commands it prints when
 something is wrong are the ones for the machine it is running on.
 
+The last two lines record over whatever is in `data\fixtures` on this
+machine. If the sources were recorded somewhere else (next section), `git
+pull` first — `record_reasoning.py` lists which fixtures are real recordings
+before it spends any model time, and warns if the news fixture is still the
+sample. Leave `RADAR_ALLOW_NETWORK` unset for this step; the script refuses to
+run with it set, and the next section says why.
+
 ### In a Codespace
 
 Two things bite:
@@ -238,17 +245,48 @@ Autobahn for current closures, USGS for the last 24 hours. That is right for a
 live board and useless for two things this product needs: replaying a specific
 day, and recording the reasoning layer over a period that already happened.
 
-GDELT indexes back to **2017** and will answer for any window, so it can be
-asked properly:
+Only GDELT keeps an archive, so only GDELT can be asked about the past. It is
+recorded in two steps, and the split is the point:
 
 ```bash
-RADAR_ALLOW_NETWORK=1 RADAR_RECORD_REASONING=1 \
-  .venv/bin/python scripts/record_reasoning.py \
-    --as-of 2026-09-16 --window-days 60
+# 1. freeze the sources — anywhere with the network
+RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py \
+    --all --as-of 2026-09-22 --days 60
+
+# 2. reason over them — on the machine with the model, network OFF
+RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py \
+    --as-of 2026-09-22
+
+git add data/fixtures data/reasoning
 ```
 
-That asks for every matching story between 18 July and 16 September, reasons
-over it, and records the answers.
+**Step 1 asks GDELT one day at a time.** A single answer holds at most 250
+articles, and this query names the world's busiest ports, so it fills 250
+inside a day: one request for sixty days returns roughly the last day and
+calls it sixty. Sliced, it is sixty requests, merged, anything returned twice
+kept once, and ranked within each day by relevance rather than recency — the
+stories that mattered that day, not its last few hours. GDELT asks for one
+request every five seconds, so sixty days takes about six minutes and lands at
+up to ~5 MB. A day that fails twice is written into the fixture as a gap and
+reported in the exit code. The other sources have no archive; they are
+recorded as the snapshot they are, and the script says which is which.
+
+**Step 2 runs with the network off, and refuses to run with it on.** An answer
+is keyed by its prompt, and the prompt is built from the headline. The
+Codespace builds its prompts from `data/fixtures`, so the answers have to be
+recorded over `data/fixtures` too. With the network on, every source is
+fetched live instead, the answers are for whatever the internet said that
+minute, and on replay every one of them misses. Nothing fails; nothing
+replays. (An earlier version of this page showed exactly that command, with
+both variables set. It recorded answers that could not replay.)
+
+**What sixty days shows on the 22nd.** A news report states no end date, so it
+is treated as live for seven days from when it was reported, and then ages
+out. The board on 22 September therefore shows the last week — which is what
+"happening now" means — and the older weeks sit in the fixture unused. Setting
+the as-of back to an earlier date is **not** yet a faithful replay: nothing
+stops an article published after that date from appearing, and the reasoning
+was recorded for the 22nd only.
 
 One trap the code handles for you: GDELT **silently returns the relative
 window** if `timespan` is sent alongside `startdatetime`, which looks exactly

@@ -262,7 +262,7 @@ def main() -> int:
     text, stats = render(summary, links)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(text)
+    args.out.write_text(text, encoding="utf-8")
 
     print(f"read    : {summary['lines']:,} line items")
     if summary["first"]:
