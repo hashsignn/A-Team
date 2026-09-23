@@ -170,6 +170,12 @@ def _get(
             return None, f"response exceeded {MAX_BYTES} bytes"
         return json.loads(payload.decode("utf-8", errors="replace")), ""
     except urllib.error.HTTPError as exc:
+        # A refusal that says how long to wait is worth passing on: it is the
+        # difference between a planner reading "HTTP 429" and one reading
+        # when to try again — and the recorder backs off by exactly this.
+        wait = (exc.headers.get("Retry-After") or "").strip() if exc.headers else ""
+        if wait.isdigit():
+            return None, f"HTTP {exc.code} (retry after {int(wait)}s)"
         return None, f"HTTP {exc.code}"
     except urllib.error.URLError as exc:
         return None, f"unreachable ({exc.reason})"

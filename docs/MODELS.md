@@ -283,9 +283,19 @@ calls it sixty. Sliced, it is sixty requests, merged, anything returned twice
 kept once, and ranked within each day by relevance rather than recency — the
 stories that mattered that day, not its last few hours. GDELT asks for one
 request every five seconds, so sixty days takes about six minutes and lands at
-up to ~5 MB. A day that fails twice is written into the fixture as a gap and
-reported in the exit code. The other sources have no archive; they are
-recorded as the snapshot they are, and the script says which is which.
+up to ~5 MB — when it is answering. The other sources have no archive; they
+are recorded as the snapshot they are, and the script says which is which.
+
+**When GDELT refuses.** It rate-limits by network, and a shared one can be
+refused before a second request is sent: the first real run of this got
+HTTP 429 on its very first day. So every day is kept under `data/cache/`
+(gitignored) the moment it arrives, and a re-run fetches only what is missing
+— Ctrl+C loses nothing. A refusal is waited out rather than hammered (30 s,
+60 s, 120 s, or longer if the server's `Retry-After` asks), resetting after
+any success. If a day is still refused after all of that the run stops,
+writes what it has, and says so; running exactly the same command later
+carries on from there. If it is refused from the first request every time,
+try another network.
 
 **Step 2 runs with the network off, and refuses to run with it on.** An answer
 is keyed by its prompt, and the prompt is built from the headline. The

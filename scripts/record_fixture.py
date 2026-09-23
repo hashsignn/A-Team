@@ -39,20 +39,37 @@ than by recency. Newest-first, sliced by day, would keep the last few hours
 of every day; relevance keeps the stories that mattered that day.
 
 GDELT asks for no more than one request every five seconds, so sixty days
-takes about six minutes. A day that fails is retried once; a day that fails
-twice is written down as a gap in the fixture and in the exit code, never
-papered over.
+takes about six minutes when it is answering.
+
+WHEN IT IS NOT ANSWERING
+========================
+GDELT rate-limits by network, and a shared one — university Wi-Fi, a VPN —
+can be refused before this script has sent a second request. So:
+
+    every day is kept the moment it arrives, under data/cache/ (gitignored).
+    A run that is refused, interrupted or stopped with Ctrl+C loses nothing,
+    and the next run fetches only the days that are missing.
+
+    a refusal is waited out, not hammered: 30 s, then 60, then 120 — longer
+    if the server's Retry-After asks for longer — resetting after any
+    success, because requests arriving inside a cooldown extend it.
+
+    if a day is still refused after all of that, the run stops, writes what
+    it has, lists what it does not, and says to come back later. Grinding
+    through the remaining days would only fail each of them the same way.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import platform
+import re
 import sys
 import time
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from pathlib import Path
 
@@ -74,10 +91,26 @@ NOTE = (
 # request per window is capped at a day's worth of a busy query.
 SLICE_DAYS = 1.0
 
-# GDELT's stated limit is one request every five seconds. A second of margin,
-# because being refused mid-window costs a retry and a retry costs twenty.
+# GDELT's stated limit is one request every five seconds, plus a second of
+# margin.
 PAUSE_S = 6.0
-RETRY_PAUSE_S = 20.0
+
+# How long to wait after a refusal or a failure, in turn, before asking again.
+# Shared across days and reset by any success: a source that refused one day
+# and answered the next has recovered, and one refusing everything has not.
+# When the schedule runs out, the run stops — see the module docstring.
+BACKOFF_S = (30.0, 60.0, 120.0)
+
+# Days are kept here as they arrive, so a re-run resumes rather than restarts.
+# Under data/cache/, which is gitignored: the merged fixture is what gets
+# committed, not its parts.
+CACHE = ROOT / "data" / "cache" / "record_fixture"
+
+# A day ending this recently may still be filling in — GDELT indexes with a
+# lag — so it is fetched each time rather than frozen half-complete.
+SETTLED_AFTER = timedelta(hours=24)
+
+_RETRY_AFTER = re.compile(r"retry after (\d+)s")
 
 # Inside each day, rank by relevance rather than recency. Per source, because
 # the parameter is the source's own vocabulary.
@@ -94,43 +127,118 @@ def _put(blob, path: str, value):
     return out
 
 
+@dataclass
+class WindowResult:
+    """What a historical window came back as."""
+
+    blob: object | None                     # merged, in the source's shape
+    missing: list[dict] = field(default_factory=list)
+    stopped: str | None = None              # why the run ended early, if it did
+    fetched: int = 0                        # days asked for this run
+    reused: int = 0                         # days already on disk
+
+
+def _slice_path(spec, params: dict, start, end) -> Path:
+    """Where one day's answer is kept. The params are part of the name, so a
+    changed query never reuses days recorded for the old one."""
+    digest = hashlib.sha256(
+        json.dumps(params, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:10]
+    return CACHE / spec.key / f"{start:%Y%m%dT%H%M%S}_{end:%Y%m%dT%H%M%S}_{digest}.json"
+
+
+def _load_slice(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None                         # half-written or missing: refetch
+
+
+def _keep_slice(path: Path, blob) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(".part")
+    partial.write_text(json.dumps(blob, ensure_ascii=False),
+                       encoding="utf-8", newline="\n")
+    partial.replace(path)                   # a Ctrl+C mid-write leaves no day
+
+
 def record_window(spec, as_of, span_days: float, *, fetch=_get,
-                  pause=time.sleep, say=print):
+                  pause=time.sleep, say=print, now=None) -> WindowResult:
     """Ask an archive about ``span_days`` ending at ``as_of``, a day at a time.
 
-    Returns ``(blob, missing)``: the merged response in the source's own
-    shape, or None if every day failed, and the days that could not be had.
-    ``fetch`` and ``pause`` are parameters so this can be tested without a
-    network or a six-minute wait.
+    ``fetch``, ``pause`` and ``now`` are parameters so this can be tested
+    without a network, a six-minute wait, or a real clock.
     """
+    if now is None:
+        from engine.clock import Clock  # noqa: PLC0415
+        now = Clock.wall().as_of
+
     sliced = replace(
         spec, params={**spec.params, **SLICE_PARAMS.get(spec.key, {})}
     )
     count = max(1, math.ceil(span_days / SLICE_DAYS - 1e-9))
+    plan = []
+    for index in range(count):
+        end = as_of - timedelta(days=index * SLICE_DAYS)
+        length = min(SLICE_DAYS, span_days - index * SLICE_DAYS)
+        start = end - timedelta(days=length)
+        plan.append((start, end, length, _slice_path(spec, sliced.params, start, end)))
+
+    have = sum(1 for *_, path in plan if path.exists())
+    todo = count - have
+    if have:
+        say(f"    {have} of {count} day(s) already recorded; fetching the "
+            f"other {todo}, about {max(0, todo - 1) * PAUSE_S / 60:.0f} min")
 
     merged: list = []
     seen: set[str] = set()
     template = None
     days: list[dict] = []
-    missing: list[dict] = []
+    result = WindowResult(blob=None)
+    waits = iter(BACKOFF_S)
+    asked_before = False
 
-    for index in range(count):
-        end = as_of - timedelta(days=index * SLICE_DAYS)
-        length = min(SLICE_DAYS, span_days - index * SLICE_DAYS)
-        start = end - timedelta(days=length)
+    for position, (start, end, length, path) in enumerate(plan):
         label = f"{start:%Y-%m-%d %H:%M} to {end:%Y-%m-%d %H:%M}"
 
-        if index:
-            pause(PAUSE_S)
-        blob, error = fetch(sliced, as_of=end, window_days=length)
-        if blob is None:
-            pause(RETRY_PAUSE_S)
-            blob, error = fetch(sliced, as_of=end, window_days=length)
-        if blob is None:
-            missing.append({"from": start.isoformat(), "to": end.isoformat(),
-                            "error": error})
-            say(f"    {label}  FAILED twice — {error}")
-            continue
+        blob = _load_slice(path) if path.exists() else None
+        if blob is not None:
+            source = "kept"
+            result.reused += 1
+        else:
+            source = "fetched"
+            if asked_before:
+                pause(PAUSE_S)
+            asked_before = True
+            while True:
+                blob, error = fetch(sliced, as_of=end, window_days=length)
+                if blob is not None:
+                    waits = iter(BACKOFF_S)          # recovered
+                    break
+                wait = next(waits, None)
+                if wait is None:
+                    break                            # the schedule is spent
+                asked = _RETRY_AFTER.search(error or "")
+                if asked:
+                    wait = max(wait, float(asked.group(1)))
+                say(f"    {label}  {error} — waiting {wait:.0f}s")
+                pause(wait)
+            result.fetched += 1
+
+            if blob is None:
+                waited = ", ".join(f"{w:.0f} s" for w in BACKOFF_S)
+                result.stopped = f"still {error} after waiting {waited}"
+                for gap_start, gap_end, _, _ in plan[position:]:
+                    result.missing.append({
+                        "from": gap_start.isoformat(),
+                        "to": gap_end.isoformat(),
+                        "error": error if gap_end == end else "not fetched — stopped",
+                    })
+                say(f"    {label}  still {error} — stopping")
+                break
+
+            if now - end >= SETTLED_AFTER:
+                _keep_slice(path, blob)
 
         records = resolve(blob, spec.items_path) if spec.items_path else blob
         if not isinstance(records, list):
@@ -147,11 +255,12 @@ def record_window(spec, as_of, span_days: float, *, fetch=_get,
         if template is None:
             template = blob
         days.append({"from": start.isoformat(), "to": end.isoformat(),
-                     "records": len(records), "new": new})
-        say(f"    {label}  {len(records):4d} returned, {new:4d} new")
+                     "records": len(records), "new": new, "source": source})
+        if source == "fetched":
+            say(f"    {label}  {len(records):4d} returned, {new:4d} new")
 
     if template is None:
-        return None, missing
+        return result
 
     out = _put(template, spec.items_path, merged) if spec.items_path else merged
     if isinstance(out, dict):
@@ -164,11 +273,12 @@ def record_window(spec, as_of, span_days: float, *, fetch=_get,
                 "params": SLICE_PARAMS.get(spec.key, {}),
                 "records": len(merged),
                 "slices": days,
-                "missing": missing,
+                "missing": result.missing,
             },
             **out,
         }
-    return out, missing
+    result.blob = out
+    return result
 
 
 def _write(spec, blob) -> int:
@@ -182,6 +292,33 @@ def _write(spec, blob) -> int:
     path.write_text(json.dumps(blob, indent=1, ensure_ascii=False),
                     encoding="utf-8", newline="\n")
     return path.stat().st_size
+
+
+def _stop_advice(stopped: str) -> list[str]:
+    """What to do next — which depends on why it stopped.
+
+    Only a 429 means the source is limiting this network. Anything else
+    after that long is the connection, and saying "the source is limiting
+    you" about a dead Wi-Fi link would send somebody to the wrong fix.
+    """
+    kept = [
+        "Every day already fetched is kept and will not be fetched again, so",
+        "running exactly the same command carries on where this stopped.",
+    ]
+    if "HTTP 429" in stopped:
+        return [
+            "The source is limiting requests from this network. Wait a while,",
+            "then run the command again.",
+            *kept,
+            "If it is refused from the very first request every time, the",
+            "network is probably shared (university Wi-Fi, a VPN) and other",
+            "people's requests count against it — try from another one.",
+        ]
+    return [
+        "The source could not be reached. Check the connection, then run",
+        "the command again.",
+        *kept,
+    ]
 
 
 def record(key: str, as_of=None, days: float | None = None) -> int:
@@ -202,22 +339,32 @@ def record(key: str, as_of=None, days: float | None = None) -> int:
         span = days if days is not None else spec.window.days
         slices = max(1, math.ceil(span / SLICE_DAYS - 1e-9))
         print(f"  {key}: {span:g} days, {slices} request(s), about "
-              f"{max(0, slices - 1) * PAUSE_S / 60:.0f} min")
-        blob, missing = record_window(spec, as_of, span)
-        if blob is None:
-            print(f"  {key}: FAILED — no day could be fetched; the existing "
-                  f"fixture was left as it was", file=sys.stderr)
+              f"{max(0, slices - 1) * PAUSE_S / 60:.0f} min if nothing is "
+              f"refused")
+        result = record_window(spec, as_of, span)
+
+        if result.blob is not None:
+            size = _write(spec, result.blob)
+            held = (result.blob["_window"]["records"]
+                    if isinstance(result.blob, dict) else len(result.blob))
+            print(f"  {key}: wrote {spec.fixture} — {held:,} records from "
+                  f"{slices - len(result.missing)} of {slices} day(s), "
+                  f"{size:,} bytes")
+        else:
+            print(f"  {key}: nothing fetched — the existing fixture was left "
+                  f"as it was", file=sys.stderr)
+
+        if result.stopped:
+            print(f"\n  {key} STOPPED: {result.stopped}.", file=sys.stderr)
+            for line in _stop_advice(result.stopped):
+                print(f"  {line}", file=sys.stderr)
+            print(file=sys.stderr)
             return 1
-        size = _write(spec, blob)
-        held = blob["_window"]["records"] if isinstance(blob, dict) else len(blob)
-        print(f"  {key}: wrote {spec.fixture} — {held:,} records, {size:,} bytes")
-        if missing:
-            print(f"  {key}: {len(missing)} of {slices} day(s) MISSING — "
-                  f"re-run to fill them:", file=sys.stderr)
-            for gap in missing:
-                print(f"      {gap['from'][:10]}  {gap['error']}", file=sys.stderr)
+        if result.missing:
+            print(f"  {key}: {len(result.missing)} day(s) missing — re-run "
+                  f"to fill them", file=sys.stderr)
             return 1
-        return 0
+        return 0 if result.blob is not None else 1
 
     # Most sources can only answer "what is happening now" — a motorway
     # closure feed has no archive and never did. Asking them for a past

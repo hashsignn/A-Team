@@ -28,6 +28,9 @@ def _load(name: str):
     path = ROOT / "scripts" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
+    # Registered before it runs: @dataclass resolves annotations through
+    # sys.modules, and a module loaded by path is not in it otherwise.
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -118,17 +121,19 @@ def test_a_recorded_window_says_how_much_it_holds(
     reasoner, recorder, gdelt, tmp_path, monkeypatch,
 ):
     monkeypatch.setattr(recorder, "FIXTURES", tmp_path)
+    monkeypatch.setattr(recorder, "CACHE", tmp_path / "cache")
     monkeypatch.setattr(reasoner, "FIXTURES", tmp_path)
 
     def archive(spec, as_of=None, window_days=None):
         stamp = as_of.strftime("%Y%m%d")
         return {"articles": [{"url": f"https://x/{stamp}/{n}"} for n in range(2)]}, ""
 
-    blob, missing = recorder.record_window(
+    result = recorder.record_window(
         gdelt, datetime(2026, 9, 22, tzinfo=UTC), 3,
         fetch=archive, pause=lambda _s: None, say=lambda *_: None,
+        now=datetime(2026, 9, 24, tzinfo=UTC),
     )
-    recorder._write(gdelt, blob)
+    recorder._write(gdelt, result.blob)
 
     what, real = reasoner.fixture_status(gdelt)
     assert real
@@ -141,22 +146,25 @@ def test_a_recorded_window_with_gaps_says_so(
     reasoner, recorder, gdelt, tmp_path, monkeypatch,
 ):
     monkeypatch.setattr(recorder, "FIXTURES", tmp_path)
+    monkeypatch.setattr(recorder, "CACHE", tmp_path / "cache")
     monkeypatch.setattr(reasoner, "FIXTURES", tmp_path)
 
     def archive(spec, as_of=None, window_days=None):
-        if as_of.day == 21:
-            return None, "HTTP 429"
+        if as_of.day <= 21:
+            return None, "HTTP 429"          # refused from the second day on
         return {"articles": [{"url": f"https://x/{as_of.day}"}]}, ""
 
-    blob, _ = recorder.record_window(
+    result = recorder.record_window(
         gdelt, datetime(2026, 9, 22, tzinfo=UTC), 3,
         fetch=archive, pause=lambda _s: None, say=lambda *_: None,
+        now=datetime(2026, 9, 24, tzinfo=UTC),
     )
-    recorder._write(gdelt, blob)
+    assert result.stopped
+    recorder._write(gdelt, result.blob)
 
     what, real = reasoner.fixture_status(gdelt)
     assert real
-    assert "1 day(s) missing" in what
+    assert "2 day(s) missing" in what
 
 
 def test_a_recording_is_stamped_with_when_it_was_made(
