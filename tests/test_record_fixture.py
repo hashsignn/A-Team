@@ -318,7 +318,8 @@ def test_a_refusal_carries_its_retry_after_through_the_fetcher(gdelt, monkeypatc
 def test_the_advice_on_a_stop_depends_on_why_it_stopped(recorder, stopped, says, never):
     """Only a 429 is the source limiting this network. Telling somebody on a
     dead link that they are being rate-limited sends them to the wrong fix."""
-    advice = " ".join(recorder._stop_advice(stopped))
+    advice = " ".join(recorder._stop_advice(stopped, "gdelt_doc"))
     assert says in advice
     assert never not in advice
     assert "carries on where this stopped" in advice
+    assert "--skip gdelt_doc" in advice, "the way to stop waiting on it"

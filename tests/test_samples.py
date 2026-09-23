@@ -47,5 +47,8 @@ def test_no_sample_is_a_recording():
 
 def test_putting_the_scenario_back_is_a_copy():
     """Same filenames, so copying tests/fixtures over data/fixtures restores
-    the scripted scenario — which docs/MODELS.md tells people they can do."""
-    assert {p.name for p in SAMPLES.glob("*.json")} == {p.name for p in DEMO.glob("*.json")}
+    the scripted scenario — which docs/MODELS.md tells people they can do.
+    A recording's manifest (``_recording.json``) is not a source."""
+    def names(folder):
+        return {p.name for p in folder.glob("*.json") if not p.name.startswith("_")}
+    assert names(SAMPLES) == names(DEMO)

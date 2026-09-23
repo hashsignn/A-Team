@@ -65,6 +65,23 @@ from engine.reason import cache, llm  # noqa: E402
 
 FIXTURES = ROOT / "data" / "fixtures"
 RECORDED = "RECORDED FROM THE LIVE SOURCE"
+MANIFEST = "_recording.json"
+
+
+def left_out(key: str) -> str | None:
+    """Why the recording holds nothing for this source, or None.
+
+    The same rule the board applies (engine/ingest/observations.left_out),
+    read from the folder this script reports on.
+    """
+    try:
+        manifest = json.loads((FIXTURES / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    entry = (manifest.get("sources") or {}).get(key) if isinstance(manifest, dict) else None
+    if isinstance(entry, dict) and entry.get("recorded") is False:
+        return str(entry.get("error") or "not recorded")
+    return None
 
 
 def fixture_status(spec) -> tuple[str, bool]:
@@ -75,6 +92,11 @@ def fixture_status(spec) -> tuple[str, bool]:
     fixtures from step 1 have been pulled onto this machine, and the only
     symptom would be answers recorded for the sample headlines.
     """
+    why = left_out(spec.key)
+    if why is not None:
+        # Not the sample either: the board leaves it out, so nothing scripted
+        # from it will be reasoned over.
+        return f"left out of this recording — {why}", True
     path = FIXTURES / spec.fixture if spec.fixture else None
     if path is None or not path.exists():
         return "no fixture", False
@@ -99,6 +121,9 @@ def fixture_status(spec) -> tuple[str, bool]:
 
 def gauge_status() -> tuple[str, bool]:
     """The same question for the Kaub gauge, which is not a catalogue source."""
+    why = left_out("watergauge_kaub")
+    if why is not None:
+        return f"left out of this recording — {why}", True
     path = FIXTURES / watergauge.FIXTURE_NAME
     if not path.exists():
         return "no fixture", False
@@ -168,19 +193,24 @@ def main() -> int:
     print("network : off — sources are read from data/fixtures")
     print("fixtures:")
     archive_is_sample = False
+    news_recorded = False
     for spec in CATALOG:
         if not spec.runnable or not spec.fixture:
             continue
         what, real = fixture_status(spec)
         print(f"  {spec.key:20s} {what}")
-        if spec.window is not None and not real:
-            archive_is_sample = True
+        if spec.window is not None:
+            archive_is_sample = archive_is_sample or not real
+            news_recorded = news_recorded or what.startswith("recorded")
     print(f"  {'watergauge_kaub':20s} {gauge_status()[0]}")
     if archive_is_sample:
-        print("\n  The news fixture is still the sample, so the answers would be")
-        print("  recorded for the sample headlines. If you recorded sources on")
-        print("  another machine, pull them here first:")
+        print("\n  A news fixture is still the sample, so answers would be recorded")
+        print("  for the sample headlines. If you recorded sources on another")
+        print("  machine, pull them here first:")
         print("    git pull origin claude/elegant-clarke-711wkt")
+    elif not news_recorded:
+        print("\n  No news source is in this recording, so there is nothing for")
+        print("  the model to read. Record GDELT or Wikipedia first.")
     print()
 
     before = cache.report()

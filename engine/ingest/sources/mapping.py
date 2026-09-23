@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from engine.clock import UTC
+from engine.ingest.sources.decoders import decoded
 from engine.ingest.sources.spec import SourceSpec
 
 _INDEX = re.compile(r"^(.*?)\[(\d+)\]$")
@@ -129,6 +130,10 @@ def to_items(
     out: list[dict] = []
     dropped = 0
     fields = spec.fields
+
+    # A source that answers with something other than a list of items says
+    # how to read it; for every other source this is the answer unchanged.
+    blob = decoded(spec, blob)
 
     for index, raw in enumerate(items_of(blob, spec.items_path)):
         headline = _text(resolve(raw, fields.headline))

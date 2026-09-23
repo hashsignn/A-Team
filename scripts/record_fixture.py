@@ -27,9 +27,15 @@ tested against a file that already agrees with it.
 
 A WINDOW THAT ALREADY HAPPENED
 ==============================
-Only a source with an archive can be asked about the past — today that is
-GDELT alone. The rest publish what is true now and never had a yesterday, so
-they are recorded as the snapshot they are, and say so.
+Only a source with an archive can be asked about the past — GDELT, and
+Wikipedia's Current events portal, which has a page for every day. The rest
+publish what is true now and never had a yesterday, so they are recorded as
+the snapshot they are, and say so.
+
+The portal is here because GDELT refused the first real recordings from both
+networks tried. It is curated rather than exhaustive — dozens of items a day,
+not thousands — and it answers from almost anywhere. Its pages are kept raw,
+one per day, and parsed when the board reads them.
 
 The Kaub gauge sits between the two. Pegelonline keeps the last thirty days
 of readings and nothing older, so it is recorded as that month, up to now,
@@ -67,6 +73,14 @@ can be refused before this script has sent a second request. So:
     if a day is still refused after all of that, the run stops, writes what
     it has, lists what it does not, and says to come back later. Grinding
     through the remaining days would only fail each of them the same way.
+
+    a source that could not be recorded at all is left off the board, not
+    replaced by its sample. A --all run writes data/fixtures/_recording.json
+    naming every source it tried; the board reads it and leaves out the ones
+    marked not recorded, because a sample is scripted — an invented Hormuz
+    closure beside real events reads as a real one. Recording that source
+    later, from a network it answers, brings it back. --skip leaves a source
+    out on purpose, for a network where it is known to refuse.
 """
 
 from __future__ import annotations
@@ -81,12 +95,15 @@ import sys
 import time
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
+from functools import partial
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from engine.ingest.observations import RECORDING  # noqa: E402
 from engine.ingest.sources import CATALOG, network_allowed  # noqa: E402
+from engine.ingest.sources.decoders import decoded  # noqa: E402
 from engine.ingest.sources.fetch import _get  # noqa: E402
 from engine.ingest.sources.mapping import resolve  # noqa: E402
 
@@ -95,8 +112,9 @@ FIXTURES = ROOT / "data" / "fixtures"
 # Not a catalogue source; see the module docstring.
 GAUGE_KEY = "watergauge_kaub"
 
+RECORDED = "RECORDED FROM THE LIVE SOURCE"
 NOTE = (
-    "RECORDED FROM THE LIVE SOURCE by scripts/record_fixture.py. Real response, "
+    f"{RECORDED} by scripts/record_fixture.py. Real response, "
     "real content, frozen at the time below so the demo replays identically."
 )
 
@@ -105,8 +123,21 @@ NOTE = (
 SLICE_DAYS = 1.0
 
 # GDELT's stated limit is one request every five seconds, plus a second of
-# margin.
+# margin. The default, because the strictest source sets it.
 PAUSE_S = 6.0
+
+# Sources that may be asked faster. Wikimedia asks only that requests be made
+# one at a time; a second apart is polite and takes sixty days to a minute.
+PAUSE_FOR: dict[str, float] = {"wikipedia_events": 1.0}
+
+# How long one answer may take while recording. The board keeps a short
+# timeout because a page is waiting on it. A recording is a batch job, and a
+# historical query over a busy index can take longer than the board's twelve
+# seconds — at which point a slow host reads as "unreachable".
+RECORD_TIMEOUT_S = 45.0
+
+# Why each source in this run was not recorded, for the recording's manifest.
+FAILED: dict[str, str] = {}
 
 # How long to wait after a refusal or a failure, in turn, before asking again.
 # Shared across days and reset by any success: a source that refused one day
@@ -175,16 +206,30 @@ def _keep_slice(path: Path, blob) -> None:
     partial.replace(path)                   # a Ctrl+C mid-write leaves no day
 
 
-def record_window(spec, as_of, span_days: float, *, fetch=_get,
-                  pause=time.sleep, say=print, now=None) -> WindowResult:
+def pause_for(spec) -> float:
+    return PAUSE_FOR.get(spec.key, PAUSE_S)
+
+
+def record_window(spec, as_of, span_days: float, *, fetch=None,
+                  pause=None, say=print, now=None) -> WindowResult:
     """Ask an archive about ``span_days`` ending at ``as_of``, a day at a time.
 
     ``fetch``, ``pause`` and ``now`` are parameters so this can be tested
     without a network, a six-minute wait, or a real clock.
+
+    A source whose answer needs decoding (``spec.decode`` — Wikipedia's page
+    of wikitext) is kept as the answers themselves, one per day, and decoded
+    when the board reads it. Every other source is merged into one answer in
+    its own shape.
     """
+    if fetch is None:
+        fetch = partial(_get, timeout=RECORD_TIMEOUT_S)
+    if pause is None:
+        pause = time.sleep
     if now is None:
         from engine.clock import Clock  # noqa: PLC0415
         now = Clock.wall().as_of
+    gap = pause_for(spec)
 
     sliced = replace(
         spec, params={**spec.params, **SLICE_PARAMS.get(spec.key, {})}
@@ -201,11 +246,13 @@ def record_window(spec, as_of, span_days: float, *, fetch=_get,
     todo = count - have
     if have:
         say(f"    {have} of {count} day(s) already recorded; fetching the "
-            f"other {todo}, about {max(0, todo - 1) * PAUSE_S / 60:.0f} min")
+            f"other {todo}, about {max(0, todo - 1) * gap / 60:.0f} min")
 
     merged: list = []
     seen: set[str] = set()
     template = None
+    answers: list = []                      # a decoded source's raw days
+    key_path = spec.fields.identifier or spec.fields.url
     days: list[dict] = []
     result = WindowResult(blob=None)
     waits = iter(BACKOFF_S)
@@ -221,7 +268,7 @@ def record_window(spec, as_of, span_days: float, *, fetch=_get,
         else:
             source = "fetched"
             if asked_before:
-                pause(PAUSE_S)
+                pause(gap)
             asked_before = True
             while True:
                 blob, error = fetch(sliced, as_of=end, window_days=length)
@@ -253,29 +300,36 @@ def record_window(spec, as_of, span_days: float, *, fetch=_get,
             if now - end >= SETTLED_AFTER:
                 _keep_slice(path, blob)
 
-        records = resolve(blob, spec.items_path) if spec.items_path else blob
+        answer = decoded(spec, blob)
+        records = resolve(answer, spec.items_path) if spec.items_path else answer
         if not isinstance(records, list):
             records = []
         new = 0
         for record in records:
-            url = resolve(record, spec.fields.url) if spec.fields.url else None
-            key = str(url) if url else json.dumps(record, sort_keys=True)
+            ident = resolve(record, key_path) if key_path else None
+            key = str(ident) if ident else json.dumps(record, sort_keys=True)
             if key in seen:
                 continue
             seen.add(key)
             merged.append(record)
             new += 1
-        if template is None:
+        if spec.decode:
+            answers.append(blob)
+        elif template is None:
             template = blob
         days.append({"from": start.isoformat(), "to": end.isoformat(),
                      "records": len(records), "new": new, "source": source})
         if source == "fetched":
             say(f"    {label}  {len(records):4d} returned, {new:4d} new")
 
-    if template is None:
+    if spec.decode:
+        if not answers:
+            return result
+        out = {"days": answers}
+    elif template is None:
         return result
-
-    out = _put(template, spec.items_path, merged) if spec.items_path else merged
+    else:
+        out = _put(template, spec.items_path, merged) if spec.items_path else merged
     if isinstance(out, dict):
         out = {
             "_fixture_note": NOTE,
@@ -311,7 +365,7 @@ def _write_file(name: str, blob) -> int:
     return path.stat().st_size
 
 
-def _stop_advice(stopped: str) -> list[str]:
+def _stop_advice(stopped: str, key: str = "gdelt_doc") -> list[str]:
     """What to do next — which depends on why it stopped.
 
     Only a 429 means the source is limiting this network. Anything else
@@ -321,6 +375,9 @@ def _stop_advice(stopped: str) -> list[str]:
     kept = [
         "Every day already fetched is kept and will not be fetched again, so",
         "running exactly the same command carries on where this stopped.",
+        "The other sources are recorded either way, and this one is left off",
+        "the board rather than shown as its sample. To stop waiting on it",
+        f"from this network, add: --skip {key}",
     ]
     if "HTTP 429" in stopped:
         return [
@@ -351,18 +408,23 @@ def record_gauge(as_of=None, *, fetch=None) -> int:
     if as_of is not None:
         print(f"  {GAUGE_KEY}: the last 30 days up to now — Pegelonline keeps "
               f"no more")
-    payload, error = (fetch or get_json)(watergauge.LIVE_URL)
+    payload, error = (fetch or partial(get_json, timeout=RECORD_TIMEOUT_S))(
+        watergauge.LIVE_URL
+    )
     if payload is None:
+        FAILED[GAUGE_KEY] = error
         print(f"  {GAUGE_KEY}: FAILED — {error}", file=sys.stderr)
         return 1
     try:
         series = watergauge.parse_pegelonline(payload)
     except (KeyError, TypeError, ValueError) as exc:
+        FAILED[GAUGE_KEY] = "the answer was not a list of readings"
         print(f"  {GAUGE_KEY}: FAILED — the answer was not a list of readings "
               f"({type(exc).__name__}); the existing fixture was left as it was",
               file=sys.stderr)
         return 1
     if not series:
+        FAILED[GAUGE_KEY] = "the answer held no readings"
         print(f"  {GAUGE_KEY}: FAILED — the answer held no readings; the "
               f"existing fixture was left as it was", file=sys.stderr)
         return 1
@@ -388,6 +450,92 @@ def record_gauge(as_of=None, *, fetch=None) -> int:
     return 0
 
 
+def _fixture_name(key: str) -> str:
+    if key == GAUGE_KEY:
+        from engine.ingest import watergauge  # noqa: PLC0415
+        return watergauge.FIXTURE_NAME
+    spec = next((s for s in CATALOG if s.key == key), None)
+    return spec.fixture if spec else ""
+
+
+def is_recording(key: str) -> bool:
+    """Whether this source's fixture is a real recording, not its sample."""
+    name = _fixture_name(key)
+    try:
+        blob = json.loads((FIXTURES / name).read_text(encoding="utf-8")) if name else None
+    except (OSError, ValueError):
+        return False
+    if not isinstance(blob, dict):
+        return False
+    if key == GAUGE_KEY:
+        return blob.get("is_real_data") is True
+    return str(blob.get("_fixture_note", "")).startswith(RECORDED)
+
+
+def write_manifest(keys: list[str], as_of, *, whole: bool) -> Path | None:
+    """Say which sources this recording holds, so the board shows only those.
+
+    A source this run could not record keeps its sample on disk — the sample
+    is a scripted scenario, and the tests read their own copy of it — but the
+    manifest marks it as not recorded, and the board then leaves it out
+    rather than showing a scripted headline beside real ones.
+
+    ``whole`` is a --all run: it writes the manifest afresh. Recording a
+    single source later updates that source's line, so re-recording GDELT
+    from another network brings it back. A single source recorded where
+    there is no manifest yet changes nothing: that is someone adding one real
+    feed to the scripted scenario, deliberately.
+    """
+    from engine.clock import Clock  # noqa: PLC0415
+
+    path = FIXTURES / RECORDING
+    try:
+        existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, ValueError):
+        existing = None
+    if existing is None and not whole:
+        return None
+    if not any(is_recording(key) for key in keys):
+        return None                       # nothing real: leave the board as it was
+
+    sources = {} if whole else dict((existing or {}).get("sources") or {})
+    for key in keys:
+        sources[key] = ({"recorded": True} if is_recording(key) else
+                        {"recorded": False, "error": FAILED.get(key) or "not recorded"})
+
+    manifest = {
+        "_note": (
+            "Written by scripts/record_fixture.py: every source this recording "
+            "tried, and whether it was recorded. A source marked recorded=false "
+            "is left off the board instead of showing its scripted sample beside "
+            "real data. To put the scripted scenario back, delete this file and "
+            "copy tests/fixtures/*.json over data/fixtures/."
+        ),
+        "as_of": (as_of.isoformat() if as_of is not None and whole
+                  else (existing or {}).get("as_of")),
+        "written_at": Clock.wall().as_of.isoformat(),
+        "sources": dict(sorted(sources.items())),
+    }
+    path.write_text(json.dumps(manifest, indent=1, ensure_ascii=False) + "\n",
+                    encoding="utf-8", newline="\n")
+    return path
+
+
+def _summary(keys: list[str], manifest: Path | None, whole: bool) -> None:
+    done = [key for key in keys if is_recording(key)]
+    missing = [key for key in keys if key not in done]
+    print()
+    print(f"Recorded     : {', '.join(done) or 'nothing'}")
+    for key in missing:
+        print(f"Not recorded : {key} — {FAILED.get(key) or 'still the sample'}")
+    if manifest is not None:
+        print(f"\nWrote {manifest.relative_to(ROOT) if manifest.is_relative_to(ROOT) else manifest}"
+              f"{': the board leaves out ' + ', '.join(missing) if missing else ''}.")
+    elif whole and not done:
+        print("\nNothing was recorded, so nothing changed. Do not commit; see "
+              "the errors above.")
+
+
 def record(key: str, as_of=None, days: float | None = None) -> int:
     if key == GAUGE_KEY:
         return record_gauge(as_of)
@@ -408,9 +556,11 @@ def record(key: str, as_of=None, days: float | None = None) -> int:
         span = days if days is not None else spec.window.days
         slices = max(1, math.ceil(span / SLICE_DAYS - 1e-9))
         print(f"  {key}: {span:g} days, {slices} request(s), about "
-              f"{max(0, slices - 1) * PAUSE_S / 60:.0f} min if nothing is "
-              f"refused")
+              f"{max(0, slices - 1) * pause_for(spec) / 60:.0f} min if nothing "
+              f"is refused")
         result = record_window(spec, as_of, span)
+        if result.stopped or result.blob is None:
+            FAILED[key] = result.stopped or "nothing fetched"
 
         if result.blob is not None:
             size = _write(spec, result.blob)
@@ -425,7 +575,7 @@ def record(key: str, as_of=None, days: float | None = None) -> int:
 
         if result.stopped:
             print(f"\n  {key} STOPPED: {result.stopped}.", file=sys.stderr)
-            for line in _stop_advice(result.stopped):
+            for line in _stop_advice(result.stopped, key):
                 print(f"  {line}", file=sys.stderr)
             print(file=sys.stderr)
             return 1
@@ -442,8 +592,9 @@ def record(key: str, as_of=None, days: float | None = None) -> int:
     if as_of is not None and not reach:
         print(f"  {key}: now only — this source has no archive")
 
-    blob, error = _get(spec)
+    blob, error = _get(spec, timeout=RECORD_TIMEOUT_S)
     if blob is None:
+        FAILED[key] = error
         print(f"  {key}: FAILED — {error}", file=sys.stderr)
         return 1
     if isinstance(blob, dict):
@@ -468,6 +619,12 @@ def main() -> int:
         "--days", type=float, default=None,
         help="how far back from --as-of to ask, fetched one day per request. "
              "Defaults to each source's own declared window.",
+    )
+    parser.add_argument(
+        "--skip", nargs="+", default=[], metavar="KEY",
+        help="leave these sources out, e.g. --skip gdelt_doc on a network it "
+             "refuses. A skipped source is left off the board, not replaced by "
+             "its sample.",
     )
     args = parser.parse_args()
 
@@ -497,7 +654,12 @@ def main() -> int:
 
     runnable = [s.key for s in CATALOG if s.runnable] + [GAUGE_KEY]
     keys = runnable if args.all else args.keys
-    if not keys:
+    FAILED.clear()
+    skipped = [key for key in keys if key in set(args.skip)]
+    keys = [key for key in keys if key not in skipped]
+    for key in skipped:
+        FAILED[key] = "skipped with --skip"
+    if not keys and not skipped:
         print("Nothing to do. Pass source keys or --all. Runnable sources:")
         for spec in CATALOG:
             if spec.runnable:
@@ -515,8 +677,13 @@ def main() -> int:
               f"reach into: {', '.join(archived) or 'none'}.")
         print()
 
+    if skipped:
+        print(f"Skipping {', '.join(skipped)}.")
     print(f"Recording {len(keys)} source(s) into {FIXTURES}:")
-    return max(record(key, as_of=as_of, days=args.days) for key in keys)
+    status = max((record(key, as_of=as_of, days=args.days) for key in keys), default=0)
+    manifest = write_manifest([*keys, *skipped], as_of, whole=args.all)
+    _summary([*keys, *skipped], manifest, args.all)
+    return status
 
 
 if __name__ == "__main__":

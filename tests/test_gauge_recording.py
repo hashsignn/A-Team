@@ -114,7 +114,7 @@ def test_a_bad_answer_leaves_the_fixture_as_it_was(recorder, fixtures, payload, 
     assert path.read_text(encoding="utf-8") == '{"readings": []}'
 
 
-def test_recording_everything_includes_the_gauge(recorder, monkeypatch):
+def test_recording_everything_includes_the_gauge(recorder, fixtures, monkeypatch):
     monkeypatch.setenv("RADAR_ALLOW_NETWORK", "1")
     monkeypatch.setattr(sys, "argv", ["record_fixture.py", "--all"])
     asked = []

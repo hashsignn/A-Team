@@ -98,6 +98,42 @@ def fixture_exists(name: str) -> bool:
     return (FIXTURE_DIR / name).exists()
 
 
+# Written by scripts/record_fixture.py: which sources a recording holds.
+RECORDING = "_recording.json"
+
+# How a recorded fixture begins its note; a sample says it is not one.
+RECORDED_NOTE = "RECORDED FROM THE LIVE SOURCE"
+
+
+def fixture_origin(blob) -> str:
+    """What a fixture is, in the words the source panel uses."""
+    note = str(blob.get("_fixture_note", "")) if isinstance(blob, dict) else ""
+    if not note.startswith(RECORDED_NOTE):
+        return "a recorded sample"
+    when = str(blob.get("_recorded_at", ""))[:10]
+    return f"the recording of {when}" if when else "a recording"
+
+
+def left_out(key: str) -> str | None:
+    """Why the recording in the fixture folder has nothing for a source, or None.
+
+    A recording lists every source it tried. One it could not reach is left
+    off the board rather than served from its sample, because a sample's
+    items are scripted — a closed Hormuz, a blockade at Antwerp, a Rhine
+    falling on cue — and scripted items beside real ones read as real. With
+    no recording (a fresh clone, the tests) nothing is left out.
+    """
+    try:
+        manifest = load_fixture(RECORDING)
+    except ValueError:                      # a damaged manifest is no manifest
+        return None
+    sources = manifest.get("sources") if isinstance(manifest, dict) else None
+    entry = sources.get(key) if isinstance(sources, dict) else None
+    if isinstance(entry, dict) and entry.get("recorded") is False:
+        return str(entry.get("error") or "not recorded")
+    return None
+
+
 # ---------------------------------------------------------------------
 # Threshold helpers — the deterministic layer's whole job
 # ---------------------------------------------------------------------

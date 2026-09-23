@@ -39,6 +39,14 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
+# English month names, spelled out rather than taken from strftime("%B"),
+# which follows the machine's locale: a page asked for as "2026 septembre 21"
+# does not exist.
+MONTH_NAMES = (
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December",
+)
+
 
 class Nature(str, Enum):
     """See the module docstring. This field decides the cost of a source."""
@@ -124,7 +132,9 @@ class Window:
     start_param: str
     end_param: str = ""
     # "gdelt" -> YYYYMMDDHHMMSS, "iso" -> 2026-09-16T00:00:00Z,
-    # "date" -> 2026-09-16, "epoch" -> seconds
+    # "date" -> 2026-09-16, "epoch" -> seconds, or "template:..." for a
+    # source asked by NAME rather than by time: Wikipedia's
+    # "Portal:Current events/{year} {month_name} {day}" is one page per day.
     format: str = "iso"
     days: float = 3.0
     # Params to DROP when a window is asked for. GDELT rejects `timespan`
@@ -133,6 +143,11 @@ class Window:
     drops: tuple[str, ...] = ()
 
     def stamp(self, moment) -> str:
+        if self.format.startswith("template:"):
+            return self.format[len("template:"):].format(
+                year=moment.year, month=moment.month,
+                month_name=MONTH_NAMES[moment.month - 1], day=moment.day,
+            )
         if self.format == "gdelt":
             return moment.strftime("%Y%m%d%H%M%S")
         if self.format == "date":
@@ -175,6 +190,11 @@ class SourceSpec:
     params: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     date_format: str = "iso"
+    # For a source whose answer is not yet a list of items — Wikipedia answers
+    # with a page of wikitext. Names a decoder in sources/decoders.py that
+    # turns the answer into the list ``items_path`` then finds. Empty for
+    # every other source.
+    decode: str = ""
     # Set when the source can be asked for a past window. None means it only
     # ever answers about now, which the /inputs panel says rather than hiding.
     window: Window | None = None

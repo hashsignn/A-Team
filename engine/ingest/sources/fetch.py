@@ -38,7 +38,14 @@ import urllib.request
 from datetime import datetime
 from typing import Any
 
-from engine.ingest.observations import FeedReport, FeedStatus, load_fixture
+from engine.ingest.observations import (
+    FeedReport,
+    FeedStatus,
+    fixture_origin,
+    left_out,
+    load_fixture,
+)
+from engine.ingest.sources.decoders import refused
 from engine.ingest.sources.mapping import to_items
 from engine.ingest.sources.spec import Cost, SourceSpec
 
@@ -91,6 +98,12 @@ def collect(
         )
 
     if spec.fixture:
+        why = left_out(spec.key)
+        if why is not None:
+            return [], _absent(spec, (
+                f"left out of this recording ({why}) — its sample is not shown "
+                "beside recorded sources"
+            ))
         cached = load_fixture(spec.fixture)
         if cached is not None:
             items, dropped = to_items(cached, spec, retrieved_at)
@@ -98,7 +111,7 @@ def collect(
                 key=spec.key,
                 label=spec.label,
                 status=FeedStatus.FIXTURE,
-                detail=f"{len(items)} item(s) from a recorded sample — {error}",
+                detail=f"{len(items)} item(s) from {fixture_origin(cached)} — {error}",
                 unlocks_if_connected=spec.unlocks_if_connected,
                 records=len(items),
                 retrieved_at=retrieved_at,
@@ -130,8 +143,13 @@ def _get(
     spec: SourceSpec,
     as_of: datetime | None = None,
     window_days: float | None = None,
+    timeout: float | None = None,
 ) -> tuple[Any | None, str]:
-    """GET and decode. Returns (blob, error) with exactly one of them set."""
+    """GET and decode. Returns (blob, error) with exactly one of them set.
+
+    ``timeout`` overrides the board's own for callers that can afford to
+    wait — the recorder, which is a batch job and not a page loading.
+    """
     url = spec.resolved_url
     if not url:
         return None, "no URL configured"
@@ -162,10 +180,18 @@ def _get(
         joiner = "&" if urllib.parse.urlparse(url).query else "?"
         url = f"{url}{joiner}{urllib.parse.urlencode(params)}"
 
-    return get_json(url, headers)
+    blob, error = get_json(url, headers, timeout=timeout)
+    # An API that answers 200 with an error in the body has refused as surely
+    # as one answering 429, and is retried and reported the same way.
+    refusal = refused(spec, blob) if blob is not None else None
+    return (None, refusal) if refusal else (blob, error)
 
 
-def get_json(url: str, headers: dict[str, str] | None = None) -> tuple[Any | None, str]:
+def get_json(
+    url: str,
+    headers: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> tuple[Any | None, str]:
     """GET one URL and decode it. Returns (blob, error) with exactly one set.
 
     Everything that leaves the machine goes through here — the catalogue's
@@ -176,7 +202,7 @@ def get_json(url: str, headers: dict[str, str] | None = None) -> tuple[Any | Non
         headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     try:
         request = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
+        with urllib.request.urlopen(request, timeout=timeout or TIMEOUT_S) as response:
             payload = response.read(MAX_BYTES + 1)
         if len(payload) > MAX_BYTES:
             return None, f"response exceeded {MAX_BYTES} bytes"

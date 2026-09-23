@@ -1,0 +1,8 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote a page in the exact shape the real API returns (MediaWiki action=parse, formatversion=2, the portal's own wikitext layout). The events are invented, cite reserved .test domains, and name no place on the network, so nothing here reaches the board. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "parse": {
+  "title": "Portal:Current events/2026 September 17",
+  "pageid": 0,
+  "wikitext": "{{Current events|year=2026|month=09|day=17|content=\n<!-- All news items below this line -->\n'''Armed conflicts and attacks'''\n*[[Example border dispute]]\n**Troops from two neighbouring states withdraw from a disputed mountain pass after talks mediated by a third country. ([https://www.example-news.test/world/2026/09/17/pass-withdrawal Example News])\n\n'''Business and economy'''\n*A consortium of European rail freight operators agrees a common winter timetable for cross-border services. ([https://www.example-wire.test/business/rail-timetable Example Wire])\n\n'''Disasters and accidents'''\n*A landslide closes a mountain road for several hours; no injuries are reported. ([https://www.example-news.test/europe/landslide Example News])\n\n'''International relations'''\n*Ministers from the Nordic countries meet to discuss rules for [[Arctic shipping routes|Arctic shipping]]. {{As of|2026|9}} ([https://www.example-wire.test/world/arctic-rules Example Wire], [https://www.example-news.test/world/arctic Example News])\n\n'''Sports'''\n*A football club wins a regional cup final on penalties. ([https://www.example-sport.test/cup Example Sport])\n<!-- All news items above this line -->|}}"
+ }
+}

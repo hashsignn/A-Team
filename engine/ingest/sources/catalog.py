@@ -33,6 +33,7 @@ items instead of millions.
 
 from __future__ import annotations
 
+from engine.ingest.sources import wikipedia
 from engine.ingest.sources.spec import (
     Auth,
     Cost,
@@ -190,6 +191,62 @@ CATALOG: tuple[SourceSpec, ...] = (
             "Free, no key. Updates every 15 minutes across 100+ countries. "
             "Returns headlines, not article bodies — the funnel reads the "
             "headline and the source domain, which is what tier 2 means here."
+        ),
+    ),
+    SourceSpec(
+        key="wikipedia_events",
+        label="Wikipedia — Current events (curated, daily)",
+        nature=Nature.REPORT,
+        source_tier=2,
+        url="https://en.wikipedia.org/w/api.php",
+        items_path="events",
+        # The API answers with the day's page as wikitext; engine/ingest/
+        # sources/wikipedia.py reads the cited lines out of it.
+        decode="wikipedia_current_events",
+        date_format="iso",
+        families=("geopolitical", "labour", "port_ops", "force_majeure", "capacity"),
+        cost=Cost.FREE,
+        fixture="wikipedia_current_events.json",
+        params={
+            "action": "parse",
+            "prop": "wikitext",
+            "format": "json",
+            "formatversion": "2",
+            "redirects": "1",
+        },
+        # Wikimedia asks every client to say who it is and where to find it.
+        headers={"User-Agent": (
+            "supply-chain-risk-radar/1.0 (https://github.com/hashsignn/A-Team; "
+            "prototype, one request per day asked for)"
+        )},
+        # Asked by page name, one page per day: the window's start names the
+        # day. Its archive reaches back as far as the portal does (2000s).
+        window=Window(
+            start_param="page",
+            format="template:" + wikipedia.PAGE,
+            days=1.0,
+        ),
+        unlocks_if_connected=(
+            "The day's significant events as editors judged them — a strait "
+            "threatened, sanctions announced, a national strike called — each "
+            "citing its outlet. A second news archive, so the board's news "
+            "does not depend on GDELT answering."
+        ),
+        fields=FieldMap(
+            headline="headline",
+            body="context",
+            url="url",
+            published="published",
+            starts="published",
+            source_name="source",
+            identifier="id",
+        ),
+        builtin=True,
+        notes=(
+            "Free, no key. Curated rather than exhaustive: dozens of items a "
+            "day, not thousands, so a local terminal outage may never appear "
+            "here while a closed strait will. Content is CC BY-SA; every item "
+            "keeps the outlet it cites."
         ),
     ),
     SourceSpec(

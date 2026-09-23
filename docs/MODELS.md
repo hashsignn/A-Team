@@ -230,11 +230,12 @@ promote one.
 
 ## 4. News and event ingestion
 
-Eleven free sources ship built in, no key needed for nine of them:
+Twelve free sources ship built in, no key needed for ten of them:
 
 | source | nature | tier |
 |---|---|---|
 | GDELT — global news index | report | 2 |
+| Wikipedia — Current events portal (curated, daily) | report | 2 |
 | GDACS — disaster alerts (EU JRC) | report | 1 |
 | ReliefWeb — situation reports (UN OCHA) | report | 2 |
 | CISA KEV — exploited vulnerabilities | report | 1 |
@@ -261,8 +262,9 @@ Autobahn for current closures, USGS for the last 24 hours. That is right for a
 live board and useless for two things this product needs: replaying a specific
 day, and recording the reasoning layer over a period that already happened.
 
-Only GDELT keeps an archive, so only GDELT can be asked about the past. It is
-recorded in two steps, and the split is the point:
+Two sources keep an archive and can be asked about the past: GDELT, and
+Wikipedia's Current events portal (`wikipedia_events`), which has a page for
+every day. They are recorded in two steps, and the split is the point:
 
 ```bash
 # 1. freeze the sources — anywhere with the network
@@ -304,8 +306,40 @@ HTTP 429 on its very first day. So every day is kept under `data/cache/`
 any success. If a day is still refused after all of that the run stops,
 writes what it has, and says so; running exactly the same command later
 carries on from there. If it is refused from the first request every time,
-try another network. A Codespace is one: record there, push, and pull the
-fixtures onto the machine with the model for step 2.
+try another network — a phone hotspot gives a fresh address — or leave it
+out with `--skip gdelt_doc`. While recording, one answer may take 45 s
+rather than the board's 12, because a slow historical query timing out reads
+as "unreachable" when the host is only slow.
+
+**Wikipedia is the second archive, for when GDELT will not answer at all.**
+The first real attempts to record GDELT were refused from both networks
+tried: HTTP 429 from one, unreachable from the other. The portal's daily
+pages list the day's significant events under fixed headings (armed
+conflicts, business and economy, international relations, law, politics),
+each line citing its outlet — curated for significance, which is close to
+"the events of most effect", and served free and keyless by the Wikimedia
+API. It is not a logistics feed: a strike at one terminal may never appear
+there while a closed strait will. Sport and culture are dropped before the
+funnel; the place filter then keeps only lines naming a node of ours, and
+the topic a line was filed under ("Red Sea crisis") counts, so "the Houthis
+strike a bulk carrier" is placed even though it names no sea. Each day's
+page is kept raw and parsed when the board loads, so a parser fix improves an
+old recording without fetching it again.
+
+**A source that could not be recorded is left off the board.** Its fixture
+stays the sample, and a sample is scripted: GDELT's is an invented Hormuz
+closure dated 18 September. Beside real events that reads as real. So a
+`--all` run writes `data/fixtures/_recording.json`, naming every source it
+tried and whether it was recorded, and the board leaves out the ones that
+were not — the source panel says why. Recording one later, from a network it
+answers, updates its line and brings it back:
+
+```bash
+RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py gdelt_doc \
+    --as-of 2026-09-22 --days 60
+```
+
+(then record the reasoning again: the new headlines need answers.)
 
 **Step 2 runs with the network off, and refuses to run with it on.** An answer
 is keyed by its prompt, and the prompt is built from the headline. The
@@ -339,7 +373,8 @@ towards its bands — so they read their own copy of the samples in
 `tests/fixtures` (see `tests/conftest.py`), and start with no recorded
 answers. Recording the real sources over `data/fixtures` is the point of
 recording; it cannot fail the suite. To put the scripted scenario back on the
-board, copy `tests/fixtures/*.json` over `data/fixtures/`.
+board, copy `tests/fixtures/*.json` over `data/fixtures/` and delete
+`data/fixtures/_recording.json`.
 
 Egress is opt-in:
 

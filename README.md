@@ -1050,7 +1050,7 @@ test asserts *both* halves: no cargo risk, and a real delay.
 
 ## External sources, and the shock they exist to catch
 
-Nine feeds ship wired. **Every one is free, keyless, and needs no
+Ten feeds ship wired. **Every one is free, keyless, and needs no
 registration.** Nothing in the catalogue can cost money — a paid source cannot
 be enabled by editing config, and a test fails the build if one ever ships
 enabled.
@@ -1058,6 +1058,7 @@ enabled.
 | Source | Family | Tier | Nature |
 |---|---|---|---|
 | **GDELT 2.0 DOC** | geopolitical, labour, port ops | 2 | report |
+| **Wikipedia — Current events** (curated, daily) | geopolitical, labour, port ops | 2 | report |
 | GDACS (EU JRC) | force majeure, climate | 1 | report |
 | ReliefWeb (UN OCHA) | force majeure, geopolitical | 2 | report |
 | CISA KEV | cyber | 1 | report |
@@ -1070,7 +1071,7 @@ so they ship **disabled** and say exactly which variable to set.
 
 **Network is off by default.** Nothing reaches the internet until
 `RADAR_ALLOW_NETWORK=1`; every source falls back to a recorded fixture and says
-so on `/inputs`. A tool that quietly starts calling nine external services on
+so on `/inputs`. A tool that quietly starts calling ten external services on
 first run is one nobody can deploy inside a corporate network.
 
 ### Nature: the field that decides who pays for a model call

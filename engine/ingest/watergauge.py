@@ -34,6 +34,7 @@ from engine.ingest.observations import (
     FeedStatus,
     crossed_above,
     crossed_below,
+    left_out,
     load_fixture,
     parse_iso,
     project,
@@ -84,6 +85,23 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
             unlocks_if_connected="",
             records=len(series),
             retrieved_at=clock.as_of,
+            source_tier=1,
+            url=PEGELONLINE_URL,
+        )
+
+    why = left_out("watergauge_kaub")
+    if why is not None:
+        return [], FeedReport(
+            key="watergauge_kaub",
+            label="Rhine water level — Kaub (Pegelonline)",
+            status=FeedStatus.ABSENT,
+            detail=(
+                f"left out of this recording ({why}) — the generated series is "
+                "not shown beside recorded sources"
+            ),
+            unlocks_if_connected=(
+                "Live Kaub readings. The logic is identical; only the source changes."
+            ),
             source_tier=1,
             url=PEGELONLINE_URL,
         )

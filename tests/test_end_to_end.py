@@ -200,7 +200,7 @@ def test_network_off_beats_a_perfectly_good_endpoint(tmp_path, customer_endpoint
 def test_every_free_source_actually_yields_items(config):
     """A spec that parses but maps nothing is a spec that is quietly wrong."""
     specs = [s for s in load_sources(EXAMPLE / "sources.yaml") if s.runnable]
-    assert len(specs) == 9, f"expected 9 free runnable sources, got {len(specs)}"
+    assert len(specs) == 10, f"expected 10 free runnable sources, got {len(specs)}"
     for spec in specs:
         items, report = collect(spec, AS_OF.as_of)
         assert report.status is FeedStatus.FIXTURE, f"{spec.key}: {report.detail}"
