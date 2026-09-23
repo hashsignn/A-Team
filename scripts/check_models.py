@@ -187,9 +187,10 @@ def main() -> int:
     print(f"   model   : {status.model or '—'}")
     print(f"   detail  : {status.detail}")
     if os.environ.get("ANTHROPIC_API_KEY"):
-        print("   note    : ANTHROPIC_API_KEY is set, but LOCAL WINS when both")
-        print("             are available — the order book stays on this machine")
-        print("             unless you set RADAR_LLM_BACKEND=api deliberately.")
+        print("   note    : ANTHROPIC_API_KEY is set, and ignored. The Anthropic")
+        print("             API bills per call, so it is not connected in this")
+        print("             prototype — see engine/costs.py. Only the local model")
+        print("             is ever used.")
 
     if missing:
         print(f"\n   Not ready: pull the models above, then run "

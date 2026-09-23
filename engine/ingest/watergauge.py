@@ -56,7 +56,17 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
     Tries the live feed, falls back to the committed fixture, and says which
     happened. It never returns an empty series pretending to be a real one.
     """
-    series, live_error = _try_live(clock)
+    # Egress is opt-in here exactly as it is for every other source. This call
+    # used to run on every board build whatever RADAR_ALLOW_NETWORK said, so
+    # offline it could stall for its eight-second timeout, and in a Codespace
+    # — which has a network — the board used a live Kaub reading in place of
+    # the recorded one although nothing had asked for the network.
+    from engine.ingest.sources.fetch import network_allowed  # noqa: PLC0415
+
+    if network_allowed():
+        series, live_error = _try_live(clock)
+    else:
+        series, live_error = [], "egress off — RADAR_ALLOW_NETWORK is not set"
     if series:
         return series, FeedReport(
             key="watergauge_kaub",

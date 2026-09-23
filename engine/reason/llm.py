@@ -46,6 +46,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from engine import costs
 from engine.reason import cache
 
 log = logging.getLogger(__name__)
@@ -74,8 +75,10 @@ TRIAGE_MODEL = os.environ.get("RADAR_TRIAGE_MODEL", "") or LOCAL_MODEL
 # contradicts the headline.
 EXTRACT_MODEL = os.environ.get("RADAR_EXTRACT_MODEL", "") or LOCAL_MODEL
 
-# The API path, if a key is present. Opus 5 is the default because this is the
-# judgement-heavy end of the pipeline, not the bulk end.
+# The API path. DECLARED, not connected: it bills per call, and this build
+# never calls anything that bills — see engine/costs.py. Kept so the socket is
+# visible and so attaching it is one reviewed line rather than a rewrite.
+# Opus 5 because it would serve the judgement-heavy end, not the bulk end.
 API_MODEL = os.environ.get("RADAR_API_MODEL", "claude-opus-5")
 
 TIMEOUT_S = float(os.environ.get("RADAR_LLM_TIMEOUT", "60"))
@@ -124,6 +127,12 @@ def detect(override: str | None = None) -> BackendStatus:
     Local wins when both are available: the data stays on the machine unless
     the operator deliberately says otherwise, which is the right default for a
     customer's order book.
+
+    The paid API is never chosen while ``costs.PAID_SERVICES_CONNECTED`` is
+    False — not by default, not by ``RADAR_LLM_BACKEND=api``, and not because
+    ``ANTHROPIC_API_KEY`` happens to be in the environment. It used to be
+    chosen by that last one alone whenever no local model was running, which
+    meant a Codespace with a key in its secrets billed for every board.
     """
     choice = (override or os.environ.get("RADAR_LLM_BACKEND") or "").strip().lower()
 
@@ -141,25 +150,38 @@ def detect(override: str | None = None) -> BackendStatus:
             "",
         )
 
-    if choice in ("", Backend.API.value) and _has_api_key():
+    if (
+        choice in ("", Backend.API.value)
+        and _has_api_key()
+        and costs.PAID_SERVICES_CONNECTED
+    ):
         return BackendStatus(
             Backend.API, API_MODEL,
             f"Anthropic API, model {API_MODEL}",
             "",
         )
 
+    paid = costs.not_connected("The Anthropic API")
     if choice == Backend.LOCAL.value:
         detail = f"Ollama not reachable at {OLLAMA_HOST}"
     elif choice == Backend.API.value:
-        detail = "ANTHROPIC_API_KEY is not set"
+        detail = paid
+    elif _has_api_key():
+        detail = (
+            f"no Ollama at {OLLAMA_HOST}. ANTHROPIC_API_KEY is set, and is "
+            f"ignored: {paid}"
+        )
     else:
-        detail = f"no Ollama at {OLLAMA_HOST}, and ANTHROPIC_API_KEY is not set"
+        detail = f"no Ollama at {OLLAMA_HOST}"
 
     return BackendStatus(
         Backend.NONE, None, detail,
         "Reading the conditional in “unless talks resume”, the duration in "
         "“at least ten days”, and second-order effects the keyword router "
-        "cannot see. The router still produces a complete board without it.",
+        "cannot see. A local model through Ollama adds this for free; the "
+        "Anthropic API could be attached but bills per call, so it is not "
+        "connected in this prototype. The router still produces a complete "
+        "board without either.",
     )
 
 
@@ -192,12 +214,18 @@ def _call_local(system: str, prompt: str, schema: dict, model: str = "") -> str:
 
 
 def _call_api(system: str, prompt: str, schema: dict, model: str = "") -> str:
-    """The Anthropic SDK, imported lazily.
+    """The Anthropic SDK, imported lazily — and refused before the import.
 
-    Lazily because `anthropic` is in requirements-optional.txt: the base
-    install is seven packages and adding an SDK nobody on the local path uses
-    would undo that.
+    Declared, not connected: this bills per call, and nothing in this build
+    calls anything that bills (engine/costs.py). The refusal is here as well
+    as in ``detect`` because ``parse`` takes a ``status`` from its caller, so
+    a caller that builds its own could otherwise reach this line directly.
+
+    The SDK is in no requirements file; it would be installed only by
+    whoever attaches this path.
     """
+    costs.refuse("The Anthropic API")
+
     import anthropic  # noqa: PLC0415  (optional dependency, imported on use)
 
     client = anthropic.Anthropic()
@@ -346,6 +374,11 @@ def ask_text(
             )
             with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
                 return json.loads(response.read())["message"]["content"].strip()
+
+        # The assistant's own paid path — refused for the same reason and in
+        # the same place as _call_api: the status here is the caller's, and
+        # a question typed into the Ask box must not be able to bill.
+        costs.refuse("The Anthropic API")
 
         import anthropic  # noqa: PLC0415
 

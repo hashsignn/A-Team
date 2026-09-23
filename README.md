@@ -519,10 +519,12 @@ avoid.
 the customers, the penalties are exactly what a company will not post to a
 third party to try a demo. It is also free, which matters because a hindcast
 over two years of archived feeds is thousands of calls. The API path
-(`ANTHROPIC_API_KEY`, `claude-opus-5`) exists because a frontier model is
-genuinely better on the hard judgement calls; it is opt-in and never required.
-`anthropic` is in `requirements-optional.txt` and imported lazily, so the base
-install stays at seven packages.
+(`claude-opus-5`) is declared because a frontier model is genuinely better on
+the hard judgement calls — and it is **not connected in this build**, because
+it bills per call and this prototype must cost nothing to run. An
+`ANTHROPIC_API_KEY` in the environment is ignored; attaching the API is a
+reviewed change to `engine/costs.py`, not a setting. `anthropic` is in no
+requirements file, so the base install stays small.
 
 **No model is a supported state, not a degraded one.** With nothing reachable
 the router runs alone and the board is complete. The assistant says what is

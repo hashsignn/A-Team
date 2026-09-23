@@ -172,11 +172,27 @@ Two things bite:
   The funnel still works; the extraction is just blunter, and the challenger
   will disagree with it more often — which is visible, and the point.
 
-### The API path
+### The API path — declared, not connected
 
-Set `ANTHROPIC_API_KEY` and the API backend becomes available. **Local still
-wins when both are present** — the order book stays on the machine unless you
-set `RADAR_LLM_BACKEND=api` deliberately.
+The Anthropic API is a socket this product can attach, and in this build it is
+**not connected**: it bills per call, and nothing in this prototype may cost
+money to run (`engine/costs.py`). Setting `ANTHROPIC_API_KEY` does nothing, and
+neither does `RADAR_LLM_BACKEND=api`. The model status says so in words and
+still names the API as something that could be attached.
+
+It is a constant in code rather than a setting on purpose. Before it was one, a
+key in the environment was enough: with no local model running, the board
+switched itself onto the paid API — so in a Codespace whose account held the
+key as a secret, every board billed, and so did every question typed into the
+Ask box. Attaching it now is a reviewed one-line change, and a test fails, with
+the reason, the moment it is made.
+
+The same rule covers every paid socket. A data source declared `cost: paid` is
+never fetched, whatever key is present. The webhook and API dispatch channels
+ship disabled and record what they would have sent instead of sending it. With
+egress off the whole app touches nothing but this machine; with it on, only
+the free public feeds. `tests/test_costs.py` checks both by trapping every
+outbound call.
 
 ---
 
