@@ -2,6 +2,7 @@
 """Record a live source response as the fixture the demo falls back to.
 
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py gdelt_doc
+    RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py watergauge_kaub
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py --all
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py --all \\
         --as-of 2026-09-22 --days 60
@@ -11,7 +12,9 @@ WHY THIS EXISTS
 Every fixture in data/fixtures is a SHAPE, written by the build team, because
 the environment this was built in blocks every data host at the egress proxy.
 The field names, nesting and date formats are the real ones; the content is
-not, and the /inputs panel says so.
+not, and the /inputs panel says so. The same shapes are kept in
+tests/fixtures, which is what the tests read: a recording here changes the
+demo, never a test.
 
 On a machine with network access, this replaces a shape with a real recording
 in one command. That matters for a demo: a recorded Tuesday replays
@@ -27,6 +30,13 @@ A WINDOW THAT ALREADY HAPPENED
 Only a source with an archive can be asked about the past — today that is
 GDELT alone. The rest publish what is true now and never had a yesterday, so
 they are recorded as the snapshot they are, and say so.
+
+The Kaub gauge sits between the two. Pegelonline keeps the last thirty days
+of readings and nothing older, so it is recorded as that month, up to now,
+and the board cuts it at its own as-of when it replays. It is not in the
+source catalogue — a level is a measurement with thresholds, read by
+engine/ingest/watergauge.py, not a report to triage — so it is recorded here
+by name, and --all includes it.
 
 An archive is asked ONE DAY AT A TIME. A single GDELT answer holds at most
 250 articles, and a query naming the world's busiest ports fills 250 inside a
@@ -81,6 +91,9 @@ from engine.ingest.sources.fetch import _get  # noqa: E402
 from engine.ingest.sources.mapping import resolve  # noqa: E402
 
 FIXTURES = ROOT / "data" / "fixtures"
+
+# Not a catalogue source; see the module docstring.
+GAUGE_KEY = "watergauge_kaub"
 
 NOTE = (
     "RECORDED FROM THE LIVE SOURCE by scripts/record_fixture.py. Real response, "
@@ -282,13 +295,17 @@ def record_window(spec, as_of, span_days: float, *, fetch=_get,
 
 
 def _write(spec, blob) -> int:
+    return _write_file(spec.fixture, blob)
+
+
+def _write_file(name: str, blob) -> int:
     # The note has always said "frozen at the time below", and nothing ever
     # wrote a time. The reasoning recorder reads this to say how old the
     # fixture it is about to reason over is.
     if isinstance(blob, dict):
         from engine.clock import Clock  # noqa: PLC0415
         blob = {**blob, "_recorded_at": Clock.wall().as_of.isoformat()}
-    path = FIXTURES / spec.fixture
+    path = FIXTURES / name
     path.write_text(json.dumps(blob, indent=1, ensure_ascii=False),
                     encoding="utf-8", newline="\n")
     return path.stat().st_size
@@ -321,7 +338,59 @@ def _stop_advice(stopped: str) -> list[str]:
     ]
 
 
+def record_gauge(as_of=None, *, fetch=None) -> int:
+    """Record the Kaub gauge: the last month, as Pegelonline sends it.
+
+    The raw answer is kept, as for every source, and checked with the same
+    parser the board will read it with before anything is written — a
+    recording the board cannot read is worse than the sample it replaced.
+    """
+    from engine.ingest import watergauge  # noqa: PLC0415
+    from engine.ingest.sources.fetch import get_json  # noqa: PLC0415
+
+    if as_of is not None:
+        print(f"  {GAUGE_KEY}: the last 30 days up to now — Pegelonline keeps "
+              f"no more")
+    payload, error = (fetch or get_json)(watergauge.LIVE_URL)
+    if payload is None:
+        print(f"  {GAUGE_KEY}: FAILED — {error}", file=sys.stderr)
+        return 1
+    try:
+        series = watergauge.parse_pegelonline(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        print(f"  {GAUGE_KEY}: FAILED — the answer was not a list of readings "
+              f"({type(exc).__name__}); the existing fixture was left as it was",
+              file=sys.stderr)
+        return 1
+    if not series:
+        print(f"  {GAUGE_KEY}: FAILED — the answer held no readings; the "
+              f"existing fixture was left as it was", file=sys.stderr)
+        return 1
+
+    first, last = series[0][0], series[-1][0]
+    size = _write_file(watergauge.FIXTURE_NAME, {
+        "_fixture_note": NOTE,
+        "station": "KAUB",
+        "river": "Rhine",
+        "unit": "cm",
+        "label": "RECORDED FROM PEGELONLINE — observed readings",
+        "is_real_data": True,
+        "source_url": watergauge.LIVE_URL,
+        "covers": {"from": first.isoformat(), "to": last.isoformat()},
+        "measurements": payload,
+    })
+    print(f"  {GAUGE_KEY}: wrote {watergauge.FIXTURE_NAME} — {len(series):,} "
+          f"readings, {first:%Y-%m-%d} to {last:%Y-%m-%d %H:%M}, latest "
+          f"{series[-1][1]:.0f} cm, {size:,} bytes")
+    if as_of is not None and as_of < first:
+        print(f"  {GAUGE_KEY}: the readings start after {as_of:%Y-%m-%d}, so a "
+              f"board at that date will have no gauge reading", file=sys.stderr)
+    return 0
+
+
 def record(key: str, as_of=None, days: float | None = None) -> int:
+    if key == GAUGE_KEY:
+        return record_gauge(as_of)
     spec = next((s for s in CATALOG if s.key == key), None)
     if spec is None:
         print(f"  {key}: not in the catalogue", file=sys.stderr)
@@ -426,12 +495,14 @@ def main() -> int:
                   "scripts/record_fixture.py --all", file=sys.stderr)
         return 2
 
-    keys = [s.key for s in CATALOG if s.runnable] if args.all else args.keys
+    runnable = [s.key for s in CATALOG if s.runnable] + [GAUGE_KEY]
+    keys = runnable if args.all else args.keys
     if not keys:
         print("Nothing to do. Pass source keys or --all. Runnable sources:")
         for spec in CATALOG:
             if spec.runnable:
                 print(f"  {spec.key:22s} {spec.label}")
+        print(f"  {GAUGE_KEY:22s} Rhine water level — Kaub (Pegelonline)")
         return 0
 
     if as_of is not None:

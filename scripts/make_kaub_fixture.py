@@ -21,12 +21,18 @@ TO REPLACE WITH REAL DATA
 -------------------------
 Run on a machine with open egress:
 
-    curl "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/\\
-KAUB/W/measurements.json?start=P30D"
+    RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py watergauge_kaub
 
-and reshape to {"readings": [{"t": iso8601, "cm": float}, ...]}. For the
-multi-year history a hindcast needs, the Pegelonline REST endpoint serves only
-a recent window — older Kaub data comes from the WSV/BfG archives instead.
+which records the last thirty days from Pegelonline into data/fixtures (and
+`--all` does it along with every other source). For the multi-year history a
+hindcast needs, the Pegelonline REST endpoint serves only a recent window —
+older Kaub data comes from the WSV/BfG archives instead.
+
+WHERE IT GOES
+-------------
+tests/fixtures, which the tests read (see tests/conftest.py). data/fixtures
+holds the same series until a recording replaces it; copy it back to put the
+generated episode on the board again.
 """
 
 from __future__ import annotations
@@ -37,7 +43,7 @@ import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / "data" / "fixtures" / "kaub_levels.json"
+OUT = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "kaub_levels.json"
 
 AS_OF = datetime(2026, 9, 18, 6, 0, tzinfo=UTC)
 DAYS_BACK = 75

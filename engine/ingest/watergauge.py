@@ -25,7 +25,7 @@ High water is the opposite case and genuinely does suspend navigation.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from engine.clock import Clock
 from engine.config import Config
@@ -49,6 +49,13 @@ PEGELONLINE_URL = (
     "stations/KAUB/W/measurements.json"
 )
 
+# Pegelonline keeps about a month of readings and nothing older, so this is
+# what the live call asks for and what a recording of it holds.
+LIVE_URL = f"{PEGELONLINE_URL}?start=P30D"
+
+# The trend is taken over this many readings. See _six_hourly.
+TREND_READINGS = 14
+
 
 def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
     """Return (series, report) where series is [(datetime, level_cm), ...].
@@ -67,6 +74,7 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
         series, live_error = _try_live(clock)
     else:
         series, live_error = [], "egress off — RADAR_ALLOW_NETWORK is not set"
+    series = _six_hourly(series)
     if series:
         return series, FeedReport(
             key="watergauge_kaub",
@@ -95,16 +103,25 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
             url=PEGELONLINE_URL,
         )
 
-    series = [(parse_iso(row["t"]), float(row["cm"])) for row in raw["readings"]]
+    # A recording keeps Pegelonline's own answer, and is read by the same
+    # parser as the live call; the generated sample has its own shape.
+    if "measurements" in raw:
+        series = parse_pegelonline(raw["measurements"])
+        when = str(raw.get("_recorded_at", ""))[:10]
+        label = raw.get("label", "recording") + (f", {when}" if when else "")
+    else:
+        series = [(parse_iso(row["t"]), float(row["cm"])) for row in raw["readings"]]
+        label = raw.get("label", "fixture")
     series = [(t, v) for t, v in series if t <= clock.as_of]
     series.sort(key=lambda pair: pair[0])
+    series = _six_hourly(series)
 
     return series, FeedReport(
         key="watergauge_kaub",
         label="Rhine water level — Kaub (Pegelonline)",
         status=FeedStatus.FIXTURE,
         detail=(
-            f"{raw.get('label', 'fixture')} — {len(series)} readings up to as-of, "
+            f"{label} — {len(series)} readings up to as-of, "
             f"latest {series[-1][1]:.0f} cm" if series else "fixture has no readings before as-of"
         ),
         unlocks_if_connected=(
@@ -123,24 +140,56 @@ def _try_live(clock: Clock) -> tuple[list[tuple], str]:
     Written so that wiring it up is a matter of the network allowing it, not of
     code changes. In this environment it always fails, visibly.
     """
+    from engine.ingest.sources.fetch import get_json  # noqa: PLC0415
+
+    payload, error = get_json(LIVE_URL)
+    if payload is None:
+        return [], error
     try:
-        import urllib.request
+        series = parse_pegelonline(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        return [], f"unreadable answer ({type(exc).__name__})"
+    return [(t, v) for t, v in series if t <= clock.as_of], ""
 
-        with urllib.request.urlopen(  # noqa: S310 - fixed, known host
-            f"{PEGELONLINE_URL}?start=P30D", timeout=8
-        ) as response:
-            import json
 
-            payload = json.load(response)
-        series = [
-            (parse_iso(row["timestamp"]), float(row["value"]))
-            for row in payload
-        ]
-        series = [(t, v) for t, v in series if t <= clock.as_of]
-        series.sort(key=lambda pair: pair[0])
-        return series, ""
-    except Exception as exc:  # noqa: BLE001 - reported, never swallowed
-        return [], type(exc).__name__
+def parse_pegelonline(payload) -> list[tuple[datetime, float]]:
+    """Pegelonline's measurements as (time, cm), oldest first.
+
+    One parser for the live answer and for a recording of it, so a recorded
+    day is read exactly as the live feed would have been. Raises on anything
+    that is not a list of readings; every caller turns that into a report.
+
+    Converted to UTC: Pegelonline stamps German local time (+02:00 in
+    summer), and every line the board prints says "UTC" after the time.
+    """
+    if not isinstance(payload, list):
+        raise TypeError("expected a list of measurements")
+    series = [
+        (parse_iso(row["timestamp"]).astimezone(UTC), float(row["value"]))
+        for row in payload
+    ]
+    series.sort(key=lambda pair: pair[0])
+    return series
+
+
+def _six_hourly(series: list[tuple]) -> list[tuple]:
+    """One reading per six hours (UTC): the last in each slot.
+
+    The trend is taken over the last TREND_READINGS readings, and the bands
+    and the projection were set against a gauge read four times a day — the
+    sample's cadence. Pegelonline publishes every fifteen minutes, and 14 of
+    those are three and a half hours, in which a centimetre of gauge jitter
+    reads as a river falling several centimetres a day. Thinned to four a
+    day, 14 readings span three days again, whichever feed they came from.
+    The newest reading is always kept, so "latest" stays the latest. A
+    series already at four a day, like the sample, passes through unchanged.
+    """
+    kept: dict[datetime, tuple] = {}
+    for moment, level in series:
+        utc = moment.astimezone(UTC)
+        slot = utc.replace(hour=utc.hour - utc.hour % 6, minute=0, second=0, microsecond=0)
+        kept[slot] = (moment, level)
+    return [kept[slot] for slot in sorted(kept)]
 
 
 def assess_kaub(config: Config, clock: Clock) -> tuple[list[dict], FeedReport]:
@@ -155,7 +204,11 @@ def assess_kaub(config: Config, clock: Clock) -> tuple[list[dict], FeedReport]:
 
     spec = config.thresholds["water_gauges"]["GAUGE_KAUB"]
     latest_at, latest_cm = series[-1]
-    per_day = trend(series, window=14)
+    per_day = trend(series, window=TREND_READINGS)
+    # Said as the span it was measured over. This read "over 14 days" while
+    # measuring the last 14 readings — three days, at four a day.
+    tail = series[-TREND_READINGS:]
+    over = f"{(tail[-1][0] - tail[0][0]).total_seconds() / 86400:.0f} days"
 
     observations: list[dict] = []
 
@@ -194,7 +247,7 @@ def assess_kaub(config: Config, clock: Clock) -> tuple[list[dict], FeedReport]:
                 "probability": _probability_from_trend(per_day, projected_band is not None),
                 "probability_basis": (
                     f"Kaub {latest_cm:.0f} cm at {latest_at:%Y-%m-%d %H:%M UTC}, "
-                    f"trending {per_day:+.1f} cm/day over 14 days"
+                    f"trending {per_day:+.1f} cm/day over {over}"
                     + (
                         f"; projected below {effective['below_cm']} cm within {days_to_next} days"
                         if projected_band
@@ -206,7 +259,7 @@ def assess_kaub(config: Config, clock: Clock) -> tuple[list[dict], FeedReport]:
                 "threshold_source": effective.get("source", "assumed"),
                 "verbatim_quote": (
                     f"Kaub gauge {latest_cm:.0f} cm ({latest_at:%Y-%m-%d %H:%M UTC}), "
-                    f"14-day trend {per_day:+.1f} cm/day"
+                    f"trend {per_day:+.1f} cm/day over {over}"
                 ),
                 "title": (
                     f"Rhine low water at Kaub — loading restricted to "

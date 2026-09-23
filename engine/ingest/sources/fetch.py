@@ -162,6 +162,18 @@ def _get(
         joiner = "&" if urllib.parse.urlparse(url).query else "?"
         url = f"{url}{joiner}{urllib.parse.urlencode(params)}"
 
+    return get_json(url, headers)
+
+
+def get_json(url: str, headers: dict[str, str] | None = None) -> tuple[Any | None, str]:
+    """GET one URL and decode it. Returns (blob, error) with exactly one set.
+
+    Everything that leaves the machine goes through here — the catalogue's
+    sources and the Kaub gauge alike — so the timeout, the size cap and the
+    wording of a refusal are decided once.
+    """
+    if headers is None:
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     try:
         request = urllib.request.Request(url, headers=headers, method="GET")
         with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
@@ -182,7 +194,9 @@ def _get(
     except json.JSONDecodeError:
         return None, "response was not JSON (a proxy login page usually does this)"
     except Exception as exc:  # noqa: BLE001 — one bad feed never takes the board down
-        log.warning("feed %s failed: %s", spec.key, exc)
+        # The host, not the URL: a key passed in the query string would
+        # otherwise be written to the log.
+        log.warning("fetch from %s failed: %s", urllib.parse.urlsplit(url).hostname, exc)
         return None, f"failed ({type(exc).__name__})"
 
 

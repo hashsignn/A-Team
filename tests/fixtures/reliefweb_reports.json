@@ -1,0 +1,15 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "data": [
+  {
+   "id": "4123456",
+   "fields": {
+    "title": "Gulf shipping disruption: initial situation report",
+    "date": {
+     "created": "2026-09-18T06:00:00+00:00"
+    },
+    "url": "https://reliefweb.int/report/gulf/4123456"
+   }
+  }
+ ]
+}

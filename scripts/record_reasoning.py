@@ -58,6 +58,7 @@ sys.path.insert(0, str(ROOT))
 
 from engine.clock import Clock  # noqa: E402
 from engine.config import load_config  # noqa: E402
+from engine.ingest import watergauge  # noqa: E402
 from engine.ingest.sources import CATALOG, network_allowed  # noqa: E402
 from engine.pipeline import RunOptions, run  # noqa: E402
 from engine.reason import cache, llm  # noqa: E402
@@ -94,6 +95,21 @@ def fixture_status(spec) -> tuple[str, bool]:
             + (f", {gaps} day(s) missing" if gaps else "")
         ), True
     return f"recorded {when}, snapshot", True
+
+
+def gauge_status() -> tuple[str, bool]:
+    """The same question for the Kaub gauge, which is not a catalogue source."""
+    path = FIXTURES / watergauge.FIXTURE_NAME
+    if not path.exists():
+        return "no fixture", False
+    try:
+        blob = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return f"unreadable ({exc.__class__.__name__})", False
+    if not (isinstance(blob, dict) and blob.get("is_real_data") is True):
+        return "still the GENERATED series shipped with the repo", False
+    when = str(blob.get("_recorded_at", ""))[:10] or "date not stamped"
+    return f"recorded {when}: {len(blob.get('measurements') or []):,} readings", True
 
 
 def network_refusal() -> list[str]:
@@ -159,6 +175,7 @@ def main() -> int:
         print(f"  {spec.key:20s} {what}")
         if spec.window is not None and not real:
             archive_is_sample = True
+    print(f"  {'watergauge_kaub':20s} {gauge_status()[0]}")
     if archive_is_sample:
         print("\n  The news fixture is still the sample, so the answers would be")
         print("  recorded for the sample headlines. If you recorded sources on")

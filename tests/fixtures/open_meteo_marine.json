@@ -1,0 +1,16 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "latitude": 51.95,
+ "longitude": 4.13,
+ "current": {
+  "time": "2026-09-18T06:00"
+ },
+ "hourly": {
+  "time": [
+   "2026-09-18T06:00"
+  ],
+  "wave_height": [
+   2.4
+  ]
+ }
+}

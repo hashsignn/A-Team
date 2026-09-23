@@ -26,7 +26,9 @@ from engine.pipeline import RunOptions, _closed_before, run
 
 AS_OF = datetime(2026, 9, 18, 6, 0, tzinfo=UTC)
 CLOCK = Clock.at(AS_OF)
-FIXTURES = Path(__file__).resolve().parent.parent / "data" / "fixtures"
+# The samples the tests are written against, not data/fixtures — which a
+# recording replaces. See conftest.py.
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 BLOCKADE = "Hauliers blockade Antwerp terminal gates over tariff dispute"
 HORMUZ = "Iran announces closure of Strait of Hormuz to commercial shipping"
@@ -88,7 +90,7 @@ def test_an_item_with_neither_end_is_left_alone():
 # =====================================================================
 @pytest.fixture
 def aged_fixtures(tmp_path, monkeypatch):
-    """The committed fixtures, with the blockade report moved back 30 days."""
+    """The samples, with the blockade report moved back 30 days."""
     target = tmp_path / "fixtures"
     shutil.copytree(FIXTURES, target)
     path = target / "gdelt_articles.json"

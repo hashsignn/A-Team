@@ -1,0 +1,19 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "closure": [
+  {
+   "identifier": "A61-C-002",
+   "title": "A61 | Koblenz -> Ludwigshafen lane closure",
+   "description": [
+    "A61 | Koblenz -> Ludwigshafen lane closure. Diversion in place.",
+    "Expect delays."
+   ],
+   "coordinate": {
+    "lat": "50.1",
+    "long": "7.6"
+   },
+   "startTimestamp": "2026-09-17T14:00:00.000Z",
+   "isBlocked": "true"
+  }
+ ]
+}

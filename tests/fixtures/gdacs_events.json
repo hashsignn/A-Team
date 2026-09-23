@@ -1,0 +1,50 @@
+{
+ "_fixture_note": "SHAPED FIXTURE, NOT A RECORDING. The egress proxy in the build environment blocks this host, so the build team wrote items in the exact shape the real API returns. Field names, nesting and date formats are the real ones; the content is not. Replace by running scripts/record_fixture.py with RADAR_ALLOW_NETWORK=1.",
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.4,
+     51.26
+    ]
+   },
+   "properties": {
+    "eventid": 1000451,
+    "name": "Flood in Belgium",
+    "htmldescription": "Flooding reported in the Scheldt basin affecting low-lying terminal areas.",
+    "alertlevel": "Orange",
+    "fromdate": "2026-09-17T00:00:00",
+    "todate": "2026-09-22T00:00:00",
+    "eventtype": "FL",
+    "url": {
+     "report": "https://www.gdacs.org/report.aspx?eventid=1000451"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     121.47,
+     31.23
+    ]
+   },
+   "properties": {
+    "eventid": 1000452,
+    "name": "Tropical Cyclone MEILI",
+    "htmldescription": "Tropical cyclone approaching the Yangtze delta. Port operations expected to suspend.",
+    "alertlevel": "Red",
+    "fromdate": "2026-09-19T00:00:00",
+    "todate": "2026-09-23T00:00:00",
+    "eventtype": "TC",
+    "url": {
+     "report": "https://www.gdacs.org/report.aspx?eventid=1000452"
+    }
+   }
+  }
+ ]
+}

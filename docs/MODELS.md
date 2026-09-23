@@ -286,6 +286,15 @@ request every five seconds, so sixty days takes about six minutes and lands at
 up to ~5 MB — when it is answering. The other sources have no archive; they
 are recorded as the snapshot they are, and the script says which is which.
 
+**The Rhine gauge is recorded too** (`watergauge_kaub`, included in `--all`).
+Pegelonline keeps the last thirty days of fifteen-minute readings and nothing
+older, so that month is what is kept, up to the moment of recording, and the
+board cuts it at its own as-of. The trend is read over those readings thinned
+to four a day, the cadence the bands were set against: over the last fourteen
+fifteen-minute readings — three and a half hours — a centimetre of gauge
+jitter reads as a river falling 15 cm a day, which on a steady 200 cm Rhine
+projected a derate within a week.
+
 **When GDELT refuses.** It rate-limits by network, and a shared one can be
 refused before a second request is sent: the first real run of this got
 HTTP 429 on its very first day. So every day is kept under `data/cache/`
@@ -295,7 +304,8 @@ HTTP 429 on its very first day. So every day is kept under `data/cache/`
 any success. If a day is still refused after all of that the run stops,
 writes what it has, and says so; running exactly the same command later
 carries on from there. If it is refused from the first request every time,
-try another network.
+try another network. A Codespace is one: record there, push, and pull the
+fixtures onto the machine with the model for step 2.
 
 **Step 2 runs with the network off, and refuses to run with it on.** An answer
 is keyed by its prompt, and the prompt is built from the headline. The
@@ -322,6 +332,14 @@ param to drop.
 Sources that can only answer about now say so rather than being sent a
 parameter they would ignore — `spec.window is None`, and the source panel
 reports what was actually asked for.
+
+**A recording never changes a test.** The tests are written about particular
+headlines — the Hormuz announcement, a blockade at Antwerp, a Rhine falling
+towards its bands — so they read their own copy of the samples in
+`tests/fixtures` (see `tests/conftest.py`), and start with no recorded
+answers. Recording the real sources over `data/fixtures` is the point of
+recording; it cannot fail the suite. To put the scripted scenario back on the
+board, copy `tests/fixtures/*.json` over `data/fixtures/`.
 
 Egress is opt-in:
 

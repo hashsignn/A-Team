@@ -22,6 +22,7 @@ import pytest
 from engine.ingest.sources.catalog import CATALOG
 
 ROOT = Path(__file__).resolve().parent.parent
+SAMPLES = Path(__file__).resolve().parent / "fixtures"
 
 
 def _load(name: str):
@@ -111,7 +112,10 @@ def test_the_window_flag_that_only_worked_live_is_gone(reasoner, monkeypatch):
 # =====================================================================
 # The fixtures it is about to reason over
 # =====================================================================
-def test_the_committed_sample_is_reported_as_the_sample(reasoner, gdelt):
+def test_the_sample_is_reported_as_the_sample(reasoner, gdelt, monkeypatch):
+    """Read from the test copy: data/fixtures holds a recording once one is
+    committed, and then it is not the sample any more."""
+    monkeypatch.setattr(reasoner, "FIXTURES", SAMPLES)
     what, real = reasoner.fixture_status(gdelt)
     assert not real
     assert "SAMPLE" in what
