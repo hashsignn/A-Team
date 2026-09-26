@@ -1,19 +1,41 @@
-"""Load the UI in a headless browser and fail on anything broken.
+"""Load the dashboard in a headless browser and fail on anything broken.
+
+    .venv/bin/python scripts/dev_check_ui.py [port] [screenshot dir]
 
 HTTP 200 proves the server is up and nothing else. A WebGL globe can fail to
 initialise, a radar can render as an empty <svg>, and a JS exception leaves the
 page half-built — all while every request returns 200. So the page has to be
-looked at.
+looked at, and clicked.
 
-Checks: JS errors, failed requests, that the globe canvas actually has pixels,
-that the radar drew geometry, that the table has rows, and that clicking a
-route updates the panel.
+What it checks, in the order a planner meets it:
+
+    the globe        drew something (the left pane opens on the 2D map, so
+                     the globe is switched to first — the map has its own
+                     checker, scripts/dev_check_map.py)
+    the ladder       five rungs
+    the routes       the right panel's cards, ranked by level
+    a route          clicking a card opens it in the panel, Back returns to
+                     the list, and another card opens another route
+    the as-of        re-runs the board, and the URL can be shared
+    the response     actions, contacts, escalation and the summary draft,
+                     its mailto and its PDF
+    the route page   "Open this route" leads to its page: both radars drew,
+                     the matrix drew, and it survives every theme — with the
+                     unsourced band outside the probability axis
+    the profile      every tab renders, a broken ladder is refused, a valid
+                     save round-trips and Reset puts it back
+    the assistant    with no model it explains rather than fails
+
+The profile check writes config/scoring.yaml and Reset deletes it. An overlay
+that was already there is someone's real edit, so it is set aside before the
+check and put back after, whatever happens.
 """
 
 from __future__ import annotations
 
 import sys
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 from PIL import Image
@@ -22,28 +44,63 @@ from playwright.sync_api import sync_playwright
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8600
 OUT = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("/tmp/shots")
 OUT.mkdir(parents=True, exist_ok=True)
+BASE = f"http://localhost:{PORT}"
+ROOT = Path(__file__).resolve().parent.parent
+OVERLAY = ROOT / "config" / "scoring.yaml"
+
+# The map's basemap tiles come from these hosts, and failing to reach them is
+# not an error: the map falls back to the vendored country outlines and says
+# so, which scripts/dev_check_map.py checks. Same list as that script.
+TILE_HOSTS = ("basemaps.cartocdn.com", "server.arcgisonline.com", "tile.openstreetmap.org")
+
+# The ladder's own order, for "ranked by level".
+LEVEL_RANK = {"Critical": 4, "Alert": 3, "Watch": 2, "Bias": 1, "Normal": 0}
 
 
-def _lit_pixels(path: Path, threshold: int = 42) -> float:
-    """Fraction of pixels brighter than the near-black page background."""
+def _drawn_fraction(path: Path, tolerance: int = 30) -> float:
+    """Share of pixels that differ from the most common colour in the shot.
+
+    An empty canvas shows one colour — the page behind it, whatever the theme.
+    A drawn globe is land, sea, arcs and shading. This used to count pixels
+    brighter than near-black, which was right for a dark page and meaningless
+    on a light one: a blank canvas over a white page read as "100% lit".
+    """
     img = Image.open(path).convert("RGB")
-    px = list(img.getdata())
-    lit = sum(1 for r, g, b in px if r + g + b > threshold)
-    return lit / max(1, len(px))
+    img = img.resize((max(1, img.width // 4), max(1, img.height // 4)))
+    data = img.get_flattened_data() if hasattr(img, "get_flattened_data") else img.getdata()
+    pixels = list(data)
+    if not pixels:
+        return 0.0
+    background = Counter(pixels).most_common(1)[0][0]
+    far = sum(1 for p in pixels
+              if sum(abs(a - b) for a, b in zip(p, background, strict=True)) > tolerance)
+    return far / len(pixels)
 
 
 def _server_alive() -> bool:
     """Is the thing we were checking still there? Cheap, and never raises."""
     try:
-        url = f"http://localhost:{PORT}/api/health"
-        with urllib.request.urlopen(url, timeout=3) as response:
+        with urllib.request.urlopen(f"{BASE}/api/health", timeout=3) as response:
             return response.status == 200
     except Exception:  # noqa: BLE001 — any failure means "no"
         return False
 
 
+def _is_tile(url: str) -> bool:
+    return any(host in url for host in TILE_HOSTS)
+
+
 def main() -> int:
     errors: list[str] = []
+
+    def check(ok: bool, message: str, detail: str = "") -> bool:
+        if ok:
+            if detail:
+                print(f"  ok   {detail}")
+        else:
+            errors.append(message)
+            print(f"  FAIL {message}")
+        return ok
 
     # One check deliberately provokes a 422 — it asserts that a ladder with
     # Critical later than Alert is REFUSED. The browser logs every non-2xx as
@@ -51,408 +108,477 @@ def main() -> int:
     # Set while the refusal is being driven, and only then.
     expecting_refusal = [False]
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path="/opt/pw-browsers/chromium")
-        page = browser.new_page(viewport={"width": 1680, "height": 1050})
-        page.on("pageerror", lambda e: errors.append(f"[js] {e}"))
-        page.on(
-            "requestfailed",
-            lambda r: errors.append(f"[net] {r.url} — {r.failure}"),
-        )
+    kept_overlay = OVERLAY.read_bytes() if OVERLAY.exists() else None
+    if kept_overlay is not None:
+        print(f"  note {OVERLAY.relative_to(ROOT)} exists — set aside for the profile "
+              "check, and put back after")
 
-        def _console(message) -> None:
-            if message.type != "error":
-                return
-            if expecting_refusal[0] and "422" in message.text:
-                return
-            errors.append(f"[console] {message.text}")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+            page = browser.new_page(viewport={"width": 1680, "height": 1050})
+            page.on("pageerror", lambda e: errors.append(f"[js] {e}"))
+            page.on("requestfailed", lambda r: None if _is_tile(r.url)
+                    else errors.append(f"[net] {r.url} — {r.failure}"))
 
-        page.on("console", _console)
+            def _console(message) -> None:
+                if message.type != "error":
+                    return
+                if expecting_refusal[0] and "422" in message.text:
+                    return
+                where = (message.location or {}).get("url", "")
+                if _is_tile(where) or _is_tile(message.text):
+                    return
+                errors.append(f"[console] {message.text}")
 
-        page.goto(f"http://localhost:{PORT}/?view=globe", wait_until="load", timeout=90_000)
-        # The globe needs a few frames to build geometry and settle.
-        page.wait_for_timeout(9_000)
+            page.on("console", _console)
 
-        # --- the globe actually drew something -----------------------
-        canvas = page.locator("#globe canvas")
-        if canvas.count() == 0:
-            errors.append("[globe] no canvas — WebGL never initialised")
-        else:
-            box = canvas.first.bounding_box()
-            if not box or box["width"] < 100 or box["height"] < 100:
-                errors.append(f"[globe] canvas collapsed: {box}")
-            # A black canvas means it initialised but rendered nothing.
+            _board(page, check)
+            _route_page(page, check)
+            _profile(page, check, expecting_refusal)
+            _themes_and_unsourced(page, check)
+            _assistant(page, check)
+
+            health = page.request.get(f"{BASE}/api/health").json()
+            check(health.get("status") == "ok", f"[health] after the run: {health}",
+                  "server healthy after a refused save")
+            browser.close()
+    finally:
+        _put_overlay_back(kept_overlay)
+
+    return _report(errors)
+
+
+# =====================================================================
+# THE BOARD — globe, ladder, route cards, as-of, response workspace
+# =====================================================================
+def _open_board(page, query: str = "") -> None:
+    page.goto(f"{BASE}/?view=globe{query}", wait_until="load", timeout=90_000)
+    page.wait_for_function(
+        "typeof state !== 'undefined' && state.board && state.board.routes.length > 0",
+        timeout=90_000)
+
+
+def _cards(page):
+    return page.locator("#rlist .rli")
+
+
+def _board(page, check) -> None:
+    _open_board(page)
+    # The globe needs a few frames to build its geometry and settle.
+    page.wait_for_function("typeof state !== 'undefined' && !!state.globe", timeout=60_000)
+    page.wait_for_timeout(5_000)
+
+    # --- the globe actually drew something ---------------------------
+    check(page.evaluate("document.querySelector('.globe-wrap').classList.contains('is-globe')"),
+          "[globe] ?view=globe did not put the globe in the left pane",
+          "left pane switched to the globe")
+    canvas = page.locator("#globe canvas")
+    if check(canvas.count() > 0, "[globe] no canvas — WebGL never initialised"):
+        box = canvas.first.bounding_box()
+        if check(bool(box) and box["width"] >= 100 and box["height"] >= 100,
+                 f"[globe] canvas collapsed: {box}"):
             # NOT via gl.readPixels: without preserveDrawingBuffer the buffer
             # is cleared once the frame is presented, so readPixels reports
-            # zero on a perfectly good render. Screenshot the element instead
-            # and look at what the user actually sees.
+            # zero on a perfectly good render. Look at what the user sees.
             #
             # A CLIPPED PAGE screenshot, not an element screenshot. An element
             # screenshot first waits for the element to be "stable", and on a
-            # continuously animating canvas that wait can simply never finish —
-            # it times out after 20s and fails a check that has nothing wrong
-            # with it. Clipping to the same box captures exactly the same
-            # pixels and skips the wait entirely.
+            # continuously animating canvas that wait can never finish.
             shot = OUT / "_globe_probe.png"
             page.screenshot(path=str(shot), clip=box)
-            lit = _lit_pixels(shot)
-            if lit < 0.02:
-                errors.append(
-                    f"[globe] canvas is essentially black ({lit:.3%} lit pixels)"
-                )
-            else:
-                print(f"  globe: rendering ({lit:.1%} of pixels lit)")
+            drawn = _drawn_fraction(shot)
+            check(drawn >= 0.05, f"[globe] canvas is essentially blank ({drawn:.1%} drawn)",
+                  f"globe: rendering ({drawn:.0%} of the pane drawn)")
 
-        # --- the panel populated -------------------------------------
-        if page.locator("#panel-body").is_hidden():
-            errors.append("[panel] never opened — no route auto-selected")
+    # --- the ladder ---------------------------------------------------
+    rungs = page.locator("#ladder .rung").count()
+    check(rungs == 5, f"[ladder] {rungs} rungs, expected 5", "ladder: 5 rungs")
+
+    # --- the route cards: present, counted, ranked --------------------
+    cards = _cards(page)
+    n = cards.count()
+    total = page.evaluate("state.board.routes.length")
+    if not check(n >= 2, f"[routes] only {n} route card(s) in the panel"):
+        return
+    check(page.locator("#panel-list").is_visible() and page.locator("#panel-body").is_hidden(),
+          "[routes] the panel did not open on the list of routes")
+    subtitle = page.locator("#panel-list-count").inner_text()
+    check(subtitle.startswith(f"{n} of {total} routes"),
+          f"[routes] the subtitle does not count the cards: {subtitle!r} with {n} cards",
+          f"routes: {n} cards — {subtitle[:60]!r}")
+    labels = [t.strip().title() for t in page.locator("#rlist .rli .level-chip").all_inner_texts()]
+    ranks = [LEVEL_RANK.get(label, -1) for label in labels]
+    check(-1 not in ranks and ranks == sorted(ranks, reverse=True),
+          f"[routes] cards are not ranked by level: {labels}",
+          "cards ranked by level, most urgent first")
+    page.screenshot(path=str(OUT / "stage.png"))
+
+    # --- clicking a card opens that route in the panel ----------------
+    target = min(3, n - 1)
+    _open_card(page, check, target, "first open")
+    first = page.locator("#d-name").inner_text().strip()
+    page.locator("#d-back").click()
+    page.wait_for_timeout(300)
+    check(page.locator("#panel-list").is_visible() and page.locator("#panel-body").is_hidden(),
+          "[route] Back did not return to the list", "Back returns to the list")
+    marked = page.locator("#rlist .rli.is-selected").count()
+    check(marked == 1, f"[route] {marked} card(s) marked selected after Back, expected 1",
+          "the opened route stays marked on the list")
+    _open_card(page, check, 0, "second open")
+    second = page.locator("#d-name").inner_text().strip()
+    check(first != second, f"[route] a different card opened the same route: {first!r}",
+          f"another card opens another route ({second[:44]!r})")
+    page.wait_for_timeout(1_000)
+    page.screenshot(path=str(OUT / "stage-selected.png"))
+
+    # --- the as-of control re-runs the board ---------------------------
+    before = page.locator("#brand-sub").inner_text()
+    page.locator("#asof-input").fill("2026-09-19T12:00")
+    page.locator("#asof-apply").click()
+    try:
+        page.wait_for_function(
+            "(b) => document.getElementById('brand-sub').innerText !== b", arg=before,
+            timeout=60_000)
+    except Exception:  # noqa: BLE001 — reported below as the failure it is
+        pass
+    after = page.locator("#brand-sub").inner_text()
+    if check("could not load" not in after and "failed to load" not in after,
+             f"[as-of] reload failed: {after}") and check(
+                 before != after, "[as-of] applying a new instant did not change the board"):
+        print(f"  ok   as-of: reloaded to {after[:34]!r}")
+        check("as_of" in page.url, "[as-of] the URL was not updated, so it is not shareable",
+              "as-of: the URL carries it, so the board can be shared")
+        critical = page.locator("#rlist .rli .level-chip", has_text="Critical").count()
+        print(f"  ok   as-of: {critical} Critical route(s) at the new instant")
+    page.screenshot(path=str(OUT / "asof-switched.png"))
+
+    _response(page, check)
+
+    # --- recoverable must be gone from the UI --------------------------
+    check("RECOVERABLE" not in page.inner_text("body").upper(),
+          "[recoverable] still shown somewhere on the page", "no 'recoverable' figure anywhere")
+    page.screenshot(path=str(OUT / "full.png"), full_page=True)
+
+
+def _open_card(page, check, index: int, what: str) -> None:
+    """Click the index-th card and confirm the panel opened on THAT route."""
+    card = _cards(page).nth(index)
+    route_id = card.get_attribute("data-route")
+    name = card.locator(".rli-name").inner_text().strip()
+    card.scroll_into_view_if_needed()
+    card.click()
+    try:
+        page.wait_for_function(
+            "(n) => !document.getElementById('panel-body').hidden"
+            " && document.getElementById('d-name').textContent.trim() === n",
+            arg=name, timeout=10_000)
+    except Exception:  # noqa: BLE001 — reported below
+        pass
+    shown = page.locator("#d-name").inner_text().strip()
+    if check(page.locator("#panel-body").is_visible() and shown == name,
+             f"[route] clicking the card for {name!r} opened {shown!r}",
+             f"click ({what}): the panel opened on {name[:44]!r}"):
+        href = page.locator("#link-route").get_attribute("href") or ""
+        check(href.startswith(f"/route/{route_id}?") and "as_of=" in href,
+              f"[route] 'Open this route' points at {href[:80]!r}",
+              "the route's own page is linked, with the as-of")
+
+
+def _response(page, check) -> None:
+    """The response workspace on a route that has options, if one does."""
+    route_id = page.evaluate("""(() => {
+        const open = state.board.routes.filter((r) => !state.hidden.has(r.level));
+        const acting = open.find((r) => (r.actions || []).length);
+        return (acting || open[0]).route_id; })()""")
+    if page.locator("#panel-body").is_visible():
+        page.locator("#d-back").click()
+        page.wait_for_timeout(300)
+    card = page.locator(f'#rlist .rli[data-route="{route_id}"]')
+    card.scroll_into_view_if_needed()
+    card.click()
+    page.wait_for_timeout(800)
+
+    check(page.locator("#d-name").inner_text().strip() not in ("", "—"),
+          "[response] the panel head never populated",
+          f"response: {page.locator('#d-name').inner_text()[:40]!r}")
+    acts = page.locator("#r-actions .act").count()
+    empty = page.locator("#r-actions .response-empty").count()
+    check(acts > 0 or empty > 0, "[response] the actions list rendered nothing at all",
+          f"response: {acts} action card(s)" if acts else "response: 'nothing worth doing' said plainly")
+
+    page.get_by_role("tab", name="Who to contact").click()
+    page.wait_for_timeout(600)
+    groups = page.locator("#r-contacts .cgroup").count()
+    people = page.locator("#r-contacts .contact").count()
+    check(groups >= 3 and people >= 3,
+          f"[response] contacts thin: {groups} groups, {people} people",
+          f"contacts: {groups} groups, {people} people")
+    page.screenshot(path=str(OUT / "response-contacts.png"))
+
+    page.get_by_role("tab", name="Act & escalate").click()
+    try:
+        page.wait_for_function(
+            "!document.getElementById('send-body').value.startsWith('loading summary')",
+            timeout=20_000)
+    except Exception:  # noqa: BLE001 — reported below
+        pass
+    check(page.locator("#r-escalate .esc-card").count() > 0, "[response] escalation card missing",
+          "escalation card shown beside the actions")
+    body = page.locator("#send-body").input_value()
+    check(not body.startswith("loading summary") and len(body) >= 120,
+          f"[response] summary did not load: {body[:90]!r}",
+          f"summary: {len(body)} chars composed")
+    check("recoverable" not in body.lower(), "[response] summary still quotes a recoverable figure")
+    # The summary must describe the SAME instant as the header above it: it
+    # was once re-read from a URL that reload() rewrites after rendering, and
+    # a Critical header sat above an Alert summary.
+    shown = page.locator("#d-chip").inner_text().strip().upper()
+    check(not shown or f"[{shown}]" in body.upper(),
+          f"[response] summary/header disagree: chip says {shown}, "
+          f"summary starts {body.splitlines()[0][:60] if body else ''!r}",
+          f"summary and header agree on {shown}")
+    mail = page.locator("#send-mail").get_attribute("href") or ""
+    check(mail.startswith("mailto:"), f"[response] mailto not built: {mail[:60]!r}",
+          "mailto draft built")
+    pdf = page.locator("#send-pdf").get_attribute("href") or ""
+    if check(".pdf" in pdf, f"[response] pdf link not built: {pdf[:60]!r}"):
+        resp = page.request.get(f"{BASE}{pdf}")
+        head = resp.body()[:4]
+        check(resp.status == 200 and head == b"%PDF",
+              f"[response] pdf endpoint bad: {resp.status}, {head!r}",
+              f"pdf: {len(resp.body())} bytes, valid header")
+    page.screenshot(path=str(OUT / "response-escalate.png"))
+
+
+# =====================================================================
+# THE ROUTE PAGE — radars and matrix, reached the way a planner does
+# =====================================================================
+def _route_page(page, check) -> None:
+    expected = page.locator("#d-name").inner_text().strip()
+    page.locator("#link-route").click()
+    page.wait_for_url("**/route/**", timeout=30_000)
+    page.wait_for_function("document.getElementById('rt-name').textContent.trim().length > 0",
+                           timeout=30_000)
+    page.wait_for_timeout(1_200)
+    name = page.locator("#rt-name").inner_text().strip()
+    check(name == expected, f"[route page] opened {name!r}, the panel was on {expected!r}",
+          f"route page: {name[:48]!r}")
+    check("as_of=" in page.url, "[route page] the as-of did not travel with the link")
+
+    view = page.evaluate("(() => { const s = new URLSearchParams(location.search);"
+                         " return location.pathname + '|' + s.toString(); })()")
+    path, query = view.split("|", 1)
+    data = page.request.get(f"{BASE}/api{path}?{query}").json()
+    for pane in ("measured", "reported"):
+        axes = len((data.get(f"radar_{pane}") or {}).get("axes") or [])
+        shapes = page.locator(
+            f"#rt-radar-{pane} polygon, #rt-radar-{pane} line, #rt-radar-{pane} circle").count()
+        if axes:
+            check(shapes >= 5, f"[radar] {pane}: only {shapes} shapes for {axes} axes",
+                  f"radar ({pane}): {shapes} shapes over {axes} axes")
         else:
-            name = page.locator("#d-name").inner_text()
-            print(f"  panel: opened on '{name[:52]}'")
+            print(f"  ok   radar ({pane}): no family can reach this route, nothing to draw")
+    cells = page.locator("#rt-matrix .mx-cell").count()
+    check(cells > 0 or page.locator("#rt-matrix").inner_text().strip() != "",
+          "[matrix] the route page drew no matrix and said nothing",
+          f"matrix: {cells} cells drawn" if cells else "matrix: this route has no event with one")
+    page.screenshot(path=str(OUT / "route.png"), full_page=True)
 
-        # --- the radar drew geometry ---------------------------------
-        shapes = page.locator("#radar polygon, #radar line, #radar circle").count()
-        if shapes < 5:
-            errors.append(f"[radar] only {shapes} shapes — chart did not draw")
-        else:
-            print(f"  radar: {shapes} shapes")
 
-        # --- the table has rows --------------------------------------
-        rows = page.locator("#rtable-body tr").count()
-        if rows < 2:
-            errors.append(f"[table] only {rows} rows")
-        else:
-            print(f"  table: {rows} rows")
+# =====================================================================
+# RISK PROFILE
+# =====================================================================
+# The one page in the app where a UI action writes into the engine's own
+# configuration, so it is worth driving rather than eyeballing.
+def _profile(page, check, expecting_refusal) -> None:
+    _open_board(page)
+    page.locator("#link-profile").click()
+    page.wait_for_url("**/profile*", timeout=30_000)
+    page.wait_for_timeout(2_500)
+    sub = page.locator("#brand-sub").inner_text().strip()
+    check("loading" not in sub.lower() and "could not" not in sub.lower(),
+          f"[profile] never loaded: {sub!r}", "profile: loaded")
 
-        # --- ladder rendered -----------------------------------------
-        rungs = page.locator("#ladder .rung").count()
-        if rungs != 5:
-            errors.append(f"[ladder] {rungs} rungs, expected 5")
-        else:
-            print("  ladder: 5 rungs")
+    for name in ("desk", "network", "ledger", "appetite", "response", "sources"):
+        page.locator(f'.prail[data-tab="{name}"]').click()
+        page.wait_for_timeout(400)
+        text = page.locator(f"#tab-{name}").inner_text().strip()
+        check(len(text) >= 120, f"[profile] {name} tab rendered empty ({len(text)} chars)")
+        page.screenshot(path=str(OUT / f"profile-{name}.png"))
 
-        page.screenshot(path=str(OUT / "stage.png"))
+    # Every one of the 45 variables has to be listed, not a sample.
+    page.locator('.prail[data-tab="ledger"]').click()
+    page.wait_for_timeout(300)
+    page.evaluate("document.querySelectorAll('.fam').forEach(d => d.open = true)")
+    page.wait_for_timeout(400)
+    listed = page.locator("#tab-ledger .rtable tbody tr").count()
+    check(listed == 45, f"[profile] ledger lists {listed} variables, expected 45",
+          f"ledger: {listed} variables across {page.locator('#tab-ledger .fam').count()} families")
+    page.screenshot(path=str(OUT / "profile-ledger.png"), full_page=True)
 
-        # --- clicking a table row changes the panel ------------------
-        before = page.locator("#d-name").inner_text()
-        target = page.locator("#rtable-body tr").nth(min(3, rows - 1))
-        target.scroll_into_view_if_needed()
-        target.click()
-        page.wait_for_timeout(2_500)
-        after = page.locator("#d-name").inner_text()
-        if before == after:
-            errors.append("[interaction] clicking a table row did not change the panel")
-        else:
-            print(f"  click: panel switched to '{after[:52]}'")
+    # --- the save bar only appears once something is dirty -----------
+    page.locator('.prail[data-tab="appetite"]').click()
+    page.wait_for_timeout(400)
+    check(not page.locator("#savebar").is_visible(), "[profile] save bar showing before any edit")
+    red = page.locator('input[data-path="alert_levels.red_hours"]')
+    red.fill("4")
+    red.dispatch_event("input")
+    page.wait_for_timeout(300)
+    check(page.locator("#savebar").is_visible(), "[profile] save bar did not appear after an edit",
+          "save bar appears once something is edited")
+    page.screenshot(path=str(OUT / "profile-appetite.png"))
 
-        page.wait_for_timeout(1_500)
-        page.screenshot(path=str(OUT / "stage-selected.png"))
+    # --- an ordering that breaks the ladder must be REFUSED ----------
+    # Critical later than Alert makes the Alert rung unreachable. The failure
+    # this guards is silent, so the refusal has to be visible.
+    expecting_refusal[0] = True
+    red.fill("999")
+    red.dispatch_event("input")
+    page.wait_for_timeout(200)
+    page.locator("#btn-save").click()
+    page.wait_for_timeout(1_200)
+    expecting_refusal[0] = False
+    flash = page.locator("#savebar-text").inner_text()
+    check("Nothing saved" in flash, f"[profile] a broken ladder was accepted: {flash[:120]!r}",
+          f"refused: {flash[:80]}")
+    page.screenshot(path=str(OUT / "profile-refused.png"))
 
-        # --- the as-of control re-runs the board ---------------------
-        before_sub = page.locator("#brand-sub").inner_text()
-        page.locator("#asof-input").fill("2026-09-19T12:00")
-        page.locator("#asof-apply").click()
-        page.wait_for_timeout(9_000)
-        after_sub = page.locator("#brand-sub").inner_text()
-        if "could not load" in after_sub:
-            errors.append(f"[as-of] reload failed: {after_sub}")
-        elif before_sub == after_sub:
-            errors.append("[as-of] applying a new instant did not change the board")
-        else:
-            print(f"  as-of: reloaded to '{after_sub[:34]}'")
-            if "as_of" not in page.url:
-                errors.append("[as-of] the URL was not updated, so it is not shareable")
-            reds = page.locator("#rtable-body tr .level-chip", has_text="Critical").count()
-            print(f"  as-of: {reds} Critical route(s) at the new instant")
-        page.screenshot(path=str(OUT / "asof-switched.png"))
+    # --- a valid save round-trips, and Reset puts it back ------------
+    red.fill("4")
+    red.dispatch_event("input")
+    agreed = page.locator('input[data-path="convene_meta.agreed_by"]')
+    agreed.fill("S&OP meeting")
+    agreed.dispatch_event("input")
+    page.wait_for_timeout(200)
+    page.locator("#btn-save").click()
+    page.wait_for_timeout(2_500)
+    saved = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
+    check(saved == "4", f"[profile] saved value did not come back: {saved!r}")
+    flag = page.locator("#overlay-flag").inner_text()
+    check("config/" in flag, f"[profile] overlay not reported after save: {flag!r}",
+          f"saved: overlay now reads {flag.strip()[:60]!r}")
+    # Reset lives on the save bar. Hiding the bar once the edits are saved
+    # would leave no way back to the committed stand-in short of a dummy edit.
+    check(page.locator("#savebar").is_visible(), "[profile] save bar hidden while an overlay is in force")
+    check(page.locator("#btn-save").is_disabled(), "[profile] Save still enabled with nothing to save")
+    page.screenshot(path=str(OUT / "profile-saved.png"))
 
-        page.locator("#ranked").scroll_into_view_if_needed()
-        page.wait_for_timeout(1_500)
+    page.locator("#btn-reset-profile").click()
+    page.wait_for_timeout(2_500)
+    restored = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
+    check(restored != "4", "[profile] reset did not restore the committed stand-in",
+          f"reset: red_hours back to {restored!r}")
+    after = page.locator("#overlay-flag").inner_text()
+    check("stand-in" in after, f"[profile] overlay still reported after reset: {after!r}")
 
-        # --- the response workspace ----------------------------------
-        if page.locator("#r-name").inner_text().strip() in ("", "—"):
-            errors.append("[response] pane never populated")
-        else:
-            print(f"  response: '{page.locator('#r-name').inner_text()[:40]}'")
 
-        acts = page.locator("#r-actions .act").count()
-        empty = page.locator("#r-actions .response-empty").count()
-        if acts == 0 and empty == 0:
-            errors.append("[response] actions tab rendered nothing at all")
-        else:
-            print(f"  response: {acts} action card(s)")
+def _put_overlay_back(kept: bytes | None) -> None:
+    if kept is None:
+        return
+    OVERLAY.parent.mkdir(parents=True, exist_ok=True)
+    OVERLAY.write_bytes(kept)
+    print(f"  note {OVERLAY.relative_to(ROOT)} put back as it was")
 
-        page.get_by_role("tab", name="Who to contact").click()
+
+# =====================================================================
+# THEMES AND THE UNSOURCED BAND — on a route page that draws one
+# =====================================================================
+def _themes_and_unsourced(page, check) -> None:
+    """The matrix lives on the route page now, so that is where it has to
+    survive every theme — on a route whose driving event has no published
+    odds, which is also the route that has to show the unsourced band."""
+    board = page.request.get(f"{BASE}/api/board").json()
+    chosen = None
+    for route in board["routes"]:
+        view = page.request.get(f"{BASE}/api/route/{route['route_id']}").json()
+        events = view.get("events") or []
+        driving = next((e for e in events if e["event_id"] == view.get("driving_event_id")),
+                       events[0] if events else None)
+        if driving and (driving.get("matrix") or {}).get("unsourced"):
+            chosen = route["route_id"]
+            break
+    if not check(chosen is not None,
+                 "[matrix] no route's driving event lacks odds, so the unsourced band went unchecked"):
+        return
+
+    page.goto(f"{BASE}/route/{chosen}", wait_until="load", timeout=90_000)
+    page.wait_for_function("document.querySelectorAll('#rt-matrix .mx-cell').length > 0",
+                           timeout=30_000)
+    check(page.locator("#rt-matrix .mx-unsourced-h").count() > 0,
+          "[matrix] the unsourced band was not drawn for an event with no odds",
+          f"matrix: unsourced band drawn outside the probability axis ({chosen})")
+
+    for theme in ("light", "blue", "sika", "dark"):
+        page.locator(f'.theme-btn[data-theme="{theme}"]').click()
         page.wait_for_timeout(900)
-        groups = page.locator("#r-contacts .cgroup").count()
-        people = page.locator("#r-contacts .contact").count()
-        if groups < 3 or people < 3:
-            errors.append(f"[response] contacts thin: {groups} groups, {people} people")
-        else:
-            print(f"  contacts: {groups} groups, {people} people")
-        page.screenshot(path=str(OUT / "response-contacts.png"))
+        check(page.evaluate("document.documentElement.getAttribute('data-theme')") == theme,
+              f"[theme] {theme} did not apply")
+        # The stylesheet's own rule: a level colour means "how soon must
+        # someone decide" and nothing else. An accent equal to a rung means a
+        # planner seeing that colour on a button and on a route cannot tell
+        # which of them carried meaning.
+        tokens = page.evaluate("""() => {
+            const cs = getComputedStyle(document.documentElement);
+            const t = (n) => cs.getPropertyValue(n).trim().toLowerCase();
+            return { accent: t('--accent'),
+                     rungs: ['green','white','blue','yellow','red'].map((l) => t('--lvl-' + l)) };
+        }""")
+        check(tokens["accent"] not in tokens["rungs"],
+              f"[theme:{theme}] --accent {tokens['accent']} collides with a ladder colour")
+        # The matrix has to survive a repaint in every theme.
+        check(page.locator("#rt-matrix .mx-cell.has").count() > 0,
+              f"[matrix] no occupied cell after switching to {theme}")
+        page.screenshot(path=str(OUT / f"theme-{theme}.png"), full_page=True)
+    print("  ok   themes: 4 applied, accent distinct from the ladder, matrix intact in each")
+    page.locator('.theme-btn[data-theme="light"]').click()
 
-        page.get_by_role("tab", name="Escalate & report").click()
-        page.wait_for_timeout(2_500)
-        if page.locator("#r-escalate .esc-card").count() == 0:
-            errors.append("[response] escalation card missing")
-        body = page.locator("#send-body").input_value()
-        if body.startswith("loading summary") or len(body) < 120:
-            errors.append(f"[response] summary did not load: {body[:90]!r}")
-        else:
-            print(f"  summary: {len(body)} chars composed")
-        if "recoverable" in body.lower():
-            errors.append("[response] summary still quotes a recoverable figure")
-        # The summary must describe the SAME instant as the header above it.
-        # primeCompose used to re-read the URL, which reload() rewrites after
-        # rendering — so a Critical header sat above an Alert summary.
-        shown_level = page.locator("#r-chip").inner_text().strip().upper()
-        if shown_level and f"[{shown_level}]" not in body.upper():
-            errors.append(
-                f"[response] summary/header disagree: chip says {shown_level}, "
-                f"summary starts {body.splitlines()[0][:60]!r}"
-            )
-        mail = page.locator("#send-mail").get_attribute("href") or ""
-        if not mail.startswith("mailto:"):
-            errors.append(f"[response] mailto not built: {mail[:60]!r}")
-        pdf_href = page.locator("#send-pdf").get_attribute("href") or ""
-        if ".pdf" not in pdf_href:
-            errors.append(f"[response] pdf link not built: {pdf_href[:60]!r}")
-        else:
-            resp = page.request.get(f"http://localhost:{PORT}{pdf_href}")
-            body_bytes = resp.body()
-            if resp.status != 200 or body_bytes[:4] != b"%PDF":
-                errors.append(
-                    f"[response] pdf endpoint bad: {resp.status}, {body_bytes[:12]!r}"
-                )
-            else:
-                print(f"  pdf: {len(body_bytes)} bytes, valid header")
-        page.screenshot(path=str(OUT / "response-escalate.png"))
 
-        page.get_by_role("tab", name="Actions").click()
-        page.wait_for_timeout(600)
-        page.screenshot(path=str(OUT / "ranked.png"))
+# =====================================================================
+# THE ASSISTANT
+# =====================================================================
+def _assistant(page, check) -> None:
+    """With no model reachable the assistant must EXPLAIN, not fail."""
+    _open_board(page)
+    page.locator("#btn-ask").click()
+    page.wait_for_timeout(500)
+    page.locator("#ask-input").fill("which route needs a decision first?")
+    page.locator("#ask-send").click()
+    page.wait_for_timeout(2_500)
+    answer = page.locator("#ask-log").inner_text()
+    status = page.request.get(f"{BASE}/api/model").json()
+    if status["status"] == "connected":
+        check("generated by" in answer.lower(),
+              "[ask] a model answered but the output was not marked generated",
+              f"ask: answered by {status['model']}, marked as generated")
+    else:
+        check("No model is connected" in answer,
+              f"[ask] no-model socket message missing: {answer[:100]!r}")
+        check("unaffected" in answer, "[ask] did not say the board is computed without a model",
+              "ask: no model, socket message shown, board unaffected")
+    page.screenshot(path=str(OUT / "assistant.png"))
+    page.locator("#ask-close").click()
 
-        # --- recoverable must be gone from the UI --------------------
-        page_text = page.inner_text("body")
-        if "RECOVERABLE" in page_text.upper():
-            errors.append("[recoverable] still shown somewhere on the page")
 
-        # --- full page, for a look at the whole thing ----------------
-        page.screenshot(path=str(OUT / "full.png"), full_page=True)
-
-        # =============================================================
-        # RISK PROFILE
-        # =============================================================
-        # The one page in the app where a UI action writes into the engine's
-        # own configuration, so it is worth driving rather than eyeballing.
-        page.locator("#link-profile").click()
-        page.wait_for_url("**/profile*", timeout=30_000)
-        page.wait_for_timeout(2_500)
-
-        sub = page.locator("#brand-sub").inner_text().strip()
-        if "loading" in sub.lower() or "could not" in sub.lower():
-            errors.append(f"[profile] never loaded: {sub!r}")
-
-        tabs = ["desk", "network", "ledger", "appetite", "response", "sources"]
-        for name in tabs:
-            page.locator(f'.prail[data-tab="{name}"]').click()
-            page.wait_for_timeout(400)
-            text = page.locator(f"#tab-{name}").inner_text().strip()
-            if len(text) < 120:
-                errors.append(f"[profile] {name} tab rendered empty ({len(text)} chars)")
-            page.screenshot(path=str(OUT / f"profile-{name}.png"))
-
-        # Every one of the 45 variables has to be listed, not a sample.
-        page.locator('.prail[data-tab="ledger"]').click()
-        page.wait_for_timeout(300)
-        page.evaluate("document.querySelectorAll('.fam').forEach(d => d.open = true)")
-        page.wait_for_timeout(400)
-        listed = page.locator("#tab-ledger .rtable tbody tr").count()
-        if listed != 45:
-            errors.append(f"[profile] ledger lists {listed} variables, expected 45")
-        else:
-            print(f"  ledger: {listed} variables across "
-                  f"{page.locator('#tab-ledger .fam').count()} families")
-        page.screenshot(path=str(OUT / "profile-ledger.png"), full_page=True)
-
-        # --- the save bar only appears once something is dirty -------
-        page.locator('.prail[data-tab="appetite"]').click()
-        page.wait_for_timeout(400)
-        if page.locator("#savebar").is_visible():
-            errors.append("[profile] save bar showing before any edit")
-
-        red = page.locator('input[data-path="alert_levels.red_hours"]')
-        red.fill("4")
-        red.dispatch_event("input")
-        page.wait_for_timeout(300)
-        if not page.locator("#savebar").is_visible():
-            errors.append("[profile] save bar did not appear after an edit")
-        page.screenshot(path=str(OUT / "profile-appetite.png"))
-
-        # --- an ordering that breaks the ladder must be REFUSED ------
-        # Critical later than Alert makes the Alert rung unreachable. The
-        # failure this guards is silent, so the refusal has to be visible.
-        expecting_refusal[0] = True
-        red.fill("999")
-        red.dispatch_event("input")
-        page.wait_for_timeout(200)
-        page.locator("#btn-save").click()
-        page.wait_for_timeout(1_200)
-        expecting_refusal[0] = False
-        flash = page.locator("#savebar-text").inner_text()
-        if "Nothing saved" not in flash:
-            errors.append(f"[profile] a broken ladder was accepted: {flash[:120]!r}")
-        else:
-            print(f"  refused: {flash[:96]}")
-        page.screenshot(path=str(OUT / "profile-refused.png"))
-
-        # --- a valid save round-trips, and Reset puts it back --------
-        red.fill("4")
-        red.dispatch_event("input")
-        agreed = page.locator('input[data-path="convene_meta.agreed_by"]')
-        agreed.fill("S&OP meeting")
-        agreed.dispatch_event("input")
-        page.wait_for_timeout(200)
-        page.locator("#btn-save").click()
-        page.wait_for_timeout(2_500)
-        saved = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
-        if saved != "4":
-            errors.append(f"[profile] saved value did not come back: {saved!r}")
-        flag = page.locator("#overlay-flag").inner_text()
-        if "config/" not in flag:
-            errors.append(f"[profile] overlay not reported after save: {flag!r}")
-        else:
-            print(f"  saved: overlay now reads {flag.strip()!r}")
-        # Reset lives on the save bar. Hiding the bar once the edits are saved
-        # would leave no route back to the committed stand-in short of making a
-        # dummy edit first, so the bar must survive a successful save.
-        if not page.locator("#savebar").is_visible():
-            errors.append("[profile] save bar hidden while an overlay is in force")
-        if not page.locator("#btn-save").is_disabled():
-            errors.append("[profile] Save still enabled with nothing to save")
-        page.screenshot(path=str(OUT / "profile-saved.png"))
-
-        page.locator("#btn-reset-profile").click()
-        page.wait_for_timeout(2_500)
-        restored = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
-        if restored == "4":
-            errors.append("[profile] reset did not restore the committed stand-in")
-        else:
-            print(f"  reset: red_hours back to {restored!r}")
-        after = page.locator("#overlay-flag").inner_text()
-        if "stand-in" not in after:
-            errors.append(f"[profile] overlay still reported after reset: {after!r}")
-
-        # =============================================================
-        # THEMES, MATRIX, ASSISTANT
-        # =============================================================
-        page.goto(f"http://localhost:{PORT}/?view=globe", wait_until="load", timeout=90_000)
-        page.wait_for_timeout(8_000)
-
-        for theme in ("light", "blue", "sika", "dark"):
-            page.locator(f'.theme-btn[data-theme="{theme}"]').click()
-            page.wait_for_timeout(1_200)
-            if page.evaluate("document.documentElement.getAttribute('data-theme')") != theme:
-                errors.append(f"[theme] {theme} did not apply")
-
-            # The stylesheet's own rule: a level colour means "how soon must
-            # someone decide" and nothing else. An accent equal to a rung
-            # means a planner seeing that colour on a button and on a route
-            # cannot tell which of them carried meaning.
-            vals = page.evaluate("""() => {
-                const cs = getComputedStyle(document.documentElement);
-                const t = (n) => cs.getPropertyValue(n).trim().toLowerCase();
-                return {
-                  accent: t('--accent'),
-                  rungs: ['green','white','blue','yellow','red'].map((l) => t('--lvl-'+l)),
-                };
-            }""")
-            if vals["accent"] in vals["rungs"]:
-                errors.append(
-                    f"[theme:{theme}] --accent {vals['accent']} collides with "
-                    "a reserved ladder colour"
-                )
-
-            # The matrix has to survive a repaint in every theme.
-            page.locator("[data-matrix]").first.click()
-            page.wait_for_timeout(600)
-            if page.locator(".mx-cell.has").count() == 0:
-                errors.append(f"[matrix] no occupied cell in {theme}")
-            page.screenshot(path=str(OUT / f"theme-{theme}.png"))
-            page.keyboard.press("Escape")
-            page.wait_for_timeout(300)
-        print("  themes: 4 applied, accent distinct from the ladder in each")
-
-        # The unsourced band must sit OUTSIDE the probability axis.
-        board = page.evaluate("JSON.stringify(state.board)")
-        import json as _json
-        data = _json.loads(board)
-        unsourced = [
-            (r["route_id"], e) for r in data["routes"]
-            for e in r.get("events", []) if e["matrix"]["unsourced"]
-        ]
-        if not unsourced:
-            errors.append("[matrix] fixture has no unsourced-probability event to check")
-        else:
-            rid, ev = unsourced[0]
-            page.evaluate(f"select({_json.dumps(rid)}, {{fly:false}})")
-            page.wait_for_timeout(600)
-            page.locator(f'[data-matrix="{ev["event_id"]}"]').click()
-            page.wait_for_timeout(600)
-            if page.locator(".mx-unsourced-h").count() == 0:
-                errors.append("[matrix] unsourced band not drawn for an unsourced event")
-            else:
-                print(f"  matrix: unsourced band shown ({len(unsourced)} such events)")
-            page.keyboard.press("Escape")
-
-        # With no model reachable the assistant must EXPLAIN, not fail.
-        page.locator("#btn-ask").click()
-        page.wait_for_timeout(500)
-        page.locator("#ask-input").fill("which route needs a decision first?")
-        page.locator("#ask-send").click()
-        page.wait_for_timeout(2_500)
-        answer = page.locator("#ask-log").inner_text()
-        status = page.request.get(f"http://localhost:{PORT}/api/model").json()
-        if status["status"] == "connected":
-            if "generated by" not in answer.lower():
-                errors.append("[ask] a model answered but the output was not marked generated")
-            else:
-                print(f"  ask: answered by {status['model']}, marked as generated")
-        else:
-            if "No model is connected" not in answer:
-                errors.append(f"[ask] no-model socket message missing: {answer[:100]!r}")
-            elif "unaffected" not in answer:
-                errors.append("[ask] did not say the board is computed without a model")
-            else:
-                print("  ask: no model, socket message shown, board unaffected")
-        page.screenshot(path=str(OUT / "assistant.png"))
-        page.locator("#ask-close").click()
-
-        health = page.request.get(f"http://localhost:{PORT}/api/health").json()
-        if health.get("status") != "ok":
-            errors.append(f"[profile] health after refused save: {health}")
-
-        browser.close()
-
+# =====================================================================
+def _report(errors: list[str]) -> int:
     if errors:
         # Tell a dead server apart from a broken page BEFORE printing a list
         # that blames the UI.
         #
         # A run was lost to this: dev_serve.sh kills every uvicorn before it
         # restarts, so restarting the server for an unrelated test mid-check
-        # produced four errors reading "summary did not load" and
-        # "summary/header disagree" — which is precisely what a genuine
-        # rendering bug looks like. The page was fine. The socket was gone.
+        # produced four errors reading "summary did not load" and "summary/
+        # header disagree" — which is precisely what a genuine rendering bug
+        # looks like. The page was fine. The socket was gone.
         #
-        # A checker that misattributes its own environment failure to the code
-        # under test is worse than one that simply crashes, because somebody
-        # will spend an afternoon fixing a bug that was never there.
-        refused = [e for e in errors if "ERR_CONNECTION_REFUSED" in e
-                   or "Failed to fetch" in e]
+        # A checker that misattributes its own environment failure to the
+        # code under test is worse than one that simply crashes, because
+        # somebody will spend an afternoon fixing a bug that was never there.
+        refused = [e for e in errors if "ERR_CONNECTION_REFUSED" in e or "Failed to fetch" in e]
         if refused and not _server_alive():
             print("\nTHE SERVER WENT AWAY MID-RUN — these are not UI errors.")
-            print(f"  http://localhost:{PORT} stopped answering mid-run.")
+            print(f"  {BASE} stopped answering mid-run.")
             print("  Most likely something restarted it (dev_serve.sh kills every")
             print("  uvicorn before it starts one). Re-run with nothing else")
             print("  touching the server.")
