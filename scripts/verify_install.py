@@ -71,6 +71,10 @@ MARKERS = {
     "Free source catalogue":          ("engine/ingest/sources/catalog.py", "gdelt_doc"),
     "Two-model funnel":               ("engine/reason/funnel.py", "TRIAGE_SYSTEM"),
     "Hormuz chokepoint":              ("config.example/network.yaml", "CHOKE_HORMUZ"),
+    "2D fleet map":                   ("api/static/index.html", 'id="fleetmap"'),
+    "Map agent hooks":                ("api/static/mapagent.js", "rankRoutes"),
+    "Action Hub split shipment":      ("api/static/actionhub.js", "split-toggle"),
+    "Recovery routes engine":         ("engine/fleet/reroute.py", "sea_bypass"),
 }
 
 
