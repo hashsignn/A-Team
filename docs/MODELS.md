@@ -142,8 +142,13 @@ ollama pull qwen2.5:7b-instruct
 .venv\Scripts\python scripts\check_models.py
 
 set RADAR_RECORD_REASONING=1
-.venv\Scripts\python scripts\record_reasoning.py --as-of 2026-09-16
+.venv\Scripts\python scripts\record_reasoning.py
 ```
+
+With no `--as-of` it records at the instant the sources were recorded at —
+the one the board opens at. It has to: the extraction prompt carries the
+as-of and an answer is keyed by its prompt, so answers recorded at any other
+instant would never be used by the board.
 
 `scripts/check_models.py` is platform-aware: the commands it prints when
 something is wrong are the ones for the machine it is running on.
@@ -269,11 +274,11 @@ every day. They are recorded in two steps, and the split is the point:
 ```bash
 # 1. freeze the sources — anywhere with the network
 RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py \
-    --all --as-of 2026-09-22 --days 60
+    --all --as-of now --days 60          # add --skip gdelt_doc in a Codespace
 
 # 2. reason over them — on the machine with the model, network OFF
-RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py \
-    --as-of 2026-09-22
+#    (no --as-of: it records at the instant step 1 recorded at)
+RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py
 
 git add data/fixtures data/reasoning
 ```
@@ -442,7 +447,7 @@ other machine replays it for free.
 
 ```bash
 # on the laptop that has Ollama
-RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py --as-of 2026-09-16
+RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py
 git add data/reasoning && git commit -m "Record the reasoning layer"
 git push
 

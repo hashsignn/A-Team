@@ -189,3 +189,18 @@ def test_an_unreadable_fixture_is_not_mistaken_for_a_recording(
     what, real = reasoner.fixture_status(gdelt)
     assert not real
     assert what.startswith("unreadable")
+
+
+
+def test_the_default_instant_is_the_one_the_board_opens_at(tmp_path, monkeypatch):
+    """An answer is keyed by its prompt, and the extraction prompt carries the
+    as-of. Recorded at any other instant than the board's own, every answer
+    would sit unused."""
+    from engine.ingest import observations
+
+    module = _load("record_reasoning")
+    monkeypatch.setattr(observations, "FIXTURE_DIR", tmp_path)
+    assert module.default_as_of() == "2026-09-16"
+    (tmp_path / observations.RECORDING).write_text(json.dumps(
+        {"as_of": "2026-09-27T14:00:00+00:00", "sources": {}}), encoding="utf-8")
+    assert module.default_as_of() == "2026-09-27T14:00:00+00:00"

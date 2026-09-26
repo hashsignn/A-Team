@@ -3,11 +3,12 @@
 
     # 1. freeze the sources, anywhere with the network
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py \
-        --all --as-of 2026-09-22 --days 60
+        --all --as-of now --days 60
 
-    # 2. on the machine that HAS a model — with the network OFF
-    RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py \
-        --as-of 2026-09-22
+    # 2. on the machine that HAS a model — with the network OFF. No --as-of:
+    #    it records at the instant step 1 recorded at, which is the instant
+    #    the board opens at, and the only one its answers replay at.
+    RADAR_RECORD_REASONING=1 .venv/bin/python scripts/record_reasoning.py
 
     git add data/fixtures data/reasoning && git commit -m "Record sources and reasoning"
 
@@ -154,14 +155,32 @@ def network_refusal() -> list[str]:
     ]
 
 
+def default_as_of() -> str:
+    """The source recording's instant — the one the board opens at.
+
+    The extraction prompt carries the as-of, and an answer is keyed by its
+    prompt, so answers replay only at the instant they were recorded at.
+    Recorded anywhere else, every one would sit unused on the board. With no
+    recording, the scripted scenario's own day.
+    """
+    from engine.ingest.observations import recorded_as_of  # noqa: PLC0415
+
+    return recorded_as_of() or "2026-09-16"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--as-of", default="2026-09-16",
-                        help="the instant to record, pinned and reproducible")
+    parser.add_argument("--as-of", default=None,
+                        help="the instant to record, pinned and reproducible. "
+                             "Defaults to the source recording's own instant — "
+                             "the one the board opens at — or 2026-09-16 with "
+                             "no recording")
     parser.add_argument("--shipments", type=int, default=220)
     parser.add_argument("--dry-run", action="store_true",
                         help="report what would be recorded, write nothing")
     args = parser.parse_args()
+    if args.as_of is None:
+        args.as_of = default_as_of()
 
     if not cache.recording() and not args.dry_run:
         print("Recording is off. Re-run with:")
