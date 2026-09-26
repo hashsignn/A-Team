@@ -94,6 +94,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import platform
 import re
 import sys
@@ -755,7 +756,14 @@ def main() -> int:
                   "scripts/record_fixture.py --all", file=sys.stderr)
         return 2
 
-    runnable = [s.key for s in CATALOG if s.runnable] + [GAUGE_KEY, WEATHER_KEY]
+    # GDELT last. It rate-limits by network, and a shared one — a Codespace, a
+    # VPN, university Wi-Fi — can be refused from the very first request. First
+    # in the list, its back-off (30 s, 60 s, 120 s) held every other source up
+    # for three and a half minutes, which looked exactly like the whole
+    # recording hanging, and got it stopped before anything was recorded.
+    runnable = ([s.key for s in CATALOG if s.runnable and s.key != "gdelt_doc"]
+                + [GAUGE_KEY, WEATHER_KEY]
+                + [s.key for s in CATALOG if s.runnable and s.key == "gdelt_doc"])
     keys = runnable if args.all else args.keys
     FAILED.clear()
     skipped = [key for key in keys if key in set(args.skip)]
@@ -783,8 +791,28 @@ def main() -> int:
 
     if skipped:
         print(f"Skipping {', '.join(skipped)}.")
+    if "gdelt_doc" in keys and os.environ.get("CODESPACES", "").lower() == "true":
+        print("Note: GDELT often refuses Codespaces' shared addresses (HTTP 429). It")
+        print("is recorded last, so everything else is recorded first either way; to")
+        print("not wait on it at all, run again with --skip gdelt_doc.")
     print(f"Recording {len(keys)} source(s) into {FIXTURES}:")
-    status = max((record(key, as_of=as_of, days=args.days) for key in keys), default=0)
+    statuses: list[int] = []
+    try:
+        for key in keys:
+            statuses.append(record(key, as_of=as_of, days=args.days))
+    except KeyboardInterrupt:
+        # Stopped by hand — usually while a refusing source is being waited
+        # out. What was recorded is kept, and the manifest is still written:
+        # without it the board would show the scripted sample of every source
+        # not reached, beside the real ones it did reach.
+        stopped_at = keys[len(statuses)]
+        FAILED[stopped_at] = "stopped with Ctrl+C"
+        for key in keys[len(statuses) + 1:]:
+            FAILED.setdefault(key, "not reached — the run was stopped")
+        print(f"\nStopped during {stopped_at}. Keeping what was recorded; run the "
+              "same command again to carry on.", file=sys.stderr)
+        statuses.append(130)
+    status = max(statuses, default=0)
     manifest = write_manifest([*keys, *skipped], as_of, whole=args.all)
     _summary([*keys, *skipped], manifest, args.all)
     return status

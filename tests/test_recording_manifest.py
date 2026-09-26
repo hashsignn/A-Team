@@ -76,6 +76,10 @@ class Network:
         return blob, ""
 
     def gauge(self, url, headers=None, timeout=None):
+        """Every call that goes through get_json: the gauge, and the weather
+        at the focus routes' places, told apart by the host they ask."""
+        if "open-meteo.com" in url:
+            return self.weather(url)
         self.asked.append("watergauge_kaub")
         if "watergauge_kaub" in self.refuse:
             return None, "unreachable (timed out)"
@@ -83,6 +87,21 @@ class Network:
         cest = timezone(timedelta(hours=2))
         return [{"timestamp": (start + timedelta(hours=h)).astimezone(cest).isoformat(),
                  "value": 180.0} for h in range(30 * 24)], ""
+
+    def weather(self, url):
+        """Open-Meteo's answer for however many places the URL asks about."""
+        from urllib.parse import parse_qs, urlsplit
+
+        self.asked.append("weather_focus")
+        if "weather_focus" in self.refuse:
+            return None, "unreachable (timed out)"
+        query = parse_qs(urlsplit(url).query)
+        places = len(query["latitude"][0].split(","))
+        reading = query["daily"][0].split(",")[0]
+        days = [(datetime(2026, 9, 22, tzinfo=UTC) + timedelta(days=d)).date().isoformat()
+                for d in range(-3, 7)]
+        one = {"daily": {"time": days, reading: [5.0] * len(days)}}
+        return ([one] * places if places > 1 else one), ""
 
 
 @pytest.fixture
@@ -125,7 +144,8 @@ def test_a_whole_recording_says_what_it_holds(recorder, world, monkeypatch, caps
     assert sources["gdelt_doc"]["recorded"] is False
     assert "unreachable" in sources["gdelt_doc"]["error"]
     runnable = [s.key for s in CATALOG if s.runnable and s.key != "gdelt_doc"]
-    assert all(sources[key]["recorded"] for key in [*runnable, "watergauge_kaub"])
+    assert all(sources[key]["recorded"]
+               for key in [*runnable, "watergauge_kaub", "weather_focus"])
 
     out = capsys.readouterr().out
     assert "Not recorded : gdelt_doc" in out
@@ -135,7 +155,7 @@ def test_a_whole_recording_says_what_it_holds(recorder, world, monkeypatch, caps
 def test_nothing_reached_writes_nothing_and_says_do_not_commit(
     recorder, world, monkeypatch, capsys,
 ):
-    everything = {s.key for s in CATALOG} | {"watergauge_kaub"}
+    everything = {s.key for s in CATALOG} | {"watergauge_kaub", "weather_focus"}
     before = {p.name: p.read_bytes() for p in world.glob("*.json")}
     run(recorder, monkeypatch, Network(refuse=everything), *EVERYTHING)
 
@@ -247,3 +267,39 @@ def test_the_reasoning_recorder_reports_a_left_out_source_as_left_out(
     what, real = reasoner.fixture_status(by_key("wikipedia_events"))
     assert real and what.startswith("recorded")
     assert reasoner.gauge_status()[0].startswith("left out of this recording")
+
+
+# =====================================================================
+# A network that refuses GDELT
+# =====================================================================
+def test_gdelt_is_recorded_last_so_a_refusal_holds_nothing_up(recorder, world, monkeypatch):
+    """First in the list, a refused GDELT was waited out (30 s, 60 s, 120 s)
+    before anything else was asked — which looked like the whole recording
+    hanging, and got it stopped with nothing recorded."""
+    network = Network(refuse={"gdelt_doc"})
+    run(recorder, monkeypatch, network, *EVERYTHING)
+    assert network.asked[-1] == "gdelt_doc"
+    assert network.asked.index("wikipedia_events") < network.asked.index("gdelt_doc")
+
+
+def test_stopping_with_ctrl_c_keeps_what_was_recorded_and_still_writes_the_manifest(
+    recorder, world, monkeypatch, capsys,
+):
+    """Without the manifest, the board would show the scripted sample of
+    every source the run never reached, beside the real ones it did."""
+    network = Network()
+    real_source = network.source
+
+    def interrupted(spec, *args, **kwargs):
+        if spec.key == "gdelt_doc":
+            raise KeyboardInterrupt
+        return real_source(spec, *args, **kwargs)
+
+    network.source = interrupted
+    status = run(recorder, monkeypatch, network, *EVERYTHING)
+    assert status == 130
+    sources = manifest(world)["sources"]
+    assert sources["gdelt_doc"] == {"recorded": False, "error": "stopped with Ctrl+C"}
+    assert sources["wikipedia_events"]["recorded"] is True
+    assert sources["weather_focus"]["recorded"] is True
+    assert "Stopped during gdelt_doc" in capsys.readouterr().err

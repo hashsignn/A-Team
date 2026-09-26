@@ -290,14 +290,21 @@ CATALOG: tuple[SourceSpec, ...] = (
         label="ReliefWeb — situation reports (UN OCHA)",
         nature=Nature.REPORT,
         source_tier=2,
-        url="https://api.reliefweb.int/v1/reports",
+        url="https://api.reliefweb.int/v2/reports",
         items_path="data",
         date_format="iso",
         families=("force_majeure", "geopolitical"),
-        cost=Cost.FREE,
+        # Free, but since 1 November 2025 ReliefWeb answers only an `appname`
+        # it has approved. The made-up one this used to send was refused on
+        # every request, and a recording printed a failure for a source that
+        # could never have answered. OFF, like every source that needs a
+        # registration: with an approved name, set RELIEFWEB_APPNAME and turn
+        # it on in sources.yaml (reliefweb: {enabled: true}).
+        cost=Cost.FREE_WITH_KEY,
+        enabled=False,
+        auth=Auth(kind="query", env="RELIEFWEB_APPNAME", name="appname"),
         fixture="reliefweb_reports.json",
         params={
-            "appname": "supply-chain-risk-radar",
             "profile": "list",
             "limit": "40",
             "sort[]": "date:desc",
@@ -316,7 +323,12 @@ CATALOG: tuple[SourceSpec, ...] = (
             source_name="const:ReliefWeb",
         ),
         builtin=True,
-        notes="Free, no key. 'appname' is a courtesy identifier, not a credential.",
+        notes=(
+            "Free. Needs an appname ReliefWeb has approved (request one at "
+            "reliefweb.int/contact), set as RELIEFWEB_APPNAME, and "
+            "`reliefweb: {enabled: true}` in sources.yaml. Not a secret, but "
+            "it is yours, so it is read from the environment, never a file."
+        ),
     ),
     SourceSpec(
         key="cisa_kev",

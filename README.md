@@ -152,9 +152,11 @@ $env:RADAR_ALLOW_NETWORK = "1"
 ```
 
 About ten minutes, most of it GDELT's one-request-per-five-seconds limit. A
-source that refuses is left off the board rather than shown as its sample;
-if GDELT refuses every request from your network, add `--skip gdelt_doc` —
-Wikipedia covers the news. An interrupted run resumes where it stopped.
+source that refuses is left off the board rather than shown as its sample.
+**In a Codespace, add `--skip gdelt_doc`:** GDELT usually refuses Codespaces'
+shared addresses (HTTP 429), and the Wikipedia archive covers the news. GDELT
+is asked last either way, so a refusal holds nothing else up. Stopping with
+Ctrl+C keeps what was recorded, and the same command carries on from there.
 
 Then restart the server. The board opens at the recording's own instant, not
 the demo's pinned 18 September. Commit what it wrote so everyone sees the
@@ -1304,7 +1306,7 @@ test asserts *both* halves: no cargo risk, and a real delay.
 
 ## External sources, and the shock they exist to catch
 
-Ten feeds ship wired. **Every one is free, keyless, and needs no
+Nine feeds ship wired and on. **Every one is free, keyless, and needs no
 registration.** Nothing in the catalogue can cost money — a paid source cannot
 be enabled by editing config, and a test fails the build if one ever ships
 enabled.
@@ -1314,14 +1316,21 @@ enabled.
 | **GDELT 2.0 DOC** | geopolitical, labour, port ops | 2 | report |
 | **Wikipedia — Current events** (curated, daily) | geopolitical, labour, port ops | 2 | report |
 | GDACS (EU JRC) | force majeure, climate | 1 | report |
-| ReliefWeb (UN OCHA) | force majeure, geopolitical | 2 | report |
 | CISA KEV | cyber | 1 | report |
 | Autobahn A5 / A61 / A3 | infrastructure | 1 | report |
 | USGS earthquakes | force majeure | 1 | **instrument** |
 | Open-Meteo marine | climate | 1 | **instrument** |
 
-Two more — ENTSO-E and OpenSanctions — are free but need a free registration,
-so they ship **disabled** and say exactly which variable to set.
+Three more — ENTSO-E, OpenSanctions and ReliefWeb (UN OCHA) — are free but
+need a free registration, so they ship **disabled** and say exactly which
+variable to set. ReliefWeb has refused any `appname` it has not approved since
+1 November 2025: request one, set `RELIEFWEB_APPNAME`, and turn it on with
+`reliefweb: {enabled: true}` in `sources.yaml`.
+
+**GDELT and shared networks.** GDELT rate-limits by address, and a shared one —
+a Codespace, a VPN, university Wi-Fi — is often refused from the first request
+(HTTP 429). The recorder asks it last, so everything else is recorded first,
+and `--skip gdelt_doc` leaves it out; the Wikipedia archive carries the news.
 
 **Network is off by default.** Nothing reaches the internet until
 `RADAR_ALLOW_NETWORK=1`; every source falls back to a recorded fixture and says

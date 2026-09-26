@@ -411,3 +411,15 @@ def test_window_stamps_match_each_api_s_convention(fmt, expected):
 
     window = Window(start_param="s", format=fmt)
     assert window.stamp(datetime(2026, 9, 16, tzinfo=UTC)) == expected
+
+
+def test_reliefweb_waits_for_an_approved_appname():
+    """Since 1 November 2025 ReliefWeb refuses any appname it has not
+    approved, so the invented one this used to send failed every request."""
+    from engine.ingest.sources import catalog
+
+    spec = catalog.by_key("reliefweb")
+    assert not spec.enabled and not spec.runnable
+    assert spec.auth.kind == "query" and spec.auth.name == "appname"
+    assert spec.auth.env == "RELIEFWEB_APPNAME"
+    assert "appname" not in spec.params
