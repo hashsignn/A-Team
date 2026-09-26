@@ -86,21 +86,14 @@ DEFAULTS: dict = {
     # answered with a picture of the words "Access blocked" — served as an
     # ordinary image, so the map could not even tell that it had failed. The
     # board showed a wall of them.
+    #
+    # NOT CARTO's keyless endpoint either, for the same reason. Since August
+    # 2026 CARTO answers a request without a key with a tile reading "API key
+    # required" — a normal 200 image, so the fallback never fires — and its
+    # terms ask that the watermark is not hidden. A key is free: get one and
+    # put CARTO first in config/fleet.yaml with `?key=` on the URL.
     "basemap": {
         "providers": [
-            {
-                "name": "CARTO Positron",
-                "tiles": [
-                    f"https://{host}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}.png"
-                    for host in "abcd"
-                ],
-                "attribution": (
-                    '&copy; <a href="https://www.openstreetmap.org/copyright">'
-                    'OpenStreetMap</a> contributors &copy; '
-                    '<a href="https://carto.com/attributions">CARTO</a>'
-                ),
-                "max_zoom": 19,
-            },
             {
                 "name": "Esri World Light Gray",
                 "tiles": [
@@ -112,6 +105,23 @@ DEFAULTS: dict = {
                     "contributors, and the GIS User Community"
                 ),
                 "max_zoom": 16,
+            },
+            {
+                # Public-domain relief from NASA's imagery service, on its own
+                # host. Coarser (zoom 8, overzoomed past it) and a picture of
+                # the ground rather than a drawn map — but it is there when
+                # Esri is not, and desaturated it reads as a quiet backdrop.
+                "name": "NASA Blue Marble relief",
+                "tiles": [
+                    "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/"
+                    "BlueMarble_ShadedRelief_Bathymetry/default/"
+                    "GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg"
+                ],
+                "attribution": (
+                    'Imagery: <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>, '
+                    "Blue Marble shaded relief and bathymetry"
+                ),
+                "max_zoom": 8,
             },
         ],
     },

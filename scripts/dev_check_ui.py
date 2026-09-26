@@ -51,7 +51,8 @@ OVERLAY = ROOT / "config" / "scoring.yaml"
 # The map's basemap tiles come from these hosts, and failing to reach them is
 # not an error: the map falls back to the vendored country outlines and says
 # so, which scripts/dev_check_map.py checks. Same list as that script.
-TILE_HOSTS = ("basemaps.cartocdn.com", "server.arcgisonline.com", "tile.openstreetmap.org")
+TILE_HOSTS = ("server.arcgisonline.com", "gibs.earthdata.nasa.gov",
+              "basemaps.cartocdn.com", "tile.openstreetmap.org")
 
 # The ladder's own order, for "ranked by level".
 LEVEL_RANK = {"Critical": 4, "Alert": 3, "Watch": 2, "Bias": 1, "Normal": 0}

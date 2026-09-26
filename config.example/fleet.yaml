@@ -153,24 +153,31 @@ routing:
 # rules out apps like this one, and they answer a blocked app with an image
 # reading "Access blocked" — which the map cannot tell from a real tile.
 #
+# Not CARTO without a key: since August 2026 it answers keyless requests with
+# tiles reading "API key required", again as ordinary images. A CARTO key is
+# free (carto.com/basemaps/apikey). To use one, copy this file to
+# config/fleet.yaml — gitignored, so the key never reaches the repository —
+# and put CARTO first:
+#     - name: "CARTO Positron"
+#       tiles: ["https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=YOUR_KEY"]
+#       attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+#       max_zoom: 19
+#
 # To self-host, replace the list with a single entry, or use the short form
 #   basemap: {tiles: ["https://tiles.example.internal/{z}/{x}/{y}.png"]}
 # which is used ALONE — no fallback to a third party.
 basemap:
   providers:
-    - name: "CARTO Positron"
-      tiles:
-        - "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-        - "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-        - "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-        - "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      max_zoom: 19
     - name: "Esri World Light Gray"
       tiles:
         - "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
       attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS User Community"
       max_zoom: 16
+    - name: "NASA Blue Marble relief"
+      tiles:
+        - "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg"
+      attribution: 'Imagery: <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>, Blue Marble shaded relief and bathymetry'
+      max_zoom: 8
 
 # -------------------------------------------------------------------
 # PARTNER NETWORK — SYNTHETIC

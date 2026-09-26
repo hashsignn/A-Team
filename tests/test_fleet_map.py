@@ -572,6 +572,15 @@ def test_the_basemap_never_asks_openstreetmaps_own_servers():
             assert "tile.openstreetmap.org" not in url, provider["name"]
 
 
+def test_the_basemap_never_asks_cartos_keyless_endpoint():
+    """Since August 2026 CARTO answers a request without a key with a tile
+    reading "API key required" — a 200 image, so the map cannot tell it from
+    a real one and never falls back. The board showed a wall of them."""
+    for provider in settings(load_config())["basemap"]["providers"]:
+        for url in provider["tiles"]:
+            assert "cartocdn.com" not in url or "key=" in url, provider["name"]
+
+
 def test_every_basemap_provider_is_keyless_and_attributed():
     """Nothing to bill and nothing to leak: no key in any URL, https only,
     and the attribution each provider's terms ask for."""

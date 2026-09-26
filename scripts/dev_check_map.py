@@ -32,7 +32,8 @@ OUT = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("/tmp/shots-map")
 OUT.mkdir(parents=True, exist_ok=True)
 BASE = f"http://localhost:{PORT}"
 
-TILE_HOSTS = ("basemaps.cartocdn.com", "server.arcgisonline.com", "tile.openstreetmap.org")
+TILE_HOSTS = ("server.arcgisonline.com", "gibs.earthdata.nasa.gov",
+              "basemaps.cartocdn.com", "tile.openstreetmap.org")
 
 
 
@@ -366,7 +367,7 @@ def _check_basemap_fallback(browser, check) -> None:
     def serve(route):
         url = route.request.url
         asked.append(url)
-        if "basemaps.cartocdn.com" in url or "tile.openstreetmap.org" in url:
+        if "server.arcgisonline.com" in url or "tile.openstreetmap.org" in url:
             route.fulfill(status=403, body="refused")
         else:
             route.fulfill(status=200, content_type="image/png", body=TILE_PNG)
@@ -379,9 +380,9 @@ def _check_basemap_fallback(browser, check) -> None:
                            timeout=60_000)
     page.wait_for_function(
         "(document.querySelector('#map-legend .lg-note') || {}).textContent"
-        ".includes('Esri World Light Gray tiles, desaturated')", timeout=30_000)
+        ".includes('NASA Blue Marble relief tiles, desaturated')", timeout=30_000)
     note = _legend_note(page)
-    check("CARTO Positron did not answer" in note,
+    check("Esri World Light Gray did not answer" in note,
           f"[basemap] the legend did not say the first provider refused: {note!r}",
           "a refusing tile provider is replaced by the next, and the legend says so")
     check(not any("tile.openstreetmap.org" in u for u in asked),
