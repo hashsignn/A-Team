@@ -10,7 +10,7 @@ const FastUI = (() => {
   /* The as-of and shipment count ride in the URL so a planner can send
    * somebody the exact screen they are looking at. Defaults match the API. */
   const params = new URLSearchParams(location.search);
-  const AS_OF = params.get('as_of') || '2026-09-18T06:00:00+00:00';
+  const AS_OF = params.get('as_of') || ((m) => (m && !m.startsWith('__') ? m : '2026-09-18T06:00:00+00:00'))((document.querySelector('meta[name="radar-default-as-of"]') || {}).content);
   const SHIPMENTS = params.get('shipments') || '150';
   const QS = `as_of=${encodeURIComponent(AS_OF)}&shipments=${encodeURIComponent(SHIPMENTS)}`;
 

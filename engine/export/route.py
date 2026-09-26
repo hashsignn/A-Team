@@ -207,6 +207,10 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
         "matrix_grid": board.get("matrix_grid"),
         "events": events,
         "driving_event_id": (driving or {}).get("event_id"),
+        # Carried through from the board: what on this route is real, and the
+        # recorded conditions at each of its places.
+        "real_data": route.get("real_data") or {"focus": False},
+        "conditions": route.get("conditions") or [],
         "legs": legs,
         "totals": {
             "affected": sum(leg["counts"]["affected"] for leg in legs),

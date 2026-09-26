@@ -62,6 +62,7 @@ const state = {
   board: null,
   selected: null,
   hidden: new Set(),   // levels toggled off in the ladder
+  focusOnly: false,    // the list narrowed to the focus routes
   globe: null,
   spinning: true,
   resumeTimer: null,
@@ -96,7 +97,8 @@ function hours(h) {
  * carry it: `?as_of=...` is a complete, shareable description of a board.
  * A past instant is a hindcast through the identical code path.
  */
-const DEFAULT_AS_OF = '2026-09-18T06:00:00+00:00';
+// The server's default instant: the recording's own, once there is one.
+const DEFAULT_AS_OF = ((m) => (m && !m.startsWith('__') ? m : '2026-09-18T06:00:00+00:00'))((document.querySelector('meta[name="radar-default-as-of"]') || {}).content);
 
 function readParams() {
   const q = new URLSearchParams(location.search);
@@ -651,7 +653,22 @@ function busiestRouteThrough(nodeId) {
 }
 
 function visibleRoutes() {
-  return state.board.routes.filter((r) => !state.hidden.has(r.level));
+  return state.board.routes.filter((r) => !state.hidden.has(r.level)
+    && (!state.focusOnly || (r.real_data && r.real_data.focus)));
+}
+
+/* The focus-route label. It counts the sources this run actually read as
+ * real (a recording or a live answer), never the route merely being on the
+ * focus list: "5 of 5" is a claim a planner will act on. */
+function focusBadge(r) {
+  const d = r.real_data;
+  if (!d || !d.focus) return '';
+  const full = d.of > 0 && d.real === d.of;
+  const none = d.real === 0;
+  const detail = (d.sources || [])
+    .map((s) => `${s.real ? 'real' : 'not real yet'} — ${s.label}`).join('\n');
+  return `<span class="rli-real${full ? ' is-full' : ''}${none ? ' is-none' : ''}"
+      title="${esc(detail)}">Focus route · ${d.real} of ${d.of} sources real</span>`;
 }
 
 // ===============================================================
@@ -955,6 +972,10 @@ function initPanelTabs() {
     $('rlist').hidden = signals;
     $('siglist').hidden = !signals;
     $('f-all').hidden = signals;
+    if ($('f-focus')) {
+      $('f-focus').hidden = signals
+        || !state.board.routes.some((r) => r.real_data && r.real_data.focus);
+    }
     // The subtitle belongs to the routes list. Leaving "17 of 17 routes"
     // above a funnel is the kind of stale line that makes a planner distrust
     // every other number on the page.
@@ -1047,6 +1068,18 @@ function renderFilters() {
     refreshPaths();
     renderTable();
   });
+  const focus = $('f-focus');
+  if (!focus) return;
+  // No focus routes configured, no button: a filter that always empties the
+  // list is a broken control.
+  focus.hidden = !(state.board && state.board.routes.some((r) => r.real_data && r.real_data.focus));
+  focus.addEventListener('click', () => {
+    state.focusOnly = !state.focusOnly;
+    focus.classList.toggle('is-on', state.focusOnly);
+    focus.setAttribute('aria-pressed', String(state.focusOnly));
+    refreshPaths();
+    renderTable();
+  });
 }
 
 /* The affected routes, as the right column's default state.
@@ -1070,6 +1103,7 @@ function renderTable() {
         <span class="rli-when" style="color:${LEVEL_COLOR[r.level]}">${hours(r.lead_time_hours)}</span>
       </span>
       <span class="rli-name">${esc(r.name)}</span>
+      ${focusBadge(r)}
       <span class="rli-driver">${esc(r.events[0] ? r.events[0].title : 'no event recorded')}</span>
       <span class="rli-foot">
         <span>${r.shipments_at_risk} of ${r.shipments} shipments</span>

@@ -143,7 +143,7 @@ HTTP is a credential you have given away.
 | Dependency | Cost | How it runs at zero cost |
 |---|---|---|
 | Rhine gauge (Pegelonline) | free, blocked here | `engine/ingest/watergauge.py` falls back to a shaped reconstruction, **labelled as one** on the inputs panel |
-| Weather (Open-Meteo, Copernicus) | free, blocked here | declared absent; the socket says what connecting it unlocks |
+| Weather (Open-Meteo, Copernicus) | free, no key | recorded by `scripts/record_fixture.py weather_focus` for the places on the five focus routes — fetched only by that script, and only with `RADAR_ALLOW_NETWORK=1`; the board reads the recording and never calls Open-Meteo itself. Until recorded, the socket says so |
 | News / trade press | free | 10 synthetic items, written to exercise the gate — including items that correctly match nothing |
 | Order book | n/a | `generate_shipments()` produces a synthetic book, flagged `synthetic: true` everywhere it surfaces |
 | Reasoning model | free locally | Ollama, or **nothing at all** — `RADAR_LLM_BACKEND=none` runs the deterministic router alone |

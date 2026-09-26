@@ -2,6 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
+<meta name="radar-default-as-of" content="__DEFAULT_AS_OF__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Route — Supply Chain Risk Radar</title>
 <link rel="stylesheet" href="/styles.css?v=__ASSETV__">
@@ -51,6 +52,17 @@
   <section class="rt-block" id="rt-vehicle-block" hidden>
     <div class="rt-block-head"><h2 id="rt-vehicle-title">Consignment</h2></div>
     <div id="rt-vehicle"></div>
+  </section>
+
+  <!-- A focus route says what on it is real: which feeds were recorded,
+       the conditions at each of its places, and who runs its legs. Hidden
+       on every other route, which is synthetic and says so elsewhere. -->
+  <section class="rt-block" id="rt-real-block" hidden>
+    <div class="rt-block-head">
+      <h2>What is real on this route</h2>
+      <span class="block-note" id="rt-real-note"></span>
+    </div>
+    <div id="rt-real"></div>
   </section>
 
   <div class="rt-two">

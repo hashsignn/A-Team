@@ -95,6 +95,79 @@ cache. `.devcontainer/README.md` has the rest of the checklist.
 
 ---
 
+## The five focus routes, and recording real data
+
+Five routes are held to real data; the other 25 stay synthetic and say so.
+They are named in `config.example/focus.yaml`, chosen from the flows in the
+customer's export (its volumes stay in the gitignored `config/`):
+
+| flow | route |
+|---|---|
+| DE→US | Stuttgart → Rotterdam → Norfolk |
+| CH→CN | Düdingen → Basel → Rhine → Rotterdam → Suez → Shanghai |
+| CH→US | Düdingen → Antwerp → New York |
+| CH→MX | Düdingen → Antwerp → Veracruz |
+| CH→IN | Düdingen → Genoa → Suez → Nhava Sheva |
+
+**What is real on them once recorded:** weather and sea state at every place
+they pass — 60 days observed, 7 forecast (Open-Meteo) — read against the
+thresholds in `thresholds.yaml → weather_rules`; the Rhine at Kaub; news over
+60 days (Wikipedia Current events, GDELT when it answers); disaster alerts and
+earthquakes over 60 days (GDACS, USGS). And the operators on each leg — real
+carriers, barge and rail operators, each with the public page it was checked
+against and the date. **Still assumed:** which ports and mode Sika books,
+consignment values, promised dates, and every operator's capacity and price,
+which nobody publishes and the board shows as unknown.
+
+Each focus card says how much of it is real — *Focus route · 4 of 5 sources
+real* — counted from what the run actually read, never from the route being
+on the list. **Focus routes** above the list narrows to the five; each
+route's own page has a *What is real on this route* section with the sources,
+the operators and the conditions at every place.
+
+**No hindsight.** A replay at an earlier as-of reads only the days that were
+over by then and no forecast (the one issued then was not recorded), and
+nothing published after the as-of reaches the board from any source.
+
+### Record it
+
+On a machine with internet — your laptop or a Codespace, not a network that
+blocks these hosts. Every source is free and keyless.
+
+```bash
+# Mac, Linux, Codespace
+RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py --all --as-of now --days 60
+```
+
+```bat
+:: Windows (cmd)
+set RADAR_ALLOW_NETWORK=1
+.venv\Scripts\python scripts\record_fixture.py --all --as-of now --days 60
+```
+
+```powershell
+# Windows (PowerShell)
+$env:RADAR_ALLOW_NETWORK = "1"
+.venv\Scripts\python scripts\record_fixture.py --all --as-of now --days 60
+```
+
+About ten minutes, most of it GDELT's one-request-per-five-seconds limit. A
+source that refuses is left off the board rather than shown as its sample;
+if GDELT refuses every request from your network, add `--skip gdelt_doc` —
+Wikipedia covers the news. An interrupted run resumes where it stopped.
+
+Then restart the server. The board opens at the recording's own instant, not
+the demo's pinned 18 September. Commit what it wrote so everyone sees the
+same days:
+
+```bash
+git add data/fixtures && git commit -m "Record 60 days of real data" && git push
+```
+
+Weather data is from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
+
+---
+
 ## What this is
 
 Nine pipeline stages behind a four-pane dashboard:

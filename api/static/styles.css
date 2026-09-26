@@ -514,6 +514,20 @@ p { margin: 0; }
   font-family: var(--mono); font-size: 10.5px; color: var(--muted);
 }
 
+/* A focus route says how much of it is real, source by source. Accent, not a
+ * level colour: this is about the data, not about how soon to decide. */
+.rli-real {
+  justify-self: start;       /* the card is a grid: hug the text, not the row */
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .02em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+  color: var(--accent); border: 1px solid var(--accent);
+}
+.rli-real.is-full { background: var(--accent); color: var(--accent-contrast); }
+.rli-real.is-none { color: var(--muted); border-color: var(--border); }
+.plh-ctl { display: flex; gap: 6px; align-items: flex-start; }
+#f-focus.is-on { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+
 /* ---- right column, state 2: one route ---- */
 .panel-body { display: block; }
 
@@ -2256,3 +2270,16 @@ button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -
   font-style: italic;
   text-align: center;
 }
+
+/* ---- route page: what is real on a focus route ---- */
+.rt-real-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 10px 0 14px; }
+@media (max-width: 760px) { .rt-real-grid { grid-template-columns: 1fr; } }
+#rt-real h3 { font-size: 12.5px; margin: 10px 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+.rt-real-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rt-real-list li { display: grid; gap: 2px; font-size: 12.5px; line-height: 1.45; }
+.rt-real-list li.is-real b { color: var(--accent); }
+.rt-real-list li.is-not b { color: var(--muted); }
+.rt-cond { width: 100%; font-size: 12px; }
+.rt-cond td, .rt-cond th { vertical-align: top; }
+.rt-note { display: grid; gap: 3px; font-size: 12.5px; line-height: 1.5; padding: 10px 12px; margin: 6px 0 12px;
+  border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; }

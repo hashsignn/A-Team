@@ -31,6 +31,7 @@ from engine.ingest.feeds import load_feed_items, social_promotion_status
 from engine.ingest.observations import FeedReport, FeedStatus, IngestBundle
 from engine.ingest.synthetic import generate_shipments, in_scope
 from engine.ingest.watergauge import assess_kaub
+from engine.ingest.weather import assess_weather
 from engine.network.geo import Point, in_bounding_box
 from engine.network.graph import Network
 from engine.portfolio import convene
@@ -97,6 +98,8 @@ class RunContext:
     reports: list[FeedReport] = field(default_factory=list)
     router_notes: dict[str, str] = field(default_factory=dict)
     unpromoted: dict[str, str] = field(default_factory=dict)
+    # Recorded conditions at every place on a focus route, for the route page.
+    conditions: dict = field(default_factory=dict)
 
 
 def run(
@@ -160,6 +163,13 @@ def run(
 
     gauge_obs, gauge_report = assess_kaub(config, clock)
     bundle.add(gauge_report, gauge_obs)
+
+    # Weather and sea state at the focus routes' places: numbers against
+    # thresholds, exactly like the gauge, so they join the gauge's path.
+    weather_obs, weather_report, conditions = assess_weather(config, clock)
+    if weather_report is not None:
+        bundle.add(weather_report, weather_obs)
+    gauge_obs = [*gauge_obs, *weather_obs]
 
     feed_items, feed_report = load_feed_items(clock)
     bundle.add(feed_report)
@@ -237,6 +247,7 @@ def run(
         reports=bundle.reports,
         router_notes=router_notes,
         unpromoted=unpromoted,
+        conditions=conditions,
     )
 
 
@@ -280,6 +291,14 @@ def _collect_sources(
     items, reports = source_pkg.collect_all(
         runnable, clock.as_of, window_days=options.source_window_days
     )
+
+    # Nothing published after the as-of. A recording reaches up to the day it
+    # was made, and a board replayed at an earlier instant must not read the
+    # news of the days after it: that is hindsight, and it would make every
+    # replay look prescient. The synthetic corpus has always skipped its
+    # unpublished items; the real sources did not, which was harmless while
+    # nothing was recorded and wrong the moment two months were.
+    items = [i for i in items if i["published_at"] <= clock.as_of]
 
     # Text sources carry no coordinates — a wire story says "the Strait of
     # Hormuz", never a UN/LOCODE. Without this every one of them would be

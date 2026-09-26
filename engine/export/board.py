@@ -14,7 +14,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from engine import focus as focus_mod
 from engine.act import contacts as contacts_mod
+from engine.ingest import flows as flows_mod
+from engine.ingest.observations import FeedStatus
 from engine.pipeline import RunContext
 from engine.schemas import ShipmentRisk
 from engine.score.matrix import (
@@ -213,6 +216,11 @@ def _build_route(
             assessments, lane, context, keep=lambda v: not v.probability_sourceable
         ),
         "actions": _actions(risks, context),
+        # How much of what this route reads is real. See engine/focus.py: the
+        # label is built from what the run actually read, never from the
+        # route merely being listed in focus.yaml.
+        "real_data": _real_data(lane, context),
+        "conditions": _conditions(lane, context),
         "response": _response(lane, verdict, risks, context),
     }
 
@@ -239,6 +247,80 @@ def _response(lane: dict, verdict, risks: list[ShipmentRisk],
         config=context.config,
         network=context.network,
     )
+
+
+# The feeds a focus route is judged on, in the order the card lists them.
+# A gauge row only for a route that passes the gauge.
+_FOCUS_SOURCES = (
+    ("weather_focus", "Weather and sea state"),
+    ("watergauge_kaub", "Rhine level at Kaub"),
+    ("wikipedia_events", "News archive (Wikipedia)"),
+    ("gdelt_doc", "News index (GDELT)"),
+    ("gdacs", "Disaster alerts (GDACS)"),
+    ("usgs_quakes", "Earthquakes (USGS)"),
+)
+
+
+def _is_real(report) -> bool:
+    """Live, or a recording of the live source — never a written sample."""
+    if report.status is FeedStatus.CONNECTED:
+        return True
+    if report.status is not FeedStatus.FIXTURE:
+        return False
+    detail = report.detail or ""
+    recorded = ("the recording of" in detail or "a recording" in detail
+                or "RECORDED FROM" in detail.upper())
+    return recorded and "sample" not in detail
+
+
+def _real_data(lane: dict, context: RunContext) -> dict:
+    route = focus_mod.focus_routes(context.config).get(lane["id"])
+    if route is None:
+        return {"focus": False}
+    nodes = set(_lane_node_ids(lane))
+    reports = {r.key: r for r in context.reports}
+    sources = []
+    for key, label in _FOCUS_SOURCES:
+        if key == "watergauge_kaub" and "GAUGE_KAUB" not in nodes:
+            continue
+        report = reports.get(key)
+        if report is None:
+            continue
+        sources.append({
+            "key": key,
+            "label": label,
+            "real": _is_real(report),
+            "status": report.status.value,
+            "detail": report.detail,
+        })
+    volume = focus_mod.flow_volume(route, flows_mod.load())
+    return {
+        "focus": True,
+        "flow": route.sika_flow,
+        # Read from the gitignored flow file on this machine, or None.
+        "flow_documents": volume,
+        "why": route.why,
+        "sources": sources,
+        "real": sum(1 for x in sources if x["real"]),
+        "of": len(sources),
+        "operators": [dict(o) for o in route.operators],
+        "notes": [dict(n) for n in route.notes],
+        # What stays assumed on every route, focus or not: the export does not
+        # carry it. Said on the card so "real data" is never read as "all of it".
+        "assumed": ["which ports and mode Sika books", "consignment values",
+                    "promised dates", "capacity and price of the operators"],
+    }
+
+
+def _conditions(lane: dict, context: RunContext) -> list[dict]:
+    """The recorded conditions at each place on the route, in route order."""
+    if not context.conditions:
+        return []
+    return [
+        {"node_id": node_id, **context.conditions[node_id]}
+        for node_id in dict.fromkeys(_lane_node_ids(lane))
+        if node_id in context.conditions
+    ]
 
 
 def _legs(lane: dict, context: RunContext) -> list[dict]:

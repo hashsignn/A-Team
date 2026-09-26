@@ -218,6 +218,98 @@ function selectVehicle(shipmentId, legIndex) {
 }
 
 // ---------------------------------------------------------------
+/* Only ever an http(s) link: an operator's page comes from a config file,
+ * and a javascript: URL in one should not become a click on this page. */
+function safeUrl(url) {
+  return /^https?:\/\//i.test(String(url || '')) ? String(url) : '';
+}
+
+const READING_WORD = {
+  wind_gusts_10m_max: ['gusts', 'm/s'],
+  wind_speed_10m_max: ['wind', 'm/s'],
+  precipitation_sum: ['rain', 'mm'],
+  snowfall_sum: ['snow', 'cm'],
+  temperature_2m_max: ['max', '°C'],
+  temperature_2m_min: ['min', '°C'],
+  wave_height_max: ['waves', 'm'],
+};
+
+function readings(values) {
+  const order = ['wind_gusts_10m_max', 'wave_height_max', 'precipitation_sum',
+                 'snowfall_sum', 'temperature_2m_max', 'temperature_2m_min'];
+  const parts = order.filter((k) => values && values[k] != null)
+    .filter((k) => !(k === 'snowfall_sum' && !values[k]))
+    .map((k) => `${READING_WORD[k][0]} ${values[k]} ${READING_WORD[k][1]}`);
+  return parts.length ? parts.join(' · ') : '—';
+}
+
+function renderReal(v) {
+  const d = v.real_data || {};
+  const block = $('rt-real-block');
+  if (!block || !d.focus) return;
+  block.hidden = false;
+  $('rt-real-note').textContent = `${d.real} of ${d.of} sources real at this as-of`;
+
+  const volume = d.flow_documents != null
+    ? `<p class="muted">Customer export, this machine only: ${Number(d.flow_documents).toLocaleString('en-CH')} documents on ${esc((d.flow || '').replace('_', ' → '))}.</p>`
+    : '';
+  const sources = (d.sources || []).map((s) => `
+    <li class="${s.real ? 'is-real' : 'is-not'}">
+      <b>${s.real ? '✓' : '○'} ${esc(s.label)}</b>
+      <span class="muted">${esc(s.detail || s.status)}</span>
+    </li>`).join('');
+
+  const places = (v.conditions || []);
+  const conditions = places.length ? `
+    <table class="rtable rt-cond">
+      <thead><tr><th>Place</th><th>Last day read</th><th>Observed</th><th>Next 7 days (max)</th></tr></thead>
+      <tbody>${places.map((c) => `
+        <tr>
+          <td>${esc(c.name)}${c.marine_at ? `<br><span class="muted">sea read at ${esc(c.marine_at)}</span>` : ''}</td>
+          <td>${esc(c.observed_day || '—')}</td>
+          <td>${esc(readings(c.observed))}</td>
+          <td>${c.forecast_from ? esc(readings({ ...c.forecast_max, ...c.forecast_min })) : '<span class="muted">replay — the forecast issued then was not recorded</span>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`
+    : '<p class="muted">No conditions recorded for this route yet — record them with scripts/record_fixture.py weather_focus.</p>';
+
+  const operators = (d.operators || []).map((o) => {
+    const url = safeUrl(o.website);
+    const checked = safeUrl(o.source);
+    return `
+      <li>
+        <b>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(o.name)}</a>` : esc(o.name)}</b>
+        <span class="muted">${esc(o.role || '')}${o.legs ? ' · ' + esc(o.legs) : ''}</span>
+        ${o.note ? `<span>${esc(o.note)}</span>` : ''}
+        <span class="muted">Capacity and price: unknown.${checked ? ` Checked ${esc(o.checked || '')} against <a href="${esc(checked)}" target="_blank" rel="noopener noreferrer">its own page</a>.` : ''}</span>
+      </li>`;
+  }).join('');
+
+  $('rt-real').innerHTML = `
+    ${d.why ? `<p>${esc(d.why)}</p>` : ''}
+    ${volume}
+    <div class="rt-real-grid">
+      <div>
+        <h3>Sources</h3>
+        <ul class="rt-real-list">${sources}</ul>
+      </div>
+      <div>
+        <h3>Who runs these legs</h3>
+        ${operators ? `<ul class="rt-real-list">${operators}</ul>` : '<p class="muted">No operators listed for this route yet.</p>'}
+      </div>
+    </div>
+    ${(d.notes || []).map((n) => `
+      <div class="rt-note">
+        <b>On the corridor, ${esc(n.date || '')}</b>
+        <span>${esc(n.text || '')}</span>
+        ${safeUrl(n.source) ? `<a class="muted" href="${esc(safeUrl(n.source))}" target="_blank" rel="noopener noreferrer">source</a>` : ''}
+      </div>`).join('')}
+    <h3>Conditions at each place</h3>
+    ${conditions}
+    <p class="muted">Still assumed on every route: ${esc((d.assumed || []).join(', '))}.</p>`;
+}
+
 async function boot() {
   const params = new URLSearchParams(location.search);
   const q = new URLSearchParams();
@@ -240,6 +332,7 @@ async function boot() {
 
   statRow(v);
   renderConvoy(v);
+  renderReal(v);
 
   const onward = new URLSearchParams({ route: ROUTE_ID });
   if (params.get('as_of')) onward.set('as_of', params.get('as_of'));

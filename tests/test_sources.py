@@ -394,7 +394,9 @@ def test_a_source_with_no_window_is_left_alone():
     sending them a parameter they will ignore."""
     from engine.ingest.sources import catalog
 
-    assert catalog.by_key("usgs_quakes").window is None
+    # A vulnerability watchlist is a list of what is true now; it has no
+    # yesterday to ask about.
+    assert catalog.by_key("cisa_kev").window is None
 
 
 @pytest.mark.parametrize("fmt,expected", [

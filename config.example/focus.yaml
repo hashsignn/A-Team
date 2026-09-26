@@ -1,0 +1,264 @@
+# FIVE FOCUS ROUTES — the routes the board is asked to be REAL on
+#
+# Every other route stays synthetic and says so. These five are where the
+# prototype is held to the real world: the conditions at every place they
+# pass, the news that touches them, and who actually runs each leg.
+#
+# WHY THESE FIVE
+# --------------
+# They were chosen from the flows in the customer's own export, which stays
+# in the gitignored config/ folder with its volumes — nothing here repeats
+# them. Between them the five cross every risk this board models: the Rhine
+# at Kaub, the Alps, the North Sea ports, the North Atlantic, the Gulf of
+# Mexico, Suez and the Red Sea, the Arabian Sea and Malacca.
+#
+#   flow    route here
+#   DE→US   LANE_US_04   Stuttgart → Rotterdam → Norfolk
+#   CH→CN   LANE_ASIA_08 Düdingen → Basel → Rhine → Rotterdam → Suez → Shanghai
+#   CH→US   LANE_US_01   Düdingen → Antwerp → New York
+#   CH→MX   LANE_MX_01   Düdingen → Antwerp → Veracruz
+#   CH→IN   LANE_IN_01   Düdingen → Genoa → Suez → Nhava Sheva
+#
+# With config/flows.yaml present the board shows each flow's own volume
+# beside its route, read at run time and never written back here.
+#
+# WHAT IS REAL, AND WHAT IS STILL AN ASSUMPTION
+# ---------------------------------------------
+# Real once recorded (scripts/record_fixture.py --all):
+#   weather and sea state at every place on these routes — the last 60 days
+#     observed, the next 7 forecast (Open-Meteo, free, no key)
+#   the Rhine level at Kaub (Pegelonline, the last 30 days)
+#   news over the last 60 days (Wikipedia Current events, GDELT when it answers)
+#   disasters and earthquakes over the last 60 days (GDACS, USGS)
+#   the operators listed below: real companies, each with the public page it
+#     was checked against. Capacity and price are UNKNOWN — nobody publishes
+#     them — and the board says so rather than inventing a number.
+#
+# Still assumed, because the export does not carry it: which ports and
+# which mode Sika actually books on each flow, consignment values and
+# promised dates. The route shapes below are the plausible ones through
+# real ports; confirm them with Sika logistics and correct them here.
+
+focus_routes:
+  - lane: LANE_US_04
+    sika_flow: DE_US
+    why: >
+      Rail to Rotterdam, then the North Atlantic to Norfolk: the North Sea
+      ports and Atlantic storms.
+
+  - lane: LANE_ASIA_08
+    sika_flow: CH_CN
+    why: >
+      The route that crosses the most risk: Rhine barge past Kaub,
+      Rotterdam, then Suez, the Red Sea and Malacca.
+
+  - lane: LANE_US_01
+    sika_flow: CH_US
+    why: >
+      Swiss exports to the US: road to Antwerp, then New York.
+
+  - lane: LANE_MX_01
+    sika_flow: CH_MX
+    why: >
+      Antwerp to Veracruz: the Gulf of Mexico in hurricane season.
+
+  - lane: LANE_IN_01
+    sika_flow: CH_IN
+    why: >
+      Over the Alps to Genoa, then Suez and the Arabian Sea to Nhava Sheva.
+
+# Where sea state is read for a place whose own coordinates are on land.
+# The wave model has no value on a quay, a canal or an upper bay, so a port is
+# read at its approach — the water a ship actually waits in. Each point is a
+# rough position a planner can check on a chart; the board names it.
+marine_points:
+  NLRTM:         {lat: 51.98, lon: 3.95,   name: "Maasmond approach"}
+  BEANR:         {lat: 51.42, lon: 3.45,   name: "Scheldt mouth off Vlissingen"}
+  USNYC:         {lat: 40.45, lon: -73.83, name: "Ambrose Channel approach"}
+  USORF:         {lat: 36.95, lon: -75.95, name: "Chesapeake Bay entrance"}
+  MXVER:         {lat: 19.25, lon: -96.02, name: "Veracruz anchorage"}
+  ITGOA:         {lat: 44.35, lon: 8.90,   name: "Genoa outer anchorage"}
+  CHOKE_SUEZ:    {lat: 29.60, lon: 32.60,  name: "Gulf of Suez, south of the canal"}
+  INNSA:         {lat: 18.90, lon: 72.78,  name: "Mumbai harbour approach"}
+  CHOKE_MALACCA: {lat: 2.50,  lon: 101.00, name: "Strait of Malacca"}
+  CNSHA:         {lat: 30.55, lon: 122.15, name: "Yangshan / Hangzhou Bay approach"}
+
+# -------------------------------------------------------------------
+# WHO RUNS EACH LEG — real companies, each checked against a public page
+# -------------------------------------------------------------------
+# Every entry names the page it was checked against (`source`) and when.
+# Services change — rotations are revised every few months — so a line
+# here is "this was published", never "this will sail". Capacity and price
+# are not published by anybody and are not guessed: the board shows them as
+# UNKNOWN. Contact is the company's own website; no personal numbers.
+#
+#   routes   the focus routes this operator can carry a leg of
+#   near     the node the map places it at (a partner near the disruption)
+#   modes    what it runs, in the board's mode names
+operators:
+  # ---- the Rhine: Basel to the North Sea ports --------------------
+  - name: Contargo
+    role: container barge and rail, Rhine
+    legs: Basel → Rotterdam / Antwerp
+    routes: [LANE_ASIA_08]
+    near: CHBSL
+    modes: [barge, rail]
+    website: https://www.contargo.net/en/
+    source: https://www.contargo.net/en/locations/terminals-a-k/basel/
+    checked: 2026-09-26
+    note: "Basel terminal: barge connections twice a week to Rotterdam and twice a week to Antwerp (terminal page)."
+
+  - name: Swissterminal
+    role: container barge, Rhine
+    legs: Basel → Antwerp / Rotterdam
+    routes: [LANE_ASIA_08]
+    near: CHBSL
+    modes: [barge]
+    website: https://www.swissterminal.com/en/
+    source: https://www.swissterminal.com/en/swissterminal-returns-to-the-rhine-and-establishes-flexible-and-reliable-container-transport-from-the-border-triangle-to-antwerp-and-rotterdam/
+    checked: 2026-09-26
+    note: "Scheduled barge from the Basel border triangle to Antwerp and Rotterdam, run with four coupled units of about 342–348 TEU each (its announcement)."
+
+  - name: OOCL — Basel inland services
+    role: ocean carrier, inland haulage from Basel
+    legs: Basel → Rotterdam (rail or barge) / Antwerp (rail)
+    routes: [LANE_ASIA_08]
+    near: CHBSL
+    modes: [barge, rail]
+    website: https://www.oocl.com/
+    source: https://www.oocl.com/switzerland/eng/localinformation/serviceprofile
+    checked: 2026-09-26
+    note: "Published transit from Basel: Rotterdam in 2 days by rail or 4 by barge (Mon/Wed/Fri); Antwerp in 3 days by rail."
+
+  # ---- rail from Stuttgart ------------------------------------------
+  - name: Hupac — Kornwestheim–Rotterdam shuttle
+    role: intermodal rail operator
+    legs: Stuttgart (Kornwestheim) → Rotterdam
+    routes: [LANE_US_04]
+    near: SIKA_STU
+    modes: [rail]
+    website: https://www.hupac.com/
+    source: https://www.railfreight.com/business/2018/01/05/hupac-launches-rotterdam-stuttgart-shuttle/
+    checked: 2026-09-26
+    note: "Launched in 2018 from the DUSS terminal at Kornwestheim on Mondays, Wednesdays and Fridays (RailFreight). Confirm it still runs in Hupac's Shuttle Net timetable before booking."
+
+  # ---- rail out of Antwerp, and across the Alps ---------------------
+  - name: Hupac — Antwerp network
+    role: intermodal rail operator
+    legs: Antwerp ↔ Switzerland, Italy, Germany
+    routes: [LANE_US_01, LANE_MX_01]
+    near: BEANR
+    modes: [rail]
+    website: https://www.hupac.com/
+    source: https://www.hupac.com/EN/Belgium-the-heart-of-our-intermodal-network-42f0ed00
+    checked: 2026-09-26
+    note: "About 80 trains a week from Antwerp to Italy, Switzerland, Germany and beyond: the rail alternative to trucking from Switzerland to Antwerp."
+
+  - name: Hupac — Basel–Busto Arsizio
+    role: intermodal rail operator
+    legs: Basel → northern Italy (Busto Arsizio)
+    routes: [LANE_IN_01]
+    near: SIKA_DUD
+    modes: [rail]
+    website: https://www.hupac.com/
+    source: https://www.hupac.com/
+    checked: 2026-09-26
+    note: "Hupac announced a strengthened Basel–Busto Arsizio service (its front page). Rail across the Alps to the Milan area, then road to Genoa — a way round an Alpine road closure, not a door-to-port service."
+
+  # ---- North Atlantic ------------------------------------------------
+  - name: Maersk / Hapag-Lloyd — Gemini TA3
+    role: ocean carriers (Gemini Cooperation)
+    legs: Rotterdam → Newark → Norfolk
+    routes: [LANE_US_04]
+    near: NLRTM
+    modes: [sea]
+    website: https://www.hapag-lloyd.com/en/services-information/gemini-cooperation.html
+    source: https://www.freightwaves.com/news/maersk-hapag-lloyd-drop-east-coast-city-from-trans-atlantic-services
+    checked: 2026-09-26
+    note: "Rotation from January 2026: Southampton – Rotterdam – Hamburg – Wilhelmshaven – Newark – Norfolk – Philadelphia – Saint John (FreightWaves, 16 Dec 2025)."
+
+  - name: CMA CGM — NEW Liberty Bridge
+    role: ocean carrier
+    legs: Antwerp / Rotterdam → New York → Norfolk
+    routes: [LANE_US_01, LANE_US_04]
+    near: BEANR
+    modes: [sea]
+    website: https://www.cma-cgm.com/
+    source: https://www.cma-cgm.com/news/5313/cma-cgm-transatlantic-north-europe-service-update
+    checked: 2026-09-26
+    note: "Southampton, Antwerp, Rotterdam, Bremerhaven, Le Havre, New York, Norfolk, Charleston, Savannah — first sailing 27 March 2026 (CMA CGM, 13 Feb 2026)."
+
+  # ---- Gulf of Mexico ------------------------------------------------
+  - name: CMA CGM — Victory Bridge
+    role: ocean carrier
+    legs: Antwerp / Rotterdam → Veracruz
+    routes: [LANE_MX_01]
+    near: BEANR
+    modes: [sea]
+    website: https://www.cma-cgm.com/
+    source: https://www.cma-cgm.com/news/5313/cma-cgm-transatlantic-north-europe-service-update
+    checked: 2026-09-26
+    note: "Southampton, Rotterdam, Antwerp, Bremerhaven, Veracruz, Altamira, Houston, New Orleans (CMA CGM, 13 Feb 2026)."
+
+  - name: Maersk / Hapag-Lloyd — Gemini TA4/AL4
+    role: ocean carriers (Gemini Cooperation)
+    legs: Rotterdam / Antwerp → Veracruz
+    routes: [LANE_MX_01]
+    near: BEANR
+    modes: [sea]
+    website: https://www.hapag-lloyd.com/en/services-information/gemini-cooperation.html
+    source: https://mykn.kuehne-nagel.com/news/article/carrier-services-update-4-22-07-2026
+    checked: 2026-09-26
+    note: "Revised in July 2026: Southampton – Rotterdam – Antwerp – Bremerhaven – Wilhelmshaven – Veracruz – Altamira – Miami (Kuehne+Nagel carrier update)."
+
+  # ---- Suez, Asia and India ----------------------------------------
+  - name: Maersk / Hapag-Lloyd — Gemini AE5
+    role: ocean carriers (Gemini Cooperation)
+    legs: Rotterdam ↔ Ningbo, via Suez
+    routes: [LANE_ASIA_08]
+    near: NLRTM
+    modes: [sea]
+    website: https://www.maersk.com/
+    source: https://blogs.tradlinx.com/maersk-and-hapag-lloyd-move-four-more-gemini-services-back-through-suez/
+    checked: 2026-09-26
+    note: "Qingdao – Ningbo – Tanjung Pelepas – Suez – London – Bremerhaven – Hamburg – Rotterdam – Algeciras – Suez; back through Suez westbound from 21 Sep 2026 (Maersk advisory of 14 Sep). Calls Ningbo, next to Shanghai, not Shanghai itself."
+
+  - name: OOCL / COSCO — Asia–Europe Loop 2 (LL2)
+    role: ocean carriers (Ocean Alliance)
+    legs: Rotterdam ↔ Shanghai
+    routes: [LANE_ASIA_08]
+    near: NLRTM
+    modes: [sea]
+    website: https://www.oocl.com/
+    source: https://www.oocl.com/SiteCollectionDocuments/OOCL/eServices/Sailing%20Schedule%20by%20Service/LL2%20_LT.pdf
+    checked: 2026-09-26
+    note: "Published sailing schedule with Shanghai and Rotterdam calls. Which way round Africa or through Suez depends on the sailing: check the schedule."
+
+  - name: CMA CGM — MEDEX (Med Express)
+    role: ocean carrier
+    legs: Genoa → Suez → Nhava Sheva
+    routes: [LANE_IN_01]
+    near: ITGOA
+    modes: [sea]
+    website: https://www.cma-cgm.com/
+    source: https://www.cma-cgm.com/ebusiness/schedules/line-services/schedules/MEDEX
+    checked: 2026-09-26
+    note: "India–Mediterranean via Suez, calling Nhava Sheva, Mundra, Colombo, Jeddah, Port Said, Malta, Genoa, Fos, Valencia and more; Genoa calls on 31 Aug, 7, 15 and 28 Sep 2026 on the published schedule."
+
+# -------------------------------------------------------------------
+# WHAT IS HAPPENING ON THE CORRIDOR — published, dated, sourced
+# -------------------------------------------------------------------
+# Context a planner should read beside the route, not an event: nobody
+# publishes odds for it, so it carries none. The recorded news feeds are
+# what turn a closure into an event.
+corridor_notes:
+  - routes: [LANE_ASIA_08, LANE_IN_01]
+    date: 2026-09-22
+    text: >
+      Carriers are coming back to Suez unevenly. CMA CGM has run the most
+      transits in 2026, under naval escort (Operation Aspides); MSC partly
+      since 24 August; COSCO/OOCL from 16 September; Gemini is moving AE5,
+      AE11, AE12 and ME2 back from about 19–24 September. Evergreen and the
+      Premier Alliance (ONE, HMM, Yang Ming) still go round the Cape. Two
+      sailings on the same lane can now be two weeks apart in transit time.
+    source: https://blogs.tradlinx.com/asia-europe-services-returning-to-suez-carrier-by-carrier-status/

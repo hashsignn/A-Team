@@ -99,6 +99,33 @@ weather:
     source: assumed
 
 # ===================================================================
+# WEATHER RULES — what a recorded reading at a focus-route place raises
+# ===================================================================
+# Read by engine/ingest/weather.py against Open-Meteo's daily values at every
+# place on the focus routes (config/focus.yaml). One rule, one reading, one
+# threshold, one variable. `kinds` are the node kinds the rule applies to
+# ("any" for all). A spell of consecutive days over a threshold is ONE event.
+#
+# !! EVERY FIGURE BELOW IS ASSUMED !! They are round numbers of the right
+# order — gusts that stop ship-to-shore cranes, seas that stop pilotage, rain
+# that floods a yard — not any terminal's own operating limits. Replace each
+# with the operator's published limit and change `source:` to say where it
+# came from.
+#
+# Units are Open-Meteo's as recorded: m/s for wind, metres for waves, mm for
+# rain, cm for snow, °C for temperature. Daily maxima (and the daily minimum
+# for frost).
+weather_rules:
+  - {id: storm_gusts,  reading: wind_gusts_10m_max, above: 28.0, variable: CLI_STORM,        kinds: [any], severity: severe,   source: assumed, says: "storm-force gusts"}
+  - {id: crane_wind,   reading: wind_gusts_10m_max, above: 20.0, variable: CLI_HIGH_WIND,    kinds: [seaport, inland_port], severity: moderate, source: assumed, says: "gusts above the usual crane limit"}
+  - {id: barge_wind,   reading: wind_speed_10m_max, above: 15.0, variable: CLI_HIGH_WIND,    kinds: [inland_port], severity: minor, source: assumed, says: "wind above the barge restriction"}
+  - {id: sea_state,    reading: wave_height_max,    above: 4.5,  variable: CLI_WAVE_HEIGHT,  kinds: [seaport, chokepoint], severity: moderate, source: assumed, says: "high sea state"}
+  - {id: heavy_rain,   reading: precipitation_sum,  above: 60.0, variable: FOR_FLOOD,        kinds: [any], severity: moderate, source: assumed, says: "rain heavy enough to flood roads and yards"}
+  - {id: heavy_snow,   reading: snowfall_sum,       above: 15.0, variable: CLI_STORM,        kinds: [plant, distribution, inland_port, gauge], severity: minor, source: assumed, says: "heavy snow"}
+  - {id: extreme_heat, reading: temperature_2m_max, above: 40.0, variable: CLI_EXTREME_HEAT, kinds: [any], severity: minor, source: assumed, says: "heat beyond the handling range"}
+  - {id: hard_frost,   reading: temperature_2m_min, below: -10.0, variable: CLI_ICE,         kinds: [plant, distribution, inland_port, gauge], severity: minor, source: assumed, says: "hard frost"}
+
+# ===================================================================
 # PORT CONGESTION (IMF PortWatch)
 # ===================================================================
 port_congestion:

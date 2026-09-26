@@ -30,7 +30,7 @@ function hours(h) {
 // as-of through the URL. A profile read at a different instant would describe
 // a different book of shipments.
 const params = new URLSearchParams(location.search);
-const AS_OF = params.get('as_of') || '2026-09-18T06:00:00+00:00';
+const AS_OF = params.get('as_of') || ((m) => (m && !m.startsWith('__') ? m : '2026-09-18T06:00:00+00:00'))((document.querySelector('meta[name="radar-default-as-of"]') || {}).content);
 const SHIPMENTS = params.get('shipments') || '150';
 
 const state = { profile: null, dirty: new Map() };

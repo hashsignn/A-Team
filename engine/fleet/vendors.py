@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import math
 
+from engine import focus as focus_mod
 from engine.fleet import manifest
 from engine.fleet.assets import index, locate
 from engine.fleet.reroute import recovery
@@ -99,6 +100,37 @@ def partners(context: RunContext) -> list[dict]:
                 "source": "contacts.yaml",
                 "synthetic": "synthetic" in v["name"].lower(),
             })
+
+    # Real operators on the focus routes (focus.yaml): real companies, placed
+    # at the node they serve, reached through their own website. Capacity is
+    # UNKNOWN — nobody publishes it — and the card says so; no phone number or
+    # address is invented for them.
+    for i, o in enumerate(focus_mod.operators(context.config)):
+        node = nodes.get(o.get("near", ""))
+        if node is None:
+            continue
+        modes = [m for m in (o.get("modes") or []) if isinstance(m, str)]
+        radius = max((float(cfg["radius_km"].get(m, 150)) for m in modes), default=150.0)
+        out.append({
+            "id": f"OP_{i}",
+            "name": o["name"],
+            "kind": "carrier" if "sea" in modes else "operator",
+            "channel": "portal",
+            "city": node.name,
+            "lat": node.lat,
+            "lon": node.lon,
+            "modes": modes,
+            "capacity": None,
+            "service_radius_km": radius,
+            "adr_certified": None,
+            "reefer": None,
+            "contact": {"phone": None, "email": None, "portal": o.get("website")},
+            "source": "focus.yaml — checked against a public page",
+            "checked_against": o.get("source"),
+            "checked": o.get("checked"),
+            "note": o.get("note"),
+            "synthetic": False,
+        })
     return out
 
 

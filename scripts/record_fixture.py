@@ -4,8 +4,13 @@
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py gdelt_doc
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py watergauge_kaub
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py --all
+    RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py weather_focus
     RADAR_ALLOW_NETWORK=1 .venv/bin/python scripts/record_fixture.py --all \\
-        --as-of 2026-09-22 --days 60
+        --as-of now --days 60
+
+The last is the one to run: every source, the sixty days up to this hour.
+The board then opens at the recording's instant rather than the demo's
+pinned date.
 
 WHY THIS EXISTS
 ===============
@@ -112,6 +117,11 @@ FIXTURES = ROOT / "data" / "fixtures"
 # Not a catalogue source; see the module docstring.
 GAUGE_KEY = "watergauge_kaub"
 
+# Nor is this: weather at the focus routes' places, read against thresholds
+# by engine/ingest/weather.py. Recorded by name like the gauge; --all
+# includes it.
+WEATHER_KEY = "weather_focus"
+
 RECORDED = "RECORDED FROM THE LIVE SOURCE"
 NOTE = (
     f"{RECORDED} by scripts/record_fixture.py. Real response, "
@@ -128,7 +138,8 @@ PAUSE_S = 6.0
 
 # Sources that may be asked faster. Wikimedia asks only that requests be made
 # one at a time; a second apart is polite and takes sixty days to a minute.
-PAUSE_FOR: dict[str, float] = {"wikipedia_events": 1.0}
+PAUSE_FOR: dict[str, float] = {"wikipedia_events": 1.0, "usgs_quakes": 1.0,
+                               "gdacs": 2.0}
 
 # How long one answer may take while recording. The board keeps a short
 # timeout because a page is waiting on it. A recording is a batch job, and a
@@ -450,7 +461,91 @@ def record_gauge(as_of=None, *, fetch=None) -> int:
     return 0
 
 
+def record_weather(as_of=None, days: float | None = None, *, fetch=None, now=None) -> int:
+    """Record weather and sea state at every place on the focus routes.
+
+    Two requests, each asking for every place at once: the last ``days``
+    observed (60 unless told otherwise) and the next seven forecast. Open-
+    Meteo counts ``past_days`` back from today, so a window ending at an
+    earlier --as-of asks for the gap as well — the board cuts at its own
+    as-of when it reads, and reads no forecast when it is a replay (see
+    engine/ingest/weather.py, "No hindsight").
+
+    Both answers are checked with the parser the board reads them with
+    before either is written.
+    """
+    from engine.clock import Clock  # noqa: PLC0415
+    from engine.config import load_config  # noqa: PLC0415
+    from engine.focus import watch_points  # noqa: PLC0415
+    from engine.ingest import weather  # noqa: PLC0415
+    from engine.ingest.sources.fetch import get_json  # noqa: PLC0415
+
+    points = watch_points(load_config())
+    if not points:
+        FAILED[WEATHER_KEY] = "no focus routes in config/focus.yaml"
+        print(f"  {WEATHER_KEY}: nothing to record — no focus routes", file=sys.stderr)
+        return 1
+    now = now or Clock.wall().as_of
+    span = days if days is not None else weather.PAST_DAYS
+    gap = max(0.0, (now - as_of).total_seconds() / 86400) if as_of is not None else 0.0
+    past = min(92, math.ceil(span + gap))
+    if past < span + gap:
+        print(f"  {WEATHER_KEY}: Open-Meteo reaches back 92 days; the window is "
+              f"cut to that", file=sys.stderr)
+    get = fetch or partial(get_json, timeout=RECORD_TIMEOUT_S)
+    weather_url, marine_url = weather.request_urls(points, past_days=past)
+    sea = [p for p in points if p.marine]
+    print(f"  {WEATHER_KEY}: {len(points)} place(s), {len(sea)} of them at sea — "
+          f"{past} days back and {weather.FORECAST_DAYS} ahead")
+
+    answers = {}
+    for name, url, asked in (("weather", weather_url, points), ("sea", marine_url, sea)):
+        if url is None:
+            continue
+        payload, error = get(url)
+        if payload is None:
+            FAILED[WEATHER_KEY] = f"{name}: {error}"
+            print(f"  {WEATHER_KEY}: FAILED — {name}: {error}; the existing "
+                  f"fixtures were left as they were", file=sys.stderr)
+            return 1
+        blob = {"nodes": [p.node_id for p in asked], "response": payload}
+        try:
+            parsed = weather.parse(blob)
+        except (TypeError, ValueError) as exc:
+            FAILED[WEATHER_KEY] = f"{name}: the answer could not be read ({exc})"
+            print(f"  {WEATHER_KEY}: FAILED — {name}: the answer could not be read "
+                  f"({exc}); nothing was written", file=sys.stderr)
+            return 1
+        answers[name] = (url, asked, blob, parsed)
+
+    for name, fixture in (("weather", weather.WEATHER_FIXTURE), ("sea", weather.MARINE_FIXTURE)):
+        if name not in answers:
+            continue
+        url, asked, blob, parsed = answers[name]
+        days_held = max((len(v) for v in parsed.values()), default=0)
+        size = _write_file(fixture, {
+            "_fixture_note": NOTE,
+            "label": f"RECORDED FROM OPEN-METEO — daily {name}, {past} days observed "
+                     f"and {weather.FORECAST_DAYS} forecast",
+            "source_url": url,
+            "places": [{"node_id": p.node_id, "name": p.name,
+                        "lat": p.marine_lat if name == "sea" else p.lat,
+                        "lon": p.marine_lon if name == "sea" else p.lon,
+                        **({"at": p.marine_name} if name == "sea" and p.marine_name else {})}
+                       for p in asked],
+            **blob,
+        })
+        empty = [n for n, d in parsed.items() if not d]
+        print(f"  {WEATHER_KEY}: wrote {fixture} — {len(asked)} place(s), {days_held} "
+              f"day(s) each, {size:,} bytes"
+              + (f"; no values at {', '.join(empty)}" if empty else ""))
+    return 0
+
+
 def _fixture_name(key: str) -> str:
+    if key == WEATHER_KEY:
+        from engine.ingest import weather  # noqa: PLC0415
+        return weather.WEATHER_FIXTURE
     if key == GAUGE_KEY:
         from engine.ingest import watergauge  # noqa: PLC0415
         return watergauge.FIXTURE_NAME
@@ -539,6 +634,8 @@ def _summary(keys: list[str], manifest: Path | None, whole: bool) -> None:
 def record(key: str, as_of=None, days: float | None = None) -> int:
     if key == GAUGE_KEY:
         return record_gauge(as_of)
+    if key == WEATHER_KEY:
+        return record_weather(as_of, days)
     spec = next((s for s in CATALOG if s.key == key), None)
     if spec is None:
         print(f"  {key}: not in the catalogue", file=sys.stderr)
@@ -612,8 +709,8 @@ def main() -> int:
     parser.add_argument("--all", action="store_true", help="every runnable source")
     parser.add_argument(
         "--as-of", default=None,
-        help="record the window ENDING here (ISO, e.g. 2026-09-22). Only "
-             "sources with an archive honour it; the rest record now.",
+        help="record the window ENDING here (ISO, e.g. 2026-09-22, or 'now'). "
+             "Only sources with an archive honour it; the rest record now.",
     )
     parser.add_argument(
         "--days", type=float, default=None,
@@ -631,7 +728,13 @@ def main() -> int:
     as_of = None
     if args.as_of:
         from engine.clock import Clock  # noqa: PLC0415
-        as_of = Clock.at(args.as_of).as_of
+        if args.as_of.strip().lower() == "now":
+            # To the hour: the board's as-of control works in whole hours,
+            # and a recording that ends at 14:37:12 opens on an instant
+            # nobody can type back in.
+            as_of = Clock.wall().as_of.replace(minute=0, second=0, microsecond=0)
+        else:
+            as_of = Clock.at(args.as_of).as_of
     if args.days is not None and as_of is None:
         print("--days needs --as-of: a span with no end is not a window.",
               file=sys.stderr)
@@ -652,7 +755,7 @@ def main() -> int:
                   "scripts/record_fixture.py --all", file=sys.stderr)
         return 2
 
-    runnable = [s.key for s in CATALOG if s.runnable] + [GAUGE_KEY]
+    runnable = [s.key for s in CATALOG if s.runnable] + [GAUGE_KEY, WEATHER_KEY]
     keys = runnable if args.all else args.keys
     FAILED.clear()
     skipped = [key for key in keys if key in set(args.skip)]
@@ -665,6 +768,7 @@ def main() -> int:
             if spec.runnable:
                 print(f"  {spec.key:22s} {spec.label}")
         print(f"  {GAUGE_KEY:22s} Rhine water level — Kaub (Pegelonline)")
+        print(f"  {WEATHER_KEY:22s} Weather and sea state on the focus routes (Open-Meteo)")
         return 0
 
     if as_of is not None:

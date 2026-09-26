@@ -16,7 +16,7 @@ const $ = (id) => document.getElementById(id);
 
 const params = new URLSearchParams(location.search);
 const ROUTE = params.get('route') || '';
-const AS_OF = params.get('as_of') || '2026-09-18T06:00:00+00:00';
+const AS_OF = params.get('as_of') || ((m) => (m && !m.startsWith('__') ? m : '2026-09-18T06:00:00+00:00'))((document.querySelector('meta[name="radar-default-as-of"]') || {}).content);
 const SHIPMENTS = params.get('shipments') || '150';
 const QS = `as_of=${encodeURIComponent(AS_OF)}&shipments=${encodeURIComponent(SHIPMENTS)}`;
 

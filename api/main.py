@@ -31,6 +31,7 @@ from engine.export import tms as tms_mod
 from engine.export.board import build_board
 from engine.fast.watch import WATCHER
 from engine.ingest import reports as reports_mod
+from engine.ingest.observations import recorded_as_of
 from engine.pipeline import RunContext, RunOptions, run
 from engine.reason import ask as ask_mod
 from engine.reason import llm as llm_mod
@@ -39,7 +40,12 @@ STATIC = Path(__file__).resolve().parent / "static"
 
 # The demo runs at a pinned instant so what you rehearse is what happens on
 # stage. Nothing in engine/ reads the wall clock; the as-of is always explicit.
-DEFAULT_AS_OF = "2026-09-18T06:00:00+00:00"
+#
+# Once there is a recording, the pinned instant is the recording's own: a
+# board recorded this morning opens on this morning. Read once, at start-up —
+# a new recording is picked up by the restart it needs anyway.
+PINNED_AS_OF = "2026-09-18T06:00:00+00:00"
+DEFAULT_AS_OF = recorded_as_of() or PINNED_AS_OF
 
 app = FastAPI(title="Supply Chain Risk Radar", docs_url="/api/docs")
 
@@ -840,6 +846,7 @@ def _asset_version() -> str:
 def _page(filename: str) -> Response:
     html = (STATIC / filename).read_text(encoding="utf-8")
     html = html.replace("__ASSETV__", _asset_version())
+    html = html.replace("__DEFAULT_AS_OF__", DEFAULT_AS_OF)
     return Response(
         content=html,
         media_type="text/html; charset=utf-8",

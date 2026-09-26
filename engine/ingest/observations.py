@@ -134,6 +134,30 @@ def left_out(key: str) -> str | None:
     return None
 
 
+def recorded_as_of() -> str | None:
+    """The instant the recording in the fixture folder ends at, or None.
+
+    The board opens there once there is a recording: a planner opening a
+    board recorded this morning wants this morning, not the demo's pinned
+    date a week earlier with none of the recorded week on it. With no
+    recording (a fresh clone, the tests) the pinned date stands.
+    """
+    try:
+        manifest = load_fixture(RECORDING)
+    except ValueError:
+        return None
+    if not isinstance(manifest, dict):
+        return None
+    for key in ("as_of", "written_at"):
+        value = manifest.get(key)
+        if isinstance(value, str) and value:
+            try:
+                return parse_iso(value).isoformat()
+            except ValueError:
+                continue
+    return None
+
+
 # ---------------------------------------------------------------------
 # Threshold helpers — the deterministic layer's whole job
 # ---------------------------------------------------------------------

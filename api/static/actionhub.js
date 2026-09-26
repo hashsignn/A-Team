@@ -481,9 +481,10 @@
         <div class="vcontact">
           ${c.phone ? `<a href="tel:${esc(c.phone.replace(/\s+/g, ''))}">☎ ${esc(c.phone)}</a>` : ''}
           ${c.email ? `<a href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`Capacity request — ${s.selection.id}`)}">✉ ${esc(c.email)}</a>` : ''}
-          ${c.portal ? `<a href="${esc(c.portal)}" target="_blank" rel="noopener">⇱ Dispatch portal</a>` : ''}
+          ${c.portal && /^https?:\/\//i.test(c.portal) ? `<a href="${esc(c.portal)}" target="_blank" rel="noopener noreferrer">⇱ ${v.checked_against ? 'Website' : 'Dispatch portal'}</a>` : ''}
           ${!c.phone && !c.email && !c.portal ? '<span class="muted">No contact on file.</span>' : ''}
         </div>
+        ${v.checked_against && /^https?:\/\//i.test(v.checked_against) ? `<p class="chart-note">A real operator. ${v.note ? esc(v.note) + ' ' : ''}Checked ${esc(v.checked || '')} against <a href="${esc(v.checked_against)}" target="_blank" rel="noopener noreferrer">its published page</a>; services change, so confirm before booking.</p>` : ''}
         <div class="k muted" style="font-size:10px;letter-spacing:.06em">AVAILABLE NOW</div>
         <div class="vcap">${v.capacity ? `${v.capacity.available} ${esc(v.capacity.unit)}` : 'Not on file'}
           <small>${v.capacity ? ` · snapshot from ${esc(v.source)}` : ` · ${esc(v.source)} carries no capacity — call to confirm`}</small></div>

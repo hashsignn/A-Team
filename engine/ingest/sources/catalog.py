@@ -254,8 +254,13 @@ CATALOG: tuple[SourceSpec, ...] = (
         label="GDACS — global disaster alerts (EU JRC)",
         nature=Nature.REPORT,
         source_tier=1,
-        url="https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
+        # SEARCH, not MAP: MAP answers with what is current and nothing else,
+        # SEARCH takes a date range — the same GeoJSON either way — which is
+        # what lets a recording reach back two months.
+        url="https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH",
         items_path="features",
+        params={"eventlist": "EQ;TC;FL;VO;DR;WF", "alertlevel": "Green;Orange;Red"},
+        window=Window(start_param="fromDate", end_param="toDate", format="date", days=7.0),
         date_format="iso",
         families=("force_majeure", "climate"),
         cost=Cost.FREE,
@@ -353,11 +358,16 @@ CATALOG: tuple[SourceSpec, ...] = (
     # =================================================================
     SourceSpec(
         key="usgs_quakes",
-        label="USGS — earthquakes M4.5+ (24h)",
+        label="USGS — earthquakes M4.5+",
         nature=Nature.INSTRUMENT,
         source_tier=1,
-        url="https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson",
+        # The event query service rather than the 24-hour summary file: the
+        # same GeoJSON, but it takes a time range, so a recording can hold
+        # the last two months and a replay can ask about any day in them.
+        url="https://earthquake.usgs.gov/fdsnws/event/1/query",
         items_path="features",
+        params={"format": "geojson", "minmagnitude": "4.5", "orderby": "time"},
+        window=Window(start_param="starttime", end_param="endtime", format="iso", days=2.0),
         date_format="epoch_ms",
         families=("force_majeure",),
         cost=Cost.FREE,

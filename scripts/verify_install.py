@@ -75,6 +75,9 @@ MARKERS = {
     "Map agent hooks":                ("api/static/mapagent.js", "rankRoutes"),
     "Action Hub split shipment":      ("api/static/actionhub.js", "split-toggle"),
     "Recovery routes engine":         ("engine/fleet/reroute.py", "sea_bypass"),
+    "Five focus routes":              ("api/static/app.js", "focusBadge"),
+    "What is real on a route":        ("api/static/route.js", "renderReal"),
+    "Weather on the focus routes":    ("engine/ingest/weather.py", "assess_weather"),
 }
 
 

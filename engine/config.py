@@ -163,6 +163,7 @@ _FILES = (
     "sources",
     "fast",
     "fleet",
+    "focus",
 )
 
 # sources.yaml is optional: with no file, the built-in free catalogue is
@@ -170,7 +171,10 @@ _FILES = (
 #
 # fleet.yaml is optional for the same reason: engine/fleet/ carries defaults for
 # every key, so a customer overlay written before the map existed still loads.
-_OPTIONAL = {"company_profile", "sources", "fast", "fleet"}
+#
+# focus.yaml is optional too: with no file there are no focus routes, and every
+# route is what it always was — synthetic and labelled so.
+_OPTIONAL = {"company_profile", "sources", "fast", "fleet", "focus"}
 
 
 def load_config(

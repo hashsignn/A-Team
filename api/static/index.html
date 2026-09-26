@@ -2,6 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
+<meta name="radar-default-as-of" content="__DEFAULT_AS_OF__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Supply Chain Risk Radar</title>
 <link rel="stylesheet" href="/styles.css?v=__ASSETV__">
@@ -159,7 +160,11 @@
             </nav>
             <p class="muted" id="panel-list-count"></p>
           </div>
-          <button type="button" class="ctl ctl--mini" id="f-all">All levels</button>
+          <div class="plh-ctl">
+            <button type="button" class="ctl ctl--mini" id="f-focus" aria-pressed="false" hidden
+                    title="Only the five routes held to real data">Focus routes</button>
+            <button type="button" class="ctl ctl--mini" id="f-all">All levels</button>
+          </div>
         </div>
         <div class="rlist" id="rlist" role="list"></div>
         <div class="rlist" id="siglist" hidden></div>
