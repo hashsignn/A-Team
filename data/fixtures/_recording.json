@@ -1,0 +1,41 @@
+{
+ "_note": "Written by scripts/record_fixture.py: every source this recording tried, and whether it was recorded. A source marked recorded=false is left off the board instead of showing its scripted sample beside real data. To put the scripted scenario back, delete this file and copy tests/fixtures/*.json over data/fixtures/.",
+ "as_of": "2026-09-26T23:00:00+00:00",
+ "written_at": "2026-09-26T23:42:05.433542+00:00",
+ "sources": {
+  "autobahn_a3": {
+   "recorded": true
+  },
+  "autobahn_a5": {
+   "recorded": true
+  },
+  "autobahn_a61": {
+   "recorded": true
+  },
+  "cisa_kev": {
+   "recorded": true
+  },
+  "gdacs": {
+   "recorded": true
+  },
+  "gdelt_doc": {
+   "recorded": false,
+   "error": "skipped with --skip"
+  },
+  "open_meteo_marine": {
+   "recorded": true
+  },
+  "usgs_quakes": {
+   "recorded": true
+  },
+  "watergauge_kaub": {
+   "recorded": true
+  },
+  "weather_focus": {
+   "recorded": true
+  },
+  "wikipedia_events": {
+   "recorded": true
+  }
+ }
+}
