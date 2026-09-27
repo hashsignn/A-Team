@@ -1,0 +1,206 @@
+{
+ "schema": 1,
+ "stage": "triage",
+ "entries": {
+  "010ee6403c0d6249f52d659290b06f73": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event 'A3 | Würzburg/Kist - Sandgraben' is related to a river dredging operation in Germany. This type of activity can affect the physical movement of freight by potentially impacting shipping lanes and ports.",
+    "freight_mode": "barge",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:36.811317+00:00"
+  },
+  "08470dda14fb88a479b4ede55b474781": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves fines for eating on public buses and placing feet on seats, which could affect the physical movement of freight. The introduction of such rules can lead to congestion at bus stops or delays in transportation due to passengers being deterred from using certain facilities.",
+    "freight_mode": "barge",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:16.432068+00:00"
+  },
+  "3ba8cc951da452e447f3d0c293ab80e8": {
+   "payload": {
+    "relevant": false,
+    "reason": "The headline 'A3 Baustelleneinrichtung' does not provide any information about physical movement of freight or logistics. It appears to be a technical term related to construction equipment.",
+    "freight_mode": "none",
+    "confidence": 0.9
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:50.278736+00:00"
+  },
+  "422caa3c017b2e275d453d4fda0dbe30": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event 'A3 Fahrbahninstandhaltung' refers to a traffic stoppage on the autobahn (German highway system), which could affect shipping lanes and ports.",
+    "freight_mode": "road",
+    "confidence": 0.9
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:58.333389+00:00"
+  },
+  "4230a8c5274bda6c95c54b2d6ba2ad91": {
+   "payload": {
+    "relevant": false,
+    "reason": "The headline does not provide any information about physical movement of freight or logistics.",
+    "freight_mode": "none",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:48:10.529093+00:00"
+  },
+  "52ff7edfa4be142e49258bfae3c4e139": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves a criminal sexual act against a former production assistant, which is related to the physical movement of freight. The sentence for Harvey Weinstein could potentially affect shipping lanes and ports due to legal consequences.",
+    "freight_mode": "air",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:46:53.650952+00:00"
+  },
+  "5b506b6e76ea6aa83dc42d7dc11f4e08": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves leaders from two countries meeting in person, which could potentially affect the physical movement of freight and ports.",
+    "freight_mode": "air",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:57:01.921485+00:00"
+  },
+  "61299ae8695f44f79f511b53d6e35c2f": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves lawsuits against a theme park ride that caused injuries to riders.",
+    "freight_mode": "air",
+    "confidence": 0.9
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:07.224469+00:00"
+  },
+  "78684ae7a5ba7248b997e09fdd713298": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves a closure of shipping lanes due to a road maintenance issue.",
+    "freight_mode": "road",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:28.216108+00:00"
+  },
+  "8f5964922fa491dfdad9b342da3c7878": {
+   "payload": {
+    "relevant": false,
+    "reason": "The headline 'A3 Grünpflege' does not provide any information about physical movement of freight or logistics. It appears to be a news source for autobahn.de.",
+    "freight_mode": "none",
+    "confidence": 0.5
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:48:02.800594+00:00"
+  },
+  "a97fcf0c19ea20a59c3fe35072d559c2": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event affects the physical movement of freight by closing shipping lanes and ports.",
+    "freight_mode": "rail",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:48:06.631001+00:00"
+  },
+  "a9e0ca32af120a6ea282e77dd9a27b55": {
+   "payload": {
+    "relevant": false,
+    "reason": "The headline mentions 'A3 von Dierdorf (AS) Unterhaltungsarbeiten', which is unrelated to the physical movement of freight or ports. It appears to be about a company's entertainment activities.",
+    "freight_mode": "none",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:48:14.885938+00:00"
+  },
+  "b2743eb2e60f371342e92685175f8f4f": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves a closure at an intersection point (Knotenpunkt) in Appenweier, which could affect shipping lanes and ports.",
+    "freight_mode": "rail",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:20.599377+00:00"
+  },
+  "b747400962f7547f502ffaa4d5ae4f71": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves technological issues affecting flights and airports, which can affect the physical movement of freight.",
+    "freight_mode": "air",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:11.518176+00:00"
+  },
+  "c9b506734dd5ff60a9081984da361b5f": {
+   "payload": {
+    "relevant": false,
+    "reason": "The headline 'A3 | Kelsterbach - Johannespfad' does not provide any information about physical movement of freight or logistics. It appears to be a product code or model number for a vehicle.",
+    "freight_mode": "none",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:41.310865+00:00"
+  },
+  "ca7b3b8446d44e8b9f81ad2f2b6ee210": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event involves foreign ministers from Iran and the United States meeting at an international organization (UN General Assembly), which could potentially affect the physical movement of freight. The talks are mediated by Qatar, indicating a potential impact on shipping lanes or ports.",
+    "freight_mode": "air",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:46:59.064624+00:00"
+  },
+  "cd2657708f6be6dbf48144679b3ab4b0": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event of a bridge being closed affects the physical movement of freight by impacting shipping lanes and ports.",
+    "freight_mode": "road",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:54.095385+00:00"
+  },
+  "f24e18761ca497094e52e5d1584aec5f": {
+   "payload": {
+    "relevant": false,
+    "reason": "The headline does not mention any event that could affect the physical movement of freight or logistics.",
+    "freight_mode": "none",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:45.490639+00:00"
+  },
+  "f7ef6163e0b5700fad788019e0290f17": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event 'A3 | Sandgraben - Würzburg/Kist' is related to a physical movement of freight, specifically the construction of a sand graben in Würzburg.",
+    "freight_mode": "rail",
+    "confidence": 0.95
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:32.388810+00:00"
+  },
+  "f92763afd276225b328b5c00d8adec74": {
+   "payload": {
+    "relevant": true,
+    "reason": "The event is related to a road closure in Weidenfeld and Koblenz.",
+    "freight_mode": "road",
+    "confidence": 1.0
+   },
+   "model": "qwen2.5:1.5b-instruct",
+   "recorded_at": "2026-09-27T02:47:24.242372+00:00"
+  }
+ }
+}
