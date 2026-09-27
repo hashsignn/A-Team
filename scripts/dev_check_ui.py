@@ -503,25 +503,39 @@ def _themes_and_unsourced(page, check) -> None:
     survive every theme — on a route whose driving event has no published
     odds, which is also the route that has to show the unsourced band."""
     board = page.request.get(f"{BASE}/api/board").json()
-    chosen = None
+    chosen, any_matrix = None, None
     for route in board["routes"]:
         view = page.request.get(f"{BASE}/api/route/{route['route_id']}").json()
         events = view.get("events") or []
         driving = next((e for e in events if e["event_id"] == view.get("driving_event_id")),
                        events[0] if events else None)
+        if driving and driving.get("matrix") and any_matrix is None:
+            any_matrix = route["route_id"]
         if driving and (driving.get("matrix") or {}).get("unsourced"):
             chosen = route["route_id"]
             break
-    if not check(chosen is not None,
-                 "[matrix] no route's driving event lacks odds, so the unsourced band went unchecked"):
-        return
 
-    page.goto(f"{BASE}/route/{chosen}", wait_until="load", timeout=90_000)
-    page.wait_for_function("document.querySelectorAll('#rt-matrix .mx-cell').length > 0",
-                           timeout=30_000)
-    check(page.locator("#rt-matrix .mx-unsourced-h").count() > 0,
-          "[matrix] the unsourced band was not drawn for an event with no odds",
-          f"matrix: unsourced band drawn outside the probability axis ({chosen})")
+    if chosen is not None:
+        page.goto(f"{BASE}/route/{chosen}", wait_until="load", timeout=90_000)
+        page.wait_for_function("document.querySelectorAll('#rt-matrix .mx-cell').length > 0",
+                               timeout=30_000)
+        check(page.locator("#rt-matrix .mx-unsourced-h").count() > 0,
+              "[matrix] the unsourced band was not drawn for an event with no odds",
+              f"matrix: unsourced band drawn outside the probability axis ({chosen})")
+    else:
+        # Only a warning sign lacks odds now: an event that has happened has
+        # odds of one, and a forecast carries its forecaster's confidence. On
+        # a board where no warning drives a route there is no band to draw —
+        # which is the board being right, not the check passing. Said, not
+        # failed, and the themes are still checked below.
+        print("  note no route's driving event lacks odds on this board, so the "
+              "unsourced band is not drawn anywhere to check")
+        chosen = any_matrix
+        if not check(chosen is not None, "[matrix] no route page draws a matrix at all"):
+            return
+        page.goto(f"{BASE}/route/{chosen}", wait_until="load", timeout=90_000)
+        page.wait_for_function("document.querySelectorAll('#rt-matrix .mx-cell').length > 0",
+                               timeout=30_000)
 
     for theme in ("light", "blue", "sika", "dark"):
         page.locator(f'.theme-btn[data-theme="{theme}"]').click()

@@ -32,7 +32,11 @@ simulation:
 cost:
   components:
     contractual_penalty:
-      enabled: true
+      # OFF: Sika's contracts carry no per-day delay penalty (team answer,
+      # 2026-09-27, README open question 1). The cost of lateness is then
+      # expediting plus customer impact below — the case this model was built
+      # to survive. Set true if a contract turns out to have one.
+      enabled: false
       # CHF per day late, taken from the shipment record where present.
       source: shipment.sla_penalty_per_day
 

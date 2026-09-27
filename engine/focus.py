@@ -58,6 +58,10 @@ class FocusRoute:
     why: str = ""
     operators: tuple[dict, ...] = field(default_factory=tuple)
     notes: tuple[dict, ...] = field(default_factory=tuple)
+    # Where the route starts and which port it leaves by, each with the public
+    # source it was chosen from: the export names neither.
+    origin: dict = field(default_factory=dict)
+    port: dict = field(default_factory=dict)
 
 
 def _plain(entry: dict) -> dict:
@@ -103,6 +107,8 @@ def focus_routes(config: Config) -> dict[str, FocusRoute]:
             why=" ".join(str(entry.get("why", "")).split()),
             operators=tuple(o for o in operators if lane_id in (o.get("routes") or [])),
             notes=tuple(n for n in notes if lane_id in (n.get("routes") or [])),
+            origin=_plain(entry["origin"]) if isinstance(entry.get("origin"), dict) else {},
+            port=_plain(entry["port"]) if isinstance(entry.get("port"), dict) else {},
         )
     return out
 

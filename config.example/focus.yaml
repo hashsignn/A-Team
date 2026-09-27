@@ -43,29 +43,101 @@ focus_routes:
   - lane: LANE_US_04
     sika_flow: DE_US
     why: >
-      Rail to Rotterdam, then the North Atlantic to Norfolk: the North Sea
-      ports and Atlantic storms.
+      Rail from the Kornwestheim terminal next to Sika's Stuttgart site to
+      Rotterdam — the cheapest way to the port by far — then the North
+      Atlantic to Norfolk.
+    origin:
+      site: "Sika Deutschland, Stuttgart — head office, research centre and production"
+      source: https://deu.sika.com/de/ueber-sika/wie-sie-uns-finden/standorte.html
+      basis: >-
+        Sika's export names the supplying company by code, never by place.
+        Stuttgart is Sika Deutschland's main production site; Bad Urach is the
+        other.
+    port:
+      name: Rotterdam
+      basis: "The largest North Sea port, with a rail shuttle from Kornwestheim."
+      source: https://www.railfreight.com/business/2018/01/05/hupac-launches-rotterdam-stuttgart-shuttle/
 
   - lane: LANE_ASIA_08
     sika_flow: CH_CN
     why: >
-      The route that crosses the most risk: Rhine barge past Kaub,
-      Rotterdam, then Suez, the Red Sea and Malacca.
+      The cheapest way from Düdingen to Rotterdam is the Rhine barge from
+      Basel, past Kaub — and it is the one leg low water takes away. Then
+      Suez, the Red Sea and Malacca.
+    origin:
+      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
+      basis: >-
+        Sika's export names the supplying company by code, never by place. Sika
+        presents Düdingen as the plant delivering "to the world": over 40,000 t
+        of adhesive and 16 million m² of membrane a year (2018). Sarnen, the
+        company's other site, is the alternative.
+    port:
+      name: Rotterdam
+      basis: >-
+        Swiss exports usually transit through North Sea ports, secondarily
+        through Mediterranean ones; Rotterdam is the Rhine's port.
+      source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
 
   - lane: LANE_US_01
     sika_flow: CH_US
     why: >
-      Swiss exports to the US: road to Antwerp, then New York.
+      Road to Basel, the Schweizerzug to Antwerp — as cheap as the barge and
+      two days faster — then New York.
+    origin:
+      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
+      basis: >-
+        Sika's export names the supplying company by code, never by place. Sika
+        presents Düdingen as the plant delivering "to the world": over 40,000 t
+        of adhesive and 16 million m² of membrane a year (2018). Sarnen, the
+        company's other site, is the alternative.
+    port:
+      name: Antwerp
+      basis: >-
+        Swiss exports usually transit through North Sea ports; Antwerp has a
+        direct rail link to Basel and Zurich.
+      source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
 
   - lane: LANE_MX_01
     sika_flow: CH_MX
     why: >
-      Antwerp to Veracruz: the Gulf of Mexico in hurricane season.
+      Road to Basel, rail to Antwerp, then the Gulf of Mexico to Veracruz in
+      hurricane season.
+    origin:
+      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
+      basis: >-
+        Sika's export names the supplying company by code, never by place. Sika
+        presents Düdingen as the plant delivering "to the world": over 40,000 t
+        of adhesive and 16 million m² of membrane a year (2018). Sarnen, the
+        company's other site, is the alternative.
+    port:
+      name: Antwerp
+      basis: >-
+        Swiss exports usually transit through North Sea ports; Antwerp has a
+        direct rail link to Basel and Zurich.
+      source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
 
   - lane: LANE_IN_01
     sika_flow: CH_IN
     why: >
-      Over the Alps to Genoa, then Suez and the Arabian Sea to Nhava Sheva.
+      Road to Basel, the direct train to Genoa — cheaper than trucking over
+      the Simplon — then Suez and the Arabian Sea to Nhava Sheva.
+    origin:
+      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
+      basis: >-
+        Sika's export names the supplying company by code, never by place. Sika
+        presents Düdingen as the plant delivering "to the world": over 40,000 t
+        of adhesive and 16 million m² of membrane a year (2018). Sarnen, the
+        company's other site, is the alternative.
+    port:
+      name: Genoa
+      basis: >-
+        Mediterranean ports are the secondary gateway for Swiss exports, and
+        the shorter sailing to India through Suez.
+      source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
 
 # Where sea state is read for a place whose own coordinates are on land.
 # The wave model has no value on a quay, a canal or an upper bay, so a port is
@@ -122,13 +194,35 @@ operators:
   - name: OOCL — Basel inland services
     role: ocean carrier, inland haulage from Basel
     legs: Basel → Rotterdam (rail or barge) / Antwerp (rail)
-    routes: [LANE_ASIA_08]
+    routes: [LANE_ASIA_08, LANE_US_01, LANE_MX_01]
     near: CHBSL
     modes: [barge, rail]
     website: https://www.oocl.com/
     source: https://www.oocl.com/switzerland/eng/localinformation/serviceprofile
     checked: 2026-09-26
     note: "Published transit from Basel: Rotterdam in 2 days by rail or 4 by barge (Mon/Wed/Fri); Antwerp in 3 days by rail."
+
+  - name: Swissterminal — Schweizerzug
+    role: container rail, Switzerland ↔ Antwerp
+    legs: Basel-Frenkendorf / Zurich-Niederglatt → Antwerp
+    routes: [LANE_US_01, LANE_MX_01]
+    near: CHBSL
+    modes: [rail]
+    website: https://www.swissterminal.com/en/
+    source: https://www.swissterminal.com/tag/container/
+    checked: 2026-09-27
+    note: "The Schweizerzug links the port of Antwerp directly with Frenkendorf near Basel and Niederglatt near Zurich (Swissterminal). The rail leg these two routes are drawn on: it prices the same as the barge and is two days faster."
+
+  - name: PSA Italy / Swissterminal — Genoa rail link
+    role: container rail, Switzerland ↔ Genoa
+    legs: Basel-Frenkendorf → Genoa-Pra'
+    routes: [LANE_IN_01]
+    near: CHBSL
+    modes: [rail]
+    website: https://www.psaitaly.com/en/
+    source: https://www.swissterminal.com/en/new-direct-service-to-genoa/
+    checked: 2026-09-27
+    note: "Export cut-off 17:00 on Mondays, Wednesdays and Fridays in Frenkendorf, in Genoa at 11:00 the next day (Swissterminal; PSA Italy announced it as the first direct rail link between Genoa and Switzerland). Cheaper than trucking over the Simplon."
 
   # ---- rail from Stuttgart ------------------------------------------
   - name: Hupac — Kornwestheim–Rotterdam shuttle

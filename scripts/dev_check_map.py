@@ -123,12 +123,31 @@ def main() -> int:
               "compass resets bearing to north")
 
         # ---- a real click on a red asset ----------------------------------
-        target = page.evaluate("""(() => { const m = window.__fleetmap;
+        # At the opening zoom the disrupted assets may all sit inside donut
+        # clusters, with no single icon to click. A planner zooms in on one,
+        # so the checker does too: past the zoom where clusters break up.
+        find_icon = """(() => { const m = window.__fleetmap;
             const fs = m.queryRenderedFeatures({layers: ['asset-icons']});
             const f = fs.find(x => x.properties.status === 'red') || fs.find(x => x.properties.status === 'yellow');
             if (!f) return null;
             const p = m.project(f.geometry.coordinates), r = m.getContainer().getBoundingClientRect();
-            return { x: r.left + p.x, y: r.top + p.y, id: f.properties.id }; })()""")
+            return { x: r.left + p.x, y: r.top + p.y, id: f.properties.id }; })()"""
+        target = page.evaluate(find_icon)
+        if target is None:
+            zoomed = page.evaluate("""(() => { const s = MapAgent.getState();
+                const a = MapStore.select.visibleAssets(s).find(x => x.status === 'red')
+                       || MapStore.select.visibleAssets(s).find(x => x.status === 'yellow');
+                if (!a) return null;
+                window.__fleetmap.jumpTo({center: [a.lon, a.lat], zoom: 8});
+                return a.id; })()""")
+            if zoomed:
+                page.wait_for_function("window.__fleetmap.loaded() && !window.__fleetmap.isMoving()",
+                                       timeout=15_000)
+                page.wait_for_timeout(1_200)
+                target = page.evaluate(find_icon)
+                if target:
+                    print(f"  note every disrupted asset was clustered at the opening zoom; "
+                          f"zoomed in on {zoomed} to click one")
         if not check(target is not None, "[click] no red or yellow icon rendered to click"):
             browser.close()
             return _report(errors)

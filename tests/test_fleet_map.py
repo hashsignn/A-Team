@@ -31,7 +31,10 @@ LATER = Clock.at("2026-09-24T12:00:00+00:00")
 
 @pytest.fixture(scope="module")
 def context():
-    return run(clock=AS_OF, config=load_config(), options=RunOptions(shipment_count=150))
+    # 220, the book the reasoning recorder uses: large enough that it holds
+    # the cases the tests below need to find (a dangerous-goods consignment
+    # in trouble, a partner without ADR) whatever lane edits reshuffle.
+    return run(clock=AS_OF, config=load_config(), options=RunOptions(shipment_count=220))
 
 
 @pytest.fixture(scope="module")
@@ -140,8 +143,24 @@ def test_an_asset_sits_on_the_line_it_is_travelling(fleet, context):
     assert checked > 5
 
 
-def test_modes_come_from_the_current_leg(fleet):
-    assert {a["mode"] for a in _on_map(fleet)} >= {"sea", "road", "barge"}
+def test_modes_come_from_the_current_leg(fleet, context):
+    """A vehicle's mode is the leg it is on now, not the lane's headline: a
+    Swiss export is a truck to Basel, then a train or a barge, then a ship.
+    (This used to require sea, road and barge on the map by name — true only
+    for as long as the lane file happened to put a barge in transit then.)"""
+    by_id = {s.shipment_id: s for s in context.shipments}
+    checked = 0
+    for a in _on_map(fleet):
+        if a["phase"] != "in_transit":
+            continue
+        leg = next((lg for lg in by_id[a["id"]].legs
+                    if lg.planned_depart <= context.clock.as_of < lg.planned_arrive), None)
+        if leg is None:
+            continue
+        assert a["mode"] == leg.mode.value, a["id"]
+        checked += 1
+    assert checked > 5
+    assert len({a["mode"] for a in _on_map(fleet)}) >= 3
 
 
 # =====================================================================

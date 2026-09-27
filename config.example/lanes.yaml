@@ -282,13 +282,19 @@ lanes:
   # EU → US
   # =================================================================
   - id: LANE_US_01
-    name: Düdingen → Antwerp → New York
+    name: Düdingen → Basel → Antwerp → New York
     focus: eu_us
+    # Pre-carriage chosen by price: engine/fast/precarriage.py, docs/ROUTES.md.
     legs:
       - from: SIKA_DUD
-        to: BEANR
+        to: CHBSL
         mode: road
-        transit_hours: 10
+        transit_hours: 11
+        buffer_hours: 6
+      - from: CHBSL
+        to: BEANR
+        mode: rail
+        transit_hours: 24
         buffer_hours: 12
       - from: BEANR
         to: USNYC
@@ -409,14 +415,20 @@ lanes:
   # nothing else, so these are declared and the inputs panel says so.
   # =================================================================
   - id: LANE_MX_01
-    name: Düdingen → Antwerp → Veracruz
+    name: Düdingen → Basel → Antwerp → Veracruz
     focus: eu_latam
+    # Pre-carriage chosen by price: engine/fast/precarriage.py, docs/ROUTES.md.
     legs:
       - from: SIKA_DUD
-        to: BEANR
+        to: CHBSL
         mode: road
-        transit_hours: 27
+        transit_hours: 11
         buffer_hours: 6
+      - from: CHBSL
+        to: BEANR
+        mode: rail
+        transit_hours: 24
+        buffer_hours: 12
       - from: BEANR
         to: MXVER
         mode: sea
@@ -424,14 +436,20 @@ lanes:
         buffer_hours: 48
 
   - id: LANE_IN_01
-    name: Düdingen → Genoa → Suez → Nhava Sheva
+    name: Düdingen → Basel → Genoa → Suez → Nhava Sheva
     focus: eu_india
+    # Pre-carriage chosen by price: engine/fast/precarriage.py, docs/ROUTES.md.
     legs:
       - from: SIKA_DUD
-        to: ITGOA
+        to: CHBSL
         mode: road
-        transit_hours: 23
+        transit_hours: 11
         buffer_hours: 6
+      - from: CHBSL
+        to: ITGOA
+        mode: rail
+        transit_hours: 18
+        buffer_hours: 12
       - from: ITGOA
         to: CHOKE_SUEZ
         mode: sea

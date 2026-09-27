@@ -298,6 +298,9 @@ def _real_data(lane: dict, context: RunContext) -> dict:
     volume = focus_mod.flow_volume(route, flows_mod.load())
     return {
         "focus": True,
+        "origin": dict(route.origin),
+        "port": dict(route.port),
+        "precarriage": _precarriage(lane, context),
         "flow": route.sika_flow,
         # Read from the gitignored flow file on this machine, or None.
         "flow_documents": volume,
@@ -309,9 +312,46 @@ def _real_data(lane: dict, context: RunContext) -> dict:
         "notes": [dict(n) for n in route.notes],
         # What stays assumed on every route, focus or not: the export does not
         # carry it. Said on the card so "real data" is never read as "all of it".
-        "assumed": ["which ports and mode Sika books", "consignment values",
-                    "promised dates", "capacity and price of the operators"],
+        "assumed": ["the site and port (chosen from public sources, not confirmed by Sika)",
+                    "consignment values", "promised dates",
+                    "capacity and price of the operators"],
     }
+
+
+def _precarriage(lane: dict, context: RunContext) -> dict | None:
+    """How the freight reaches its port, priced (engine/fast/precarriage.py):
+    every chain, the one the route is drawn on, and — when the board has
+    recorded a low-water derate at Kaub — the same chains at today's
+    surcharge, because the cheapest way to the sea is the one the Rhine
+    takes away."""
+    from engine.fast import precarriage  # noqa: PLC0415
+
+    gateway = precarriage.for_lane(context.config, lane["id"])
+    if gateway is None:
+        return None
+    normal = precarriage.compare(gateway, context.config, context.network)
+    chosen = precarriage.choose(normal, context.config)
+    port = gateway.get("port")
+    out = {
+        "port": port,
+        "port_name": context.network.node(port).name if port in context.network.nodes else port,
+        "chains": [c.as_dict() for c in normal],
+        "chosen": chosen.id if chosen else None,
+        "today": None,
+    }
+    kaub = [e for e in context.events
+            if "GAUGE_KAUB" in e.node_ids and "WAT_LOW_WATER" in e.active_variables]
+    surcharge = max((e.cost_multiplier for e in kaub), default=1.0)
+    if surcharge > 1.0 and any(c.via for c in normal):
+        today = precarriage.compare(gateway, context.config, context.network, surcharge)
+        best = precarriage.choose(today, context.config)
+        out["today"] = {
+            "because": kaub[0].title,
+            "surcharge": surcharge,
+            "chains": [c.as_dict() for c in today],
+            "chosen": best.id if best else None,
+        }
+    return out
 
 
 def _conditions(lane: dict, context: RunContext) -> list[dict]:

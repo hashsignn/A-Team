@@ -243,6 +243,48 @@ function readings(values) {
   return parts.length ? parts.join(' · ') : '—';
 }
 
+/* How the freight reaches its port, priced (engine/fast/precarriage.py).
+ * One row per chain; the route is drawn on the chosen one. When the board
+ * has a low-water derate at Kaub, the same chains at today's surcharge. */
+const CHF = (n) => `CHF ${Math.round(n).toLocaleString('en-CH')}`;
+
+function evidence(label, e) {
+  if (!e || !(e.site || e.name)) return '';
+  const url = safeUrl(e.source);
+  return `<p><b>${esc(label)}:</b> ${esc(e.site || e.name)}. <span class="muted">${esc(e.basis || '')}
+    ${url ? ` <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}</span></p>`;
+}
+
+function precarriageHTML(pre) {
+  if (!pre || !(pre.chains || []).length) return '';
+  const today = pre.today;
+  const todayCost = {};
+  for (const c of (today && today.chains) || []) todayCost[c.id] = c.cost_chf;
+  const rows = pre.chains.map((c) => `
+    <tr class="${c.id === pre.chosen ? 'is-chosen' : ''}">
+      <td>${esc(c.id)}${c.id === pre.chosen ? ' <span class="muted">— drawn on this route</span>' : ''}</td>
+      <td class="num">${CHF(c.cost_chf)}</td>
+      <td class="num">${Math.round(c.hours)} h</td>
+      ${today ? `<td class="num">${todayCost[c.id] !== undefined ? CHF(todayCost[c.id]) : '—'}</td>` : ''}
+    </tr>`).join('');
+  const switchNote = today && today.chosen && today.chosen !== pre.chosen
+    ? `<p class="rt-pre-switch">At today's Kaub reading the cheapest is <b>${esc(today.chosen)}</b>:
+         ${esc(today.because)} — barge freight ×${today.surcharge}.</p>`
+    : '';
+  return `
+    <h3>How the freight reaches ${esc(pre.port_name || pre.port || 'the port')}</h3>
+    <table class="rt-pre">
+      <thead><tr><th>chain</th><th class="num">per container</th><th class="num">time</th>
+        ${today ? '<th class="num">at today\'s Kaub</th>' : ''}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${switchNote}
+    <p class="muted">Priced from published rates: ASNAV operator costs per tonne-km, the Swiss
+      heavy-vehicle fee, German and Italian tolls, a transfer per change of mode. The cheapest
+      is kept unless another is within 5% and faster. Sika's export does not say which mode it
+      books; this is what a forwarder would quote.</p>`;
+}
+
 function renderReal(v) {
   const d = v.real_data || {};
   const block = $('rt-real-block');
@@ -250,6 +292,7 @@ function renderReal(v) {
   block.hidden = false;
   $('rt-real-note').textContent = `${d.real} of ${d.of} sources real at this as-of`;
 
+  const chosen = `${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${precarriageHTML(d.precarriage)}`;
   const volume = d.flow_documents != null
     ? `<p class="muted">Customer export, this machine only: ${Number(d.flow_documents).toLocaleString('en-CH')} documents on ${esc((d.flow || '').replace('_', ' → '))}.</p>`
     : '';
@@ -288,6 +331,7 @@ function renderReal(v) {
 
   $('rt-real').innerHTML = `
     ${d.why ? `<p>${esc(d.why)}</p>` : ''}
+    ${chosen}
     ${volume}
     <div class="rt-real-grid">
       <div>

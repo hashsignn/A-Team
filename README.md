@@ -342,6 +342,15 @@ posture is not a matrix.
 
 ---
 
+## Where the focus routes start, and how they reach the sea
+
+Sika's export names no site, port or mode, so each was chosen from public
+sources and the mode by price: Düdingen and Stuttgart, the North Sea ports
+(Genoa for India), and truck + barge or truck + rail by a cost simulation at
+published rates. See [`docs/ROUTES.md`](docs/ROUTES.md). The cheapest way
+from Switzerland to Rotterdam is the Rhine barge — until Kaub is low, when
+rail wins, and the route page says so.
+
 ## How risk is judged
 
 Every event is sorted by **what is uncertain about it**, and each question
@@ -1643,9 +1652,11 @@ Onboarding a new customer is a profile swap — that is true here, not a claim.
 
 ## Open questions for Sika
 
-1. Do your contracts actually carry per-day delay penalties, or is the real cost
-   expediting plus customer escalation? (The cost model has three components so
-   it survives either answer, but this decides which one carries the weight.)
+1. ~~Do your contracts actually carry per-day delay penalties?~~ **Answered
+   (team, 2026-09-27): no.** The per-day penalty component is off
+   (`scoring.yaml → cost.components.contractual_penalty`); the cost of
+   lateness is expediting plus customer impact, the case the three-part model
+   was built to survive.
 2. Would you pre-agree a convene threshold in calm conditions?
 3. Does the shipment data include actual vs. planned arrival dates, or only
    lanes and volumes? (Decides whether the hindcast produces a *measured*

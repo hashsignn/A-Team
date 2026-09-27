@@ -41,7 +41,10 @@ def config():
 
 @pytest.fixture(scope="module")
 def context(config):
-    return run(clock=AS_OF, config=config, options=RunOptions(shipment_count=150))
+    # 220, the book the reasoning recorder uses. At 150 the Rhine lane can
+    # draw no consignment a reroute still pays for, and the gate below then
+    # has nothing to lock — which tests the book, not the gate.
+    return run(clock=AS_OF, config=config, options=RunOptions(shipment_count=220))
 
 
 @pytest.fixture(scope="module")

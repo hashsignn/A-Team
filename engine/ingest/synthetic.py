@@ -73,7 +73,8 @@ def generate_shipments(
     with planned ranked lower — the 48-hour lead-time value mostly lives in
     shipments that have not left yet.
     """
-    rng = random.Random(seed if seed is not None else int(clock.as_of.timestamp()))
+    base = seed if seed is not None else int(clock.as_of.timestamp())
+    rng = random.Random(base)
     lanes = config.lanes
     shipments: list[Shipment] = []
 
@@ -97,7 +98,13 @@ def generate_shipments(
 
     for i in range(count):
         lane = rng.choices(lanes, weights=weights, k=1)[0]
-        shipment = _build_one(lane, rng, clock, index=i, season=season)
+        # Each consignment draws its details from its own stream. With one
+        # stream for the whole book, a lane given one more leg consumed one
+        # more draw per consignment and reshuffled every lane generated after
+        # it: routing Düdingen–Antwerp by rail changed the Rhine lane's
+        # deadlines. Now a lane edit changes that lane's consignments only.
+        own = random.Random(f"{base}:{i}")
+        shipment = _build_one(lane, own, clock, index=i, season=season)
         shipments.append(shipment)
 
     return shipments

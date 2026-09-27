@@ -66,6 +66,97 @@ transit:
     default:      {value: 6,  source: assumed}
 
 # -------------------------------------------------------------------
+# PRE-CARRIAGE — how a container reaches the seaport
+# -------------------------------------------------------------------
+# Sika's export says which country ships to which and nothing about how the
+# freight reaches its port: there is no mode column. So every realistic chain
+# from the plant to the gateway port is priced with published figures, and
+# the cheapest is the route the board draws — what a forwarder quoting the
+# pre-carriage would do. engine/fast/precarriage.py does the sums;
+# `scripts/simulate_precarriage.py` prints them, docs/ROUTES.md keeps them.
+precarriage:
+  payload_t: {value: 18, source: assumed, note: "a 40-foot container of packed chemicals"}
+  gross_t: {value: 40, source: "the 40 t limit for an articulated truck in Switzerland and Germany"}
+  # Real road distance over great-circle distance.
+  circuity:
+    value: 1.46
+    source: >-
+      Ballou, Rahardja and Sakai (2002), Selected country circuity factors for
+      road travel distance estimation, Transportation Research Part A 36(9):
+      the average for Europe. Applied to rail as well (assumed).
+  # Operator cost per tonne-km under Swiss conditions: fuel or power, staff,
+  # depreciation, insurance, maintenance. Tolls are added separately below.
+  chf_per_tkm:
+    road:  {value: 0.117, source: "ASNAV, Transportkostenvergleich Strasse–Schiene–Wasser (2021), Anhang 1"}
+    rail:  {value: 0.026, source: "ASNAV (2021), Anhang 1"}
+    barge: {value: 0.019, source: "ASNAV (2021), Anhang 1, including locks"}
+  swiss_fee_chf_per_tkm: {value: 0.0239, source: "BAZG: LSVA for a Euro 6 truck, 2.39 Rp/tkm (2026), on the gross weight"}
+  german_toll_eur_per_km: {value: 0.348, source: "Toll Collect: Euro VI, over 18 t, 5+ axles, CO2 class 1, since 1 July 2024"}
+  italian_toll_eur_per_km: {value: 0.19034, source: "Autostrade per l'Italia: class 5 (5+ axles), plain-terrain rate (2026)"}
+  eur_chf: {value: 0.94, source: assumed}
+  # Within this fraction of the cheapest, costs are a tie at the precision of
+  # the rates above, and the faster chain wins: two days less freight on the
+  # water is worth more than a rounding difference.
+  tie_fraction: {value: 0.05, source: assumed}
+  # Places a chain passes that are not nodes on the board.
+  points:
+    KORNWESTHEIM: {lat: 48.87, lon: 9.18, name: "Kornwestheim rail terminal (DUSS), 6 km from the Stuttgart site"}
+    MANNHEIM: {lat: 49.49, lon: 8.46, name: "Mannheim Rhine port"}
+  # Every chain priced, per origin and gateway port. `km` overrides the
+  # geometry where a river is involved: Rhine kilometres, not a sketch.
+  # `swiss_km` / `german_km` are the tolled part of a road leg, estimated
+  # from the motorway route; `all` means the whole leg.
+  gateways:
+    - origin: SIKA_DUD
+      port: NLRTM
+      lanes: [LANE_ASIA_08]
+      chains:
+        - id: truck
+          legs: [{from: SIKA_DUD, to: NLRTM, mode: road, swiss_km: 130, german_km: 520}]
+        - id: truck + barge
+          legs: [{from: SIKA_DUD, to: CHBSL, mode: road, swiss_km: all},
+                 {from: CHBSL, to: NLRTM, mode: barge, km: 870, via: GAUGE_KAUB}]
+        - id: truck + rail
+          legs: [{from: SIKA_DUD, to: CHBSL, mode: road, swiss_km: all},
+                 {from: CHBSL, to: NLRTM, mode: rail}]
+    - origin: SIKA_DUD
+      port: BEANR
+      lanes: [LANE_US_01, LANE_MX_01]
+      chains:
+        - id: truck
+          legs: [{from: SIKA_DUD, to: BEANR, mode: road, swiss_km: 130, german_km: 440}]
+        - id: truck + barge
+          legs: [{from: SIKA_DUD, to: CHBSL, mode: road, swiss_km: all},
+                 {from: CHBSL, to: BEANR, mode: barge, km: 900, via: GAUGE_KAUB}]
+        - id: truck + rail
+          note: "Swissterminal's Schweizerzug, Antwerp to Basel-Frenkendorf and Zurich-Niederglatt"
+          legs: [{from: SIKA_DUD, to: CHBSL, mode: road, swiss_km: all},
+                 {from: CHBSL, to: BEANR, mode: rail}]
+    - origin: SIKA_DUD
+      port: ITGOA
+      lanes: [LANE_IN_01]
+      chains:
+        - id: truck
+          note: "over the Simplon, then the A26 to Genoa"
+          legs: [{from: SIKA_DUD, to: ITGOA, mode: road, swiss_km: 150, italian_km: 220}]
+        - id: truck + rail
+          note: "PSA and Swissterminal: Frenkendorf to Genoa-Pra', 3 a week, next-day arrival"
+          legs: [{from: SIKA_DUD, to: CHBSL, mode: road, swiss_km: all},
+                 {from: CHBSL, to: ITGOA, mode: rail}]
+    - origin: SIKA_STU
+      port: NLRTM
+      lanes: [LANE_US_04]
+      chains:
+        - id: truck
+          legs: [{from: SIKA_STU, to: NLRTM, mode: road, german_km: 470}]
+        - id: truck + rail
+          legs: [{from: SIKA_STU, to: KORNWESTHEIM, mode: road, german_km: 0},
+                 {from: KORNWESTHEIM, to: NLRTM, mode: rail}]
+        - id: truck + barge
+          legs: [{from: SIKA_STU, to: MANNHEIM, mode: road, german_km: all},
+                 {from: MANNHEIM, to: NLRTM, mode: barge, km: 610, via: GAUGE_KAUB}]
+
+# -------------------------------------------------------------------
 # THE CONTINGENCY SEARCH
 # -------------------------------------------------------------------
 contingency:
