@@ -532,3 +532,97 @@ def test_weights_that_are_not_numbers_weigh_nothing(board, context, fleet):
     routes = reroute.recovery(board, context, a["id"],
                               weights={"time": "fast", "cost": None, "risk": 1})
     assert routes["weights"] == {"time": 0.0, "cost": 0.0, "risk": 1.0}
+
+
+# =====================================================================
+# CO2e — GLEC / ISO 14083, a separate KPI
+# =====================================================================
+
+
+def test_the_glec_arithmetic_on_the_rhine_example():
+    """20 t over 500 km is 10,000 tonne-km. Barge 390 kg, truck 830 kg,
+    electric rail 200 kg — the low-water story in three numbers."""
+    from engine.fleet import emissions
+
+    cfg = settings(load_config())
+    assert emissions.co2e_kg(cfg, [("barge", 500.0)], 20.0) == pytest.approx(390.0)
+    assert emissions.co2e_kg(cfg, [("road", 500.0)], 20.0) == pytest.approx(830.0)
+    assert emissions.co2e_kg(cfg, [("rail", 500.0)], 20.0) == pytest.approx(200.0)
+    assert emissions.provenance(cfg)["indicative"] is True
+    assert "indicative" in emissions.provenance(cfg)["source"]
+
+
+def test_every_option_carries_co2e_and_its_delta_against_the_plan(board, context, fleet):
+    _, routes = _disrupted_with_routes(board, context, fleet)
+    o = routes["original"]
+    assert o["co2e_kg"] > 0 and routes["carbon"]["source"]
+    for c in routes["candidates"]:
+        assert c["co2e_kg"] > 0
+        assert c["delta"]["co2e_kg"] == pytest.approx(c["co2e_kg"] - o["co2e_kg"], abs=0.2)
+        assert c["delta"]["co2e_pct"] == pytest.approx(
+            100 * (c["co2e_kg"] - o["co2e_kg"]) / o["co2e_kg"], abs=0.2)
+
+
+def test_co2e_never_moves_the_score(board, context, fleet, monkeypatch):
+    """Separate KPI: doubling every emission factor changes the CO2e column
+    and nothing about how the routes score."""
+    from engine.fleet import settings as settings_mod
+
+    a, before = _disrupted_with_routes(board, context, fleet)
+    real = settings_mod.settings
+
+    def dirty(config):
+        cfg = real(config)
+        cfg["emissions"]["g_co2e_per_tkm"] = {
+            k: v * 2 for k, v in cfg["emissions"]["g_co2e_per_tkm"].items()}
+        return cfg
+
+    monkeypatch.setattr(reroute, "fleet_settings", dirty)
+    after = reroute.recovery(board, context, a["id"])
+    assert [c["score"] for c in after["candidates"]] == [c["score"] for c in before["candidates"]]
+    assert after["original"]["co2e_kg"] == pytest.approx(2 * before["original"]["co2e_kg"], rel=1e-3)
+
+
+def test_the_highlight_goes_to_the_cleanest_option_that_is_still_on_time(board, context, fleet):
+    """Cost and date decide; CO2e breaks the tie. An option that misses the
+    customer's date is never highlighted, however clean."""
+    seen = 0
+    for a in _on_map(fleet):
+        if a["status"] == "green":
+            continue
+        routes = reroute.recovery(board, context, a["id"])
+        pool = [routes["original"], *routes["candidates"]]
+        flagged = [o for o in pool if o["lowest_co2_on_time"]]
+        on_time = [o for o in pool if o["meets_commitment"]]
+        if not on_time:
+            assert not flagged and routes["greenest_on_time"] is None
+            continue
+        assert len(flagged) == 1 and flagged[0]["meets_commitment"]
+        assert flagged[0]["co2e_kg"] == min(o["co2e_kg"] for o in on_time)
+        assert routes["greenest_on_time"] == flagged[0]["id"]
+        seen += 1
+    assert seen, "no disrupted asset had an on-time option to highlight"
+
+
+def test_rail_is_cleaner_than_the_barge_and_trucks_dirtier(board, context, fleet):
+    """On the Rhine the method must reproduce the story: the truck fix
+    costs the climate more than the barge it replaces, rail less."""
+    checked = 0
+    for a in _on_map(fleet):
+        if a["mode"] != "barge" or a["status"] == "green":
+            continue
+        routes = reroute.recovery(board, context, a["id"])
+        kinds = {c["kind"]: c for c in routes["candidates"]}
+        if "inland_to_road" in kinds and "inland_to_rail" in kinds:
+            assert kinds["inland_to_road"]["co2e_kg"] > kinds["inland_to_rail"]["co2e_kg"]
+            assert kinds["inland_to_rail"]["delta"]["co2e_pct"] < 0
+            checked += 1
+    assert checked
+
+
+def test_a_split_reports_the_co2e_of_each_branch(board, context, fleet):
+    a, _ = _disrupted_with_routes(board, context, fleet)
+    s = split.evaluate(board, context, a["id"])
+    total = sum(b["co2e_kg"] for b in s["branches"])
+    assert s["summary"]["co2e_after_kg"] == pytest.approx(total, abs=0.5)
+    assert s["summary"]["co2e_before_kg"] > 0

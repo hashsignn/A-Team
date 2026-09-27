@@ -436,6 +436,7 @@
         tip.innerHTML = `<div class="tip-k">${esc(c.badge || `#${c.rank}`)} · ${esc(c.kind.replace(/_/g, ' '))}</div>
           <b>${esc(c.label)}</b>
           <div class="tip-delta">${esc(c.delta.text)}</div>
+          <div class="tip-delta">CO₂e ${(c.co2e_kg / 1000).toFixed(2)} t${c.delta.co2e_pct == null ? '' : ` (${c.delta.co2e_pct >= 0 ? '+' : '−'}${Math.abs(Math.round(c.delta.co2e_pct))}% vs plan)`}${c.lowest_co2_on_time ? ' · lowest on time' : ''}</div>
           <div class="muted">vs the original route · score ${c.score.toFixed(2)}</div>`;
         tip.hidden = false; place(e);
         map.getCanvas().style.cursor = 'pointer';

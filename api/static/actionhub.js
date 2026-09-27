@@ -40,6 +40,8 @@
     return `${(a / 24).toFixed(1)} days`;
   };
   const statusColour = (s) => tokenOf(`--status-${s}`);
+  const tCo2 = (kg) => (kg == null ? '—' : `${(kg / 1000).toFixed(kg < 10000 ? 2 : 1)} t`);
+  const pct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v))}%`);
   const altColour = (rank) => tokenOf(`--alt-${Math.max(1, Math.min(4, rank || 4))}`);
 
   function createHub({ store, agent, select }) {
@@ -316,10 +318,43 @@
         <h4>Recovery routes <span>${r.status === 'loading' ? 're-ranking…' : `ranked on time · cost · risk`}</span></h4>
         ${d.eligible && d.candidates.length ? `<div class="weights">${slider('time', 'Time')}${slider('cost', 'Cost')}${slider('risk', 'Risk')}</div>` : ''}
         <p class="alt-orig">Original: ETA <b>${esc(when(o.eta))}</b> · ${chf(o.cost_chf)} · risk <b>${esc(o.risk_label)}</b>${d.disruption ? ` · disrupted at ${esc(d.disruption.name || d.disruption.title)}` : ''}</p>
+        ${d.candidates.length ? optionTable(d) : ''}
         ${d.note ? `<p class="hnote hnote--warn">${esc(d.note)}</p>` : ''}
         ${(d.no_route || []).map((t) => `<p class="hnote">${esc(t)}</p>`).join('')}
         <div class="alts">${alts}</div>
       </section>`;
+    }
+
+    /* The option table: one row per way of getting it there, the plan
+     * included. CO2e sits beside cost and date, never inside the score —
+     * the risk score says how bad the disruption is, CO2e what each fix
+     * costs the climate, and folding them together hides the trade-off.
+     * Among the rows that still meet the committed date, the lowest CO2e is
+     * highlighted: cost and date decide, CO2e breaks the tie. */
+    function optionTable(d) {
+      const o = d.original;
+      const rows = [...d.candidates, o];
+      const row = (x) => {
+        const plan = x.id === 'ORIGINAL';
+        const green = x.lowest_co2_on_time;
+        return `<tr class="${green ? 'is-green' : ''}${plan ? ' is-plan' : ''}" data-route="${plan ? '' : esc(x.id)}">
+          <td>${plan ? '<span class="muted">Plan</span>' : `<span class="rbadge" style="--c:${altColour(x.rank)}">${esc(x.badge || `#${x.rank}`)}</span>`}
+            ${esc(plan ? 'Stay on the original route' : x.label)}</td>
+          <td class="num">${esc(when(x.eta).slice(4, 10))} ${x.meets_commitment ? '<span class="ok">✓</span>' : '<span class="late">✗</span>'}</td>
+          <td class="num">${plan ? chf(x.cost_chf) : `${x.delta.cost_chf >= 0 ? '+' : '−'}${chf(Math.abs(x.delta.cost_chf))}`}</td>
+          <td class="num">${tCo2(x.co2e_kg)}${green ? ' <span class="leaf" title="Lowest CO₂e among the options that still meet the committed date">🌿</span>' : ''}</td>
+          <td class="num">${plan ? '—' : pct(x.delta.co2e_pct)}</td>
+        </tr>`;
+      };
+      const greenest = rows.find((x) => x.lowest_co2_on_time);
+      return `
+        <table class="opt-table">
+          <thead><tr><th>Option</th><th>Arrives</th><th>Cost</th><th>CO₂e</th><th>vs plan</th></tr></thead>
+          <tbody>${rows.map(row).join('')}</tbody>
+        </table>
+        <p class="chart-note">✓ meets the committed date (${esc(when(d.committed).slice(0, 10))}).
+          ${greenest ? `🌿 lowest CO₂e that still arrives on time: <b>${esc(greenest.id === 'ORIGINAL' ? 'the plan' : greenest.label)}</b>.` : 'No option meets the committed date, so none is highlighted.'}
+          CO₂e = ${d.tonnes} t × km × factor — ${esc(d.carbon.source)}, ${esc(d.carbon.method)}; the leg after the factory gate, where Sika's Carbon Compass stops. Not part of the ranking score.</p>`;
     }
 
     function split(s) {
@@ -368,11 +403,11 @@
           <div class="split-sum">
             <div><div class="k">On time</div><div class="v">${sm.on_time_before} → ${sm.on_time_after}<small style="font-weight:500"> / ${sm.containers}</small></div></div>
             <div><div class="k">Extra cost</div><div class="v">${sm.extra_cost_chf >= 0 ? '+' : '−'}${chf(Math.abs(sm.extra_cost_chf)).replace('CHF ', 'CHF ')}</div></div>
-            <div><div class="k">Tracking lines</div><div class="v">${sm.branches}</div></div>
+            <div><div class="k">CO₂e</div><div class="v">${tCo2(sm.co2e_before_kg)} → ${tCo2(sm.co2e_after_kg)}</div></div>
           </div>
           <div class="branches">${data.branches.map((b, i) => `
             <div class="branch" style="--c:${colourOf(b.route_id)}"><b>${'ABCDEFG'[i]}</b>
-              <span>${esc(b.label)} · ${b.containers.length} box(es), ${b.teu} TEU · ETA ${esc(when(b.eta))}${b.vehicles ? ` · ${b.vehicles.count} ${esc(b.vehicles.unit)}` : ''}${b.late.length ? ` · <span style="color:var(--status-red)">${b.late.length} late</span>` : ''}</span></div>`).join('')}</div>`;
+              <span>${esc(b.label)} · ${b.containers.length} box(es), ${b.teu} TEU · ETA ${esc(when(b.eta))} · ${tCo2(b.co2e_kg)} CO₂e${b.vehicles ? ` · ${b.vehicles.count} ${esc(b.vehicles.unit)}` : ''}${b.late.length ? ` · <span style="color:var(--status-red)">${b.late.length} late</span>` : ''}</span></div>`).join('')}</div>`;
       }
       return `
       <section class="hsec" data-sec="split">
@@ -502,15 +537,15 @@
     // Events — delegated, and every one is a MapAgent call
     // ---------------------------------------------------------------
     hub.addEventListener('mouseover', (e) => {
-      const r = e.target.closest('.alt[data-route]');
+      const r = e.target.closest('.alt[data-route], .opt-table tr[data-route]:not([data-route=""])');
       if (r) agent.highlightRoute(r.dataset.route);
     });
     hub.addEventListener('mouseout', (e) => {
-      const r = e.target.closest('.alt[data-route]');
+      const r = e.target.closest('.alt[data-route], .opt-table tr[data-route]:not([data-route=""])');
       if (r && !r.contains(e.relatedTarget)) agent.highlightRoute(null);
     });
     hub.addEventListener('click', (e) => {
-      const alt = e.target.closest('.alt[data-route]');
+      const alt = e.target.closest('.alt[data-route], .opt-table tr[data-route]:not([data-route=""])');
       if (alt) { agent.chooseRoute(alt.dataset.route); return; }
       const vendor = e.target.closest('.partner[data-vendor]');
       if (vendor) { agent.selectVendor(vendor.dataset.vendor); return; }

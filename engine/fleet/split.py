@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from engine.fleet import manifest
+from engine.fleet import emissions, manifest
 from engine.fleet.assets import index
 from engine.fleet.reroute import price, recovery
 from engine.fleet.settings import settings as fleet_settings
@@ -88,6 +88,8 @@ def evaluate(board: dict, context: RunContext, shipment_id: str,
         eta = datetime.fromisoformat(option["eta"])
         legs = [(leg["mode"], leg["km"]) for leg in option["legs"]]
         cost = price(cfg, legs, teu, option["transfers"])
+        tonnes = sum(m["gross_t"] for m in members)
+        co2 = emissions.co2e_kg(cfg, legs, tonnes)
         on_time = [m["container_id"] for m in members
                    if datetime.fromisoformat(m["deadline"]) >= eta]
         branches.append({
@@ -99,6 +101,8 @@ def evaluate(board: dict, context: RunContext, shipment_id: str,
             "containers": [m["container_id"] for m in members],
             "eta": option["eta"],
             "cost_chf": round(cost, 2),
+            "tonnes": round(tonnes, 1),
+            "co2e_kg": round(co2, 1),
             "on_time": on_time,
             "late": [m["container_id"] for m in members if m["container_id"] not in on_time],
             "vehicles": _vehicles(cfg, option, teu),
@@ -108,6 +112,7 @@ def evaluate(board: dict, context: RunContext, shipment_id: str,
     before = _baseline(cfg, routes["original"], boxes, total_teu)
     after_cost = sum(b["cost_chf"] for b in branches)
     after_on_time = sum(len(b["on_time"]) for b in branches)
+    after_co2 = sum(b["co2e_kg"] for b in branches)
     moved = [k for k, v in assigned.items() if v != ORIGINAL]
 
     return {
@@ -130,6 +135,9 @@ def evaluate(board: dict, context: RunContext, shipment_id: str,
             "cost_before_chf": round(before["cost"], 2),
             "cost_after_chf": round(after_cost, 2),
             "extra_cost_chf": round(after_cost - before["cost"], 2),
+            "co2e_before_kg": round(before["co2e"], 1),
+            "co2e_after_kg": round(after_co2, 1),
+            "extra_co2e_kg": round(after_co2 - before["co2e"], 1),
             "branches": len(branches),
         },
         "routes": [
@@ -137,6 +145,7 @@ def evaluate(board: dict, context: RunContext, shipment_id: str,
              "rank": o.get("rank")}
             for o in [routes["original"], *routes["candidates"]]
         ],
+        "carbon": emissions.provenance(cfg),
         "synthetic": True,
     }
 
@@ -146,6 +155,7 @@ def _baseline(cfg: dict, original: dict, boxes: list[dict], teu: int) -> dict:
     legs = [(leg["mode"], leg["km"]) for leg in original["legs"]]
     return {
         "cost": price(cfg, legs, teu, original["transfers"]),
+        "co2e": emissions.co2e_kg(cfg, legs, sum(b["gross_t"] for b in boxes)),
         "on_time": sum(1 for b in boxes if datetime.fromisoformat(b["deadline"]) >= eta),
     }
 

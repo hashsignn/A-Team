@@ -83,6 +83,11 @@ DEFAULTS: dict = {
         "attribution": "© OpenStreetMap contributors",
         "max_zoom": 18,
     },
+    "emissions": {
+        "method": "GLEC Framework / ISO 14083, well-to-wheel",
+        "source": "GLEC default values (indicative)",
+        "g_co2e_per_tkm": {"road": 83, "rail": 20, "barge": 39, "sea": 13, "air": 545},
+    },
     "vendors": {
         "radius_km": {"road": 120, "rail": 150, "barge": 150, "sea": 900},
         "fallback_nearest": 3,

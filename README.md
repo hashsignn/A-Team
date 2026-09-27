@@ -1031,6 +1031,38 @@ marked `owner: carrier`. The map **proposes**. The playbook gate on `/ops` —
 confirm the disruption before rerouting — still governs what may be taken,
 and the card links to it.
 
+### CO₂e: the journey after the factory gate
+
+Sika's **Carbon Compass** (Oct 2025, TÜV Rheinland verified, ISO 14067)
+gives each product's footprint up to the factory gate, inbound transport
+included. It stops there. The map covers the delivery leg after it — for the
+plan **and every recovery alternative** — so a faster fix never hides a
+higher footprint.
+
+Method: GLEC Framework, formalised as **ISO 14083**, well-to-wheel —
+`CO₂e = tonnes × km × factor` (`engine/fleet/emissions.py`). Factors in
+`fleet.yaml`, cited as **GLEC default values (indicative)**: truck 83, Rhine
+barge 39, electric rail 20, deep sea 13 (ours), g CO₂e / tonne-km. 20 t over
+500 km: barge 390 kg, truck 830 kg, rail 200 kg — asserted in a test.
+
+It is a **separate KPI, never inside the risk score or the ranking**. The
+risk score says how bad the disruption is; CO₂e says what each fix costs the
+climate, and folding them together would hide exactly that trade-off (a test
+doubles every factor and checks no score moves). The Action Hub shows one row
+per option — arrives (✓ against the committed date), cost, CO₂e, % vs plan —
+and **among the options that still meet the date, the lowest CO₂e is
+highlighted** 🌿. Cost and date decide; CO₂e breaks ties and is always
+visible. Splits report CO₂e per branch.
+
+On the demo board, a Rhine barge caught by low water at Kaub: trucks
+**+117 %**, rail **−50 %** and on time — highlighted — while the barge misses
+the date.
+
+> The factors are indicative defaults from a secondary source, not the
+> official GLEC tables, and the Horizon pitch figures in the brief (€14k,
+> 20 t, 500 km) were illustrative. Next: carrier-reported figures (e.g.
+> per-shipment ocean data) or the EcoTransIT API, into the same function.
+
 ### Splitting a load
 
 Low water at Kaub is a derate, not a stoppage. What a planner actually does
@@ -1522,6 +1554,8 @@ Onboarding a new customer is a profile swap — that is true here, not a claim.
 - **Kaub thresholds need sourcing** (above).
 - **The map's positions are the schedule's** unless a field report carries a
   fix. No GPS/AIS feed is connected; the socket is `progress.observed()`.
+- **CO₂e factors are GLEC defaults (indicative)**, not the official tables
+  and not carrier data. Cargo tonnages are from the synthetic manifest.
 - **The map's rate card, partner list and capacities are assumed / synthetic**
   (`config.example/fleet.yaml`). A partner capacity API is the socket.
 - **No accuracy claim is made.** The honest metric is the hindcast — did we fire
