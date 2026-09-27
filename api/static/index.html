@@ -122,8 +122,9 @@
 
       <div class="globe-tooltip only-globe" id="globe-tooltip" hidden></div>
 
-      <!-- map-only chrome: the legend doubles as the status filter -->
-      <div class="map-legend only-map" id="map-legend" aria-label="Map legend and filters"></div>
+      <!-- No legend: the ladder in the top bar is the board's one key. This
+           line appears only when the basemap had to fall back or go offline. -->
+      <div class="map-note only-map" id="map-note" hidden></div>
       <div class="map-tip only-map" id="map-tip" hidden></div>
       <div class="map-busy only-map" id="map-busy" hidden>Loading assets…</div>
     </div>

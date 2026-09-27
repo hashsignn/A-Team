@@ -108,9 +108,9 @@ def main() -> int:
         images = page.evaluate("""['sea','barge','rail','road'].flatMap(m => ['green','yellow','red']
             .map(s => window.__fleetmap.hasImage(`asset-${m}-${s}`))).every(Boolean)""")
         check(images, "[icons] a modality/status icon failed to load", "12 SVG modality icons loaded")
-        legend = page.locator("#map-legend .lg-status").count()
-        check(legend == 3, f"[legend] {legend} status chips, expected 3", "legend: 3 status chips")
-        check(page.locator("#map-legend").inner_text().strip() != "", "[legend] empty")
+        check(page.locator("#map-legend").count() == 0,
+              "[legend] a map legend is back beside the ladder",
+              "no map legend: the ladder is the board's one key")
         check(page.locator(".maplibregl-ctrl-compass").count() == 1,
               "[controls] no reset-bearing compass", "zoom + compass (reset bearing) controls")
 
@@ -371,7 +371,7 @@ def main() -> int:
 
 def _legend_note(page) -> str:
     return page.evaluate(
-        "(document.querySelector('#map-legend .lg-note') || {}).textContent || ''")
+        "(document.querySelector('#map-note') || {}).textContent || ''")
 
 
 def _check_basemap_fallback(browser, check) -> None:
@@ -398,12 +398,12 @@ def _check_basemap_fallback(browser, check) -> None:
     page.wait_for_function("window.__fleetmap && window.__fleetmap.getLayer('asset-icons')",
                            timeout=60_000)
     page.wait_for_function(
-        "(document.querySelector('#map-legend .lg-note') || {}).textContent"
+        "(document.querySelector('#map-note') || {}).textContent"
         ".includes('NASA Blue Marble relief tiles, desaturated')", timeout=30_000)
     note = _legend_note(page)
     check("Esri World Light Gray did not answer" in note,
-          f"[basemap] the legend did not say the first provider refused: {note!r}",
-          "a refusing tile provider is replaced by the next, and the legend says so")
+          f"[basemap] the note did not say the first provider refused: {note!r}",
+          "a refusing tile provider is replaced by the next, and the note says so")
     check(not any("tile.openstreetmap.org" in u for u in asked),
           "[basemap] tiles were asked of OpenStreetMap's own servers",
           "no tile is asked of OpenStreetMap's volunteer servers")
@@ -414,11 +414,11 @@ def _check_basemap_fallback(browser, check) -> None:
                if any(h in route.request.url for h in TILE_HOSTS) else route.continue_())
     page.goto(f"{BASE}/", wait_until="load", timeout=90_000)
     page.wait_for_function(
-        "(document.querySelector('#map-legend .lg-note') || {}).textContent"
+        "(document.querySelector('#map-note') || {}).textContent"
         ".includes('Offline outline')", timeout=30_000)
     check(page.evaluate("!!window.__fleetmap.getLayer('land')"),
           "[basemap] every provider refused and the country outlines are missing",
-          "every provider refusing leaves the offline outline, and the legend says so")
+          "every provider refusing leaves the offline outline, and the note says so")
     page.close()
 
 

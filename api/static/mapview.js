@@ -67,11 +67,6 @@
       <g transform="translate(10.5 10.5) scale(0.96)" fill="#ffffff">${glyph}</g></svg>`;
   }
 
-  function legendIcon(mode) {
-    return `<svg viewBox="0 0 44 44">${assetSvg(mode, tokenOf('--muted'))
-      .replace(/^[\s\S]*?<circle/, '<circle').replace(/<\/svg>\s*$/, '')}</svg>`;
-  }
-
   function loadImage(svg) {
     return new Promise((resolve, reject) => {
       const img = new Image(44, 44);
@@ -726,11 +721,10 @@
         data.candidates.forEach((c) => add(c.path));
         // Frame the routes in the part of the map the cards do not cover.
         const hub = $('hub');
-        const legend = $('map-legend');
         const pane = el.getBoundingClientRect();
         const right = hub && !hub.hidden
           ? Math.max(60, pane.right - hub.getBoundingClientRect().left + 30) : 60;
-        const bottom = legend ? legend.offsetHeight + 40 : 60;
+        const bottom = 60;
         const room = pane.width - right - 50;
         map.fitBounds(b, {
           padding: { top: 90, bottom, left: 50, right: room > 240 ? right : 60 },
@@ -791,56 +785,38 @@
     }
 
     // ---------------------------------------------------------------
-    // Legend
+    // Status line — no legend
     // ---------------------------------------------------------------
+    /* There is no map legend: the ladder in the top bar is the one key on
+     * the board, and a second set of coloured counts beside it read as the
+     * same numbers disagreeing (they count different things: vehicles by
+     * delay here, lanes by deadline there). The asset tooltip names each
+     * status. What remains is a one-line note, shown only when the basemap
+     * fell back to another provider or to the offline outlines — something
+     * a planner cannot see for themselves. */
     function renderLegend(state) {
-      const host = $('map-legend');
-      if (!host) return;
-      const visible = select.visibleAssets({ ...state, filters: { ...state.filters, statuses: { green: true, yellow: true, red: true } } });
-      const count = (s) => visible.filter((a) => a.status === s).length;
-      const booked = state.assets.items.filter((a) => a.phase === 'booked').length;
-      const labels = (state.assets.meta && state.assets.meta.status_labels) || { green: 'Nominal', yellow: 'Minor disruption', red: 'Major disruption' };
-      const th = (state.assets.meta && state.assets.meta.thresholds) || { minor_max_hours: 4 };
-      const t = view.tiles;
-      const current = providersOf(t.meta || (state.assets && state.assets.meta))[Math.max(0, t.index)];
-      const refused = t.refused.length
-        ? ` ${t.refused.map((n) => esc(n)).join(' and ')} did not answer.` : '';
-      const basemap = t.offline
-        ? `<b>Offline outline</b> — no tile provider answered, so the vendored country shapes are drawn instead.${refused}`
-        : t.ok && current
-          ? `<b>${esc(current.name)}</b> tiles, desaturated.${refused}`
-          : `<b>${esc(current ? current.name : 'Map')}</b> tiles loading; country outlines underneath.${refused}`;
-      host.innerHTML = `
-        <div class="map-legend-row">
-          ${['red', 'yellow', 'green'].map((s) => `
-            <button type="button" class="lg-status${state.filters.statuses[s] === false ? ' is-off' : ''}" data-status="${s}"
-              title="${esc(labels[s])}${s === 'yellow' ? ` — under ${th.minor_max_hours} h late` : s === 'red' ? ` — ${th.minor_max_hours} h or more, or stopped` : ' — on schedule'}">
-              <i style="background:${statusColour(s)}"></i>${esc(labels[s])} <b>${count(s)}</b>
-            </button>`).join('')}
-        </div>
-        <details class="lg-more"${view.legendOpen ? ' open' : ''}>
-          <summary>Modes, booked freight, basemap</summary>
-          <div class="map-legend-row" style="margin-top:6px">
-            ${MODES.map((m) => `<span class="lg-mode">${legendIcon(m)}${m === 'sea' ? 'ship' : m === 'road' ? 'truck' : m === 'rail' ? 'train' : 'barge'}</span>`).join('')}
-          </div>
-          <label class="lg-check" style="margin-top:6px"><input type="checkbox" id="lg-booked" ${state.filters.showBooked ? 'checked' : ''}>
-            Include booked freight not yet departed (${booked})</label>
-          <div class="lg-note">${basemap} Positions are where the schedule puts each asset unless somebody on site sent a fix. ${state.assets.items.length && state.assets.items.every((a) => a.id.startsWith('SYN-')) ? 'Book is <b>synthetic</b>.' : ''}</div>
-        </details>`;
-      const more = host.querySelector('.lg-more');
-      if (more) more.addEventListener('toggle', () => { view.legendOpen = more.open; });
-      host.querySelectorAll('.lg-status').forEach((b) => b.addEventListener('click', () => {
-        const s = b.dataset.status;
-        agent.setFilter({ statuses: { [s]: state.filters.statuses[s] === false } });
-      }));
-      const box = host.querySelector('#lg-booked');
-      if (box) box.addEventListener('change', () => agent.setFilter({ showBooked: box.checked }));
       const busy = $('map-busy');
       if (busy) {
         busy.hidden = state.assets.status !== 'loading' && state.assets.status !== 'error';
         busy.textContent = state.assets.status === 'error'
           ? `Could not load assets — ${state.assets.error}` : 'Loading assets…';
       }
+      const host = $('map-note');
+      if (!host) return;
+      const t = view.tiles;
+      const current = providersOf(t.meta || (state.assets && state.assets.meta))[Math.max(0, t.index)];
+      const refused = t.refused.length
+        ? ` ${t.refused.map((n) => esc(n)).join(' and ')} did not answer.` : '';
+      let text = '';
+      if (t.offline) {
+        text = `<b>Offline outline</b> — no tile provider answered, so the vendored country shapes are drawn instead.${refused}`;
+      } else if (t.refused.length) {
+        text = t.ok && current
+          ? `<b>${esc(current.name)}</b> tiles, desaturated.${refused}`
+          : `<b>${esc(current ? current.name : 'Map')}</b> tiles loading.${refused}`;
+      }
+      host.innerHTML = text;
+      host.hidden = !text;
     }
 
     // ---------------------------------------------------------------

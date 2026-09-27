@@ -1062,6 +1062,12 @@ with coordinates replaces it, and the card says which you are looking at. No
 GPS or AIS feed is connected, and a planned dot presented as telemetry would
 be a lie with a timestamp. Clusters are donuts of the statuses inside them.
 
+**There is no map legend.** The ladder in the top bar is the board's one key.
+A second row of coloured counts beside it read as the same numbers
+disagreeing — they are not the same numbers: the ladder counts **lanes** by
+how soon a decision is due, the map colours **vehicles** by how late they
+are. Hovering an asset names its status.
+
 | | colour | rule |
 |---|---|---|
 | 🟢 | `#22c55e` Nominal | expected delay ≤ 30 min |
@@ -1235,7 +1241,7 @@ books or writes anything.
 
 | | offline | with a network |
 |---|---|---|
-| basemap | vendored country outlines, and the legend says so | Esri World Light Gray tiles, NASA Blue Marble relief if Esri refuses (browser fetches them, no key; `fleet.yaml` → `basemap.tiles` to self-host, used alone) |
+| basemap | vendored country outlines, and a note on the map says so | Esri World Light Gray tiles, NASA Blue Marble relief if Esri refuses (browser fetches them, no key; `fleet.yaml` → `basemap.tiles` to self-host, used alone) |
 | road geometry | corridor estimate, labelled | OSRM, only with `RADAR_ALLOW_NETWORK=1`; `routing.osrm_url` for a self-hosted one |
 | sea routes, ranking, split, partners | all of it | the same |
 
