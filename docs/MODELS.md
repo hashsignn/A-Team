@@ -125,14 +125,27 @@ ollama pull qwen2.5:7b-instruct                    # extract, ~4.7 GB
 
 ### On Windows
 
-`cmd.exe` and PowerShell differ from the Unix commands above in three ways
-that all produce confusing errors rather than useful ones:
+`cmd.exe` and PowerShell differ from the Unix commands above, and from each
+other, in ways that produce confusing errors rather than useful ones — or
+none at all. PowerShell's prompt starts with `PS`:
 
-| | Unix | Windows |
-|---|---|---|
-| venv python | `.venv/bin/python` | `.venv\Scripts\python` |
-| create venv | `python3.11 -m venv .venv` | `py -3.11 -m venv .venv` |
-| set a variable | `VAR=1 cmd` | `set VAR=1` on its own line |
+| | Unix | cmd.exe | PowerShell |
+|---|---|---|---|
+| venv python | `.venv/bin/python` | `.venv\Scripts\python` | `.venv\Scripts\python` |
+| create venv | `python3.11 -m venv .venv` | `py -3.11 -m venv .venv` | `py -3.11 -m venv .venv` |
+| set a variable | `VAR=1 cmd` | `set VAR=1` on its own line | `$env:VAR = "1"` on its own line |
+| clear it | `unset VAR` | `set VAR=` | `$env:VAR = ""` |
+| delete two files | `rm a b` | `del a b` | `Remove-Item a, b` |
+| change folder | `cd dir` | `cd /d C:\dir` | `cd C:\dir` |
+
+**In PowerShell, `set VAR=1` sets nothing, and says nothing.** `set` is its
+alias for Set-Variable, so the line makes a PowerShell variable no program
+ever sees. When the recording steps were first pasted into PowerShell, every
+`set` line appeared to work, the model check said Ready — for the built-in
+defaults — and the recorder said recording was off. The scripts now name the
+shell they think they are in and print its form (`engine/shell.py`), and
+`check_models.py` says what chose each model: "the built-in default" means
+nothing you set reached it.
 
 And **`cmd.exe` does not strip `#` comments.** Pasting
 
@@ -156,6 +169,13 @@ ollama pull qwen2.5:7b-instruct
 .venv\Scripts\python scripts\check_models.py
 
 set RADAR_RECORD_REASONING=1
+.venv\Scripts\python scripts\record_reasoning.py
+```
+
+In PowerShell the last two lines are:
+
+```powershell
+$env:RADAR_RECORD_REASONING = "1"
 .venv\Scripts\python scripts\record_reasoning.py
 ```
 

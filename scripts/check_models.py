@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 
+from engine import shell  # noqa: E402
 from engine.reason import llm  # noqa: E402
 
 # What each stage is for, and what to pull if it is missing. Two models
@@ -141,7 +142,15 @@ def find_gguf(home: Path | None = None, limit: int = 20) -> list[tuple[Path, flo
 
 
 def setter(name: str, value: str) -> str:
-    return f"set {name}={value}" if WINDOWS else f"export {name}={value}"
+    """The line that sets *name* in the shell this is running in — cmd.exe
+    and PowerShell differ, and PowerShell runs cmd's form silently as
+    nothing. See engine/shell.py."""
+    return shell.set_line(name, value)
+
+
+def _shell_note() -> None:
+    if shell.note():
+        print(f"     {shell.note()}")
 
 
 def _matches(wanted: str, installed: list[str]) -> str | None:
@@ -272,6 +281,8 @@ def main() -> int:
         mark = "have" if exact else "MISSING"
         print(f"   [{mark:>7}]  {want['stage']:8} {want['model']}")
         print(f"              {want['job']}")
+        by = llm.configured_by(want["env"])
+        print(f"              {f'chosen by {by}' if by else 'the built-in default'}")
         if near:
             print(f"              (you have {near} — not the same tag to Ollama)")
         if not exact:
@@ -283,12 +294,14 @@ def main() -> int:
             print("\n   Use what you already have — paste these, in this same window:")
             for name, value in choice.items():
                 print(f"     {setter(name, value)}")
+            _shell_note()
             print("   (smallest for the yes/no triage, largest for the careful")
             print("    reading and for Ask.) Then run this check again.")
         print("\n   Or pull the suggested ones:")
         for want in missing:
             print(f"     ollama pull {want['suggest']}")
             print(f"     {setter(want['env'], want['suggest'])}")
+        _shell_note()
 
     # ---- 4. what the radar itself thinks -------------------------------
     _step(4, "What does the radar see?")
@@ -307,6 +320,20 @@ def main() -> int:
               f"run {PY_BIN} scripts/check_models.py again in the same window.")
         return 1
 
+    # A line that failed to set a model leaves the default in place and
+    # nothing else to show for it — so say which stages are on the default.
+    defaults = [want["env"] for want in WANTED if llm.configured_by(want["env"]) is None]
+    if defaults:
+        print(f"\n   Note: {' and '.join(defaults)} "
+              f"{'is' if len(defaults) == 1 else 'are'} not set in this")
+        print("   window, so the built-in default above is used. To choose, in this window:")
+        print(f"     {setter(defaults[0], '<model>')}")
+        if shell.kind() == shell.POWERSHELL:
+            print("   (`set NAME=value`, the cmd.exe form, sets nothing in PowerShell,")
+            print("    and says nothing.)")
+        elif shell.kind() == shell.CMD:
+            print("   (In PowerShell that line sets nothing, and says nothing. There it is")
+            print(f"    {shell.set_line('NAME', 'value', shell.POWERSHELL)})")
     print("\n   Ready. The two-stage funnel will use these models.")
     print("   Nothing is sent anywhere: both run on this machine.")
     return 0

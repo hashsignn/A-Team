@@ -96,3 +96,47 @@ def test_model_files_from_other_tools_are_found(checker, tmp_path):
     (tmp_path / "Downloads" / "notes.txt").write_text("x", encoding="utf-8")
     found = checker.find_gguf(home=tmp_path)
     assert [p.name for p, _gb in found] == ["qwen2.5-14b-instruct-q4_k_m.gguf"]
+
+
+def _unset_models(monkeypatch):
+    for name in ("RADAR_TRIAGE_MODEL", "RADAR_EXTRACT_MODEL", "RADAR_LOCAL_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_it_says_which_variable_chose_each_model(checker, monkeypatch, capsys):
+    """Pasted into PowerShell, `set RADAR_EXTRACT_MODEL=...` set nothing, and
+    the check said Ready — for the defaults, with no sign that they were.
+    Now every model says what chose it, and a default says so."""
+    _pulled(checker, monkeypatch, [("qwen2.5:7b-instruct", 4.7), ("qwen2.5:14b-instruct", 9.0)])
+    _wanted(checker, monkeypatch, "qwen2.5:7b-instruct", "qwen2.5:14b-instruct")
+    _unset_models(monkeypatch)
+    monkeypatch.setenv("RADAR_EXTRACT_MODEL", "qwen2.5:14b-instruct")
+    assert checker.main() == 0
+    out = capsys.readouterr().out
+    assert "chosen by RADAR_EXTRACT_MODEL" in out
+    assert "the built-in default" in out
+    assert "Note: RADAR_TRIAGE_MODEL is not set in this\n" in out
+    assert "Ready." in out
+
+
+def test_with_both_chosen_there_is_no_note(checker, monkeypatch, capsys):
+    _pulled(checker, monkeypatch, [("qwen2.5:7b-instruct", 4.7), ("qwen2.5:14b-instruct", 9.0)])
+    _wanted(checker, monkeypatch, "qwen2.5:7b-instruct", "qwen2.5:14b-instruct")
+    _unset_models(monkeypatch)
+    monkeypatch.setenv("RADAR_TRIAGE_MODEL", "qwen2.5:7b-instruct")
+    monkeypatch.setenv("RADAR_EXTRACT_MODEL", "qwen2.5:14b-instruct")
+    assert checker.main() == 0
+    out = capsys.readouterr().out
+    assert "Note:" not in out
+    assert "chosen by RADAR_TRIAGE_MODEL" in out
+
+
+def test_in_powershell_the_lines_to_paste_are_powershell_lines(checker, monkeypatch, capsys):
+    monkeypatch.setattr(checker.shell, "kind", lambda *a, **k: checker.shell.POWERSHELL)
+    _pulled(checker, monkeypatch, [("qwen2.5:7b", 4.7), ("qwen2.5:14b", 9.0)])
+    _wanted(checker, monkeypatch, "qwen2.5:1.5b-instruct", "qwen2.5:7b-instruct")
+    assert checker.main() == 1
+    out = capsys.readouterr().out
+    assert '$env:RADAR_TRIAGE_MODEL = "qwen2.5:7b"' in out
+    assert "set RADAR_TRIAGE_MODEL" not in out
+    assert "In cmd.exe the form is" in out

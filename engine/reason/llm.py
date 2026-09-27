@@ -75,6 +75,17 @@ TRIAGE_MODEL = os.environ.get("RADAR_TRIAGE_MODEL", "") or LOCAL_MODEL
 # contradicts the headline.
 EXTRACT_MODEL = os.environ.get("RADAR_EXTRACT_MODEL", "") or LOCAL_MODEL
 
+
+def configured_by(env: str) -> str | None:
+    """The variable that chose a stage's model: *env* itself, then
+    RADAR_LOCAL_MODEL, or None for the built-in default. Said out loud
+    because a line that failed to set one leaves the default in place with
+    no sign of it."""
+    for name in (env, "RADAR_LOCAL_MODEL"):
+        if os.environ.get(name):
+            return name
+    return None
+
 # The API path. DECLARED, not connected: it bills per call, and this build
 # never calls anything that bills — see engine/costs.py. Kept so the socket is
 # visible and so attaching it is one reviewed line rather than a rewrite.

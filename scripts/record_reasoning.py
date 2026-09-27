@@ -57,6 +57,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from engine import shell  # noqa: E402
 from engine.clock import Clock  # noqa: E402
 from engine.config import load_config  # noqa: E402
 from engine.ingest import watergauge  # noqa: E402
@@ -140,19 +141,16 @@ def gauge_status() -> tuple[str, bool]:
 
 def network_refusal() -> list[str]:
     """Why this must not run with the network on, and how to turn it off."""
-    if platform.system() == "Windows":
-        unset = "set RADAR_ALLOW_NETWORK="
-    else:
-        unset = "unset RADAR_ALLOW_NETWORK"
-    return [
+    lines = [
         "RADAR_ALLOW_NETWORK is set, so every source would be fetched live",
         "instead of read from data/fixtures. The answers would be recorded for",
         "whatever the internet says right now, and the Codespace — which reads",
         "data/fixtures — would miss every one of them on replay.",
         "",
         "Turn it off in this window and run again:",
-        f"  {unset}",
+        f"  {shell.unset_line('RADAR_ALLOW_NETWORK')}",
     ]
+    return lines + ([f"  {shell.note()}"] if shell.note() else [])
 
 
 def default_as_of() -> str:
@@ -185,8 +183,9 @@ def main() -> int:
     if not cache.recording() and not args.dry_run:
         print("Recording is off. Re-run with:")
         if platform.system() == "Windows":
-            print(f"  set {cache.RECORD_ENV}=1")
+            print(f"  {shell.set_line(cache.RECORD_ENV, '1')}")
             print(r"  .venv\Scripts\python scripts\record_reasoning.py")
+            print(f"  {shell.note()}")
         else:
             print(f"  {cache.RECORD_ENV}=1 "
                   ".venv/bin/python scripts/record_reasoning.py")
@@ -202,6 +201,14 @@ def main() -> int:
     status = llm.detect()
     print(f"backend : {status.backend.value}")
     print(f"model   : {status.model or '—'}")
+    # Which variable chose each stage, so a line that failed to set one (in
+    # PowerShell `set NAME=value` does nothing) shows before the model time
+    # is spent, not after.
+    for stage, model, env in (("triage", llm.TRIAGE_MODEL, "RADAR_TRIAGE_MODEL"),
+                              ("extract", llm.EXTRACT_MODEL, "RADAR_EXTRACT_MODEL")):
+        by = llm.configured_by(env)
+        print(f"{stage:8}: {model}  ({f'from {by}' if by else f'default: {env} is not set'})")
+    print(f"timeout : {llm.TIMEOUT_S:.0f} s per answer")
     if not status.available:
         print("\nNo model is reachable, so there is nothing to record.")
         print("Run scripts/check_models.py — it names the one thing to fix.")
@@ -273,10 +280,9 @@ def main() -> int:
             return 0
         print("\nNo answer was recorded. If the model is running, it is probably")
         print(f"timing out: each call may take {llm.TIMEOUT_S:.0f} s. Raise it and run again:")
-        setter = "set" if platform.system() == "Windows" else "export"
-        print(f"  {setter} RADAR_LLM_TIMEOUT=900")
+        print(f"  {shell.set_line('RADAR_LLM_TIMEOUT', '900')}")
         print("or read with a smaller model, e.g. "
-              f"{setter} RADAR_EXTRACT_MODEL=qwen2.5:7b-instruct")
+              f"{shell.set_line('RADAR_EXTRACT_MODEL', 'qwen2.5:7b-instruct')}")
         return 1
 
     for path in written:

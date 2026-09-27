@@ -88,17 +88,44 @@ def test_with_the_network_off_it_gets_as_far_as_the_model(reasoner, monkeypatch)
     assert seen
 
 
-@pytest.mark.parametrize("system, command", [
-    ("Windows", "set RADAR_ALLOW_NETWORK="),
-    ("Linux", "unset RADAR_ALLOW_NETWORK"),
+CMD_ENV = {"USERPROFILE": r"C:\Users\ann",
+           "PSModulePath": r"C:\Program Files\WindowsPowerShell\Modules"}
+POWERSHELL_ENV = {"USERPROFILE": r"C:\Users\ann",
+                  "PSModulePath": r"C:\Users\ann\Documents\WindowsPowerShell\Modules"}
+
+
+@pytest.mark.parametrize("system, env, command", [
+    ("Windows", CMD_ENV, "set RADAR_ALLOW_NETWORK="),
+    ("Windows", POWERSHELL_ENV, '$env:RADAR_ALLOW_NETWORK = ""'),
+    ("Linux", {}, "unset RADAR_ALLOW_NETWORK"),
 ])
 def test_the_way_out_is_the_right_command_for_the_machine(
-    reasoner, monkeypatch, system, command,
+    reasoner, monkeypatch, system, env, command,
 ):
     """On Windows, `unset` is "not recognised" — the command printed has to
-    be one the person reading it can actually type."""
+    be one the person reading it can actually type, in the shell they are
+    typing it into."""
     monkeypatch.setattr(reasoner.platform, "system", lambda: system)
+    monkeypatch.delenv("MSYSTEM", raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
     assert f"  {command}" in reasoner.network_refusal()
+
+
+def test_in_powershell_the_way_in_is_a_powershell_line(reasoner, monkeypatch, capsys):
+    """The hint used to print `set RADAR_RECORD_REASONING=1` on every Windows
+    machine, and in PowerShell that line sets nothing and says nothing: it
+    was pasted, and the recorder answered "Recording is off" again."""
+    monkeypatch.setattr(reasoner.platform, "system", lambda: "Windows")
+    monkeypatch.delenv("MSYSTEM", raising=False)
+    monkeypatch.delenv("RADAR_RECORD_REASONING", raising=False)
+    for name, value in POWERSHELL_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(sys, "argv", ["record_reasoning.py", "--as-of", "2026-09-22"])
+    assert reasoner.main() == 1
+    out = capsys.readouterr().out
+    assert '$env:RADAR_RECORD_REASONING = "1"' in out
+    assert "set RADAR_RECORD_REASONING=1" not in out
 
 
 def test_the_window_flag_that_only_worked_live_is_gone(reasoner, monkeypatch):

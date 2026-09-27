@@ -107,6 +107,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from engine import shell  # noqa: E402
 from engine.ingest.observations import RECORDING  # noqa: E402
 from engine.ingest.sources import CATALOG, network_allowed  # noqa: E402
 from engine.ingest.sources.decoders import decoded  # noqa: E402
@@ -749,9 +750,10 @@ def main() -> int:
         print("RADAR_ALLOW_NETWORK is not set, so nothing would be fetched. "
               "Re-run as:", file=sys.stderr)
         if platform.system() == "Windows":
-            print("  set RADAR_ALLOW_NETWORK=1", file=sys.stderr)
+            print(f"  {shell.set_line('RADAR_ALLOW_NETWORK', '1')}", file=sys.stderr)
             print(r"  .venv\Scripts\python scripts\record_fixture.py --all",
                   file=sys.stderr)
+            print(f"  {shell.note()}", file=sys.stderr)
         else:
             print("  RADAR_ALLOW_NETWORK=1 .venv/bin/python "
                   "scripts/record_fixture.py --all", file=sys.stderr)
