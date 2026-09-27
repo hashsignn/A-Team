@@ -1038,6 +1038,62 @@ Radius scales with the **square root** of the affected count, because a
 ring's visual weight is its area — a linear radius makes a lane with twice
 the freight look four times as bad.
 
+### The response path: a decision flow that branches
+
+Telling a planner "there is a risk" is where most tools stop. The top of the
+ops console (`/ops?route=…`) is a **response path** instead
+(`engine/act/paths.py`): Horizon suggests the next action, the planner does
+it, and the flow moves on.
+
+```
+Confirm the situation on site
+  ├── Reroute the shipment      check inventory → evaluate sea/rail/road routes →
+  │                             coordinate Logistics & Procurement → approval → execute
+  ├── Use an alternative port   evaluate ports → port agent → rebook → approval → execute
+  ├── Split the shipment        urgent containers → book the fast route → approval → execute
+  └── Hold and monitor          tell the customer → review checkpoint → record why
+```
+
+- **The first block is always "confirm the situation on site".** It names
+  who to call: a local partner at the disrupted node, else the nearest one on
+  the lane, else the route manager. It also carries the event, the lead
+  consignment (the worst-off one on the lane), and its vehicle, crew and
+  position.
+- **Every block carries what is needed to act.** That is the responsible
+  contact with their phone and e-mail, the step's own facts (ranked routes
+  with deltas and CO₂e, the split plan, carriers, stock cover), and a
+  **response time**. The response time is read off the lane's rung: red 1 h,
+  yellow 4 h, blue 24 h.
+- **Complete a block and it turns green**, and the next block on that branch
+  becomes the active one.
+- **Horizon recommends a branch from the engine's own numbers:**
+  - a split, when moving *some* containers saves boxes;
+  - a port change, when that is the best alternative;
+  - a reroute, when an alternative scores better than staying;
+  - on a red lane, a declared alternative port rather than waiting;
+  - otherwise, hold.
+
+  Branches that cannot apply are shown greyed with the reason.
+- **The planner is not held to the recommendation.** "Choose this path" on
+  any other branch opens it at any time, even before the site is confirmed,
+  with a warning rather than a lock. Work already done on another branch
+  stays green.
+- **Approval routes itself.** Above the delegated limit in `contacts.yaml`
+  (CHF 10'000), Controlling signs; below it, the lane owner does.
+- **It is traceable.** Every completion, reopen and branch switch lands in
+  the decision trail with who, when, and whether it followed the suggestion.
+
+The engine builds and evaluates the graph (`evaluate` is pure). The ticks,
+the chosen branch and the trail are per-planner working state held at the
+API boundary, like the console's other ticks:
+
+- `decision_flow` is returned in `GET /api/v2/console/{route}`.
+- Moves go through `POST /api/v2/console/{route}/path` with
+  `{"action": "complete" | "choose" | "reopen", …}`.
+- Choosing an unavailable branch returns 409.
+
+The stage tools remain below it, under **Tools by stage**.
+
 ---
 
 ## The fleet map

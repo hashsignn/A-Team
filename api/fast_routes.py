@@ -37,6 +37,7 @@ from fastapi import APIRouter, Body, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from engine.act import console as console_mod
+from engine.act import paths as paths_mod
 from engine.fast import dispatch as dispatch_mod
 from engine.fast import execute as execute_mod
 from engine.fast import view
@@ -433,6 +434,14 @@ def signals(
 # changes what another planner's board says.
 _REVIEWED: dict[str, set[str]] = {}
 _LOGGED: dict[str, dict[str, dict]] = {}
+# The response path each lane is on: which blocks are green, which branch the
+# planner chose, and the trail of both. Same standing as the ticks above —
+# working state, never engine input.
+_PATHS: dict[str, dict] = {}
+
+
+def _path_state(route_id: str) -> dict:
+    return _PATHS.setdefault(route_id, {"completed": set(), "chosen": None, "trail": []})
 
 
 def _lane_reports(context, route_id: str) -> list:
@@ -449,18 +458,28 @@ def _lane_reports(context, route_id: str) -> list:
     ]
 
 
-def _route_of(context, route_id: str) -> dict:
+def _board_route(context, route_id: str) -> tuple[dict, dict]:
     from engine.export.board import build_board
 
     board = build_board(context)
     for row in board["routes"]:
         if row["route_id"] == route_id:
-            return row
+            return board, row
     raise HTTPException(404, f"no route {route_id!r}")
 
 
+def _route_of(context, route_id: str) -> dict:
+    return _board_route(context, route_id)[1]
+
+
+def _flow(context, board: dict, route: dict) -> dict:
+    graph = paths_mod.build(board, context, route)
+    state = _path_state(route["route_id"])
+    return paths_mod.evaluate(graph, state["completed"], state["chosen"], state["trail"])
+
+
 def _console(context, route_id: str) -> dict:
-    route = _route_of(context, route_id)
+    board, route = _board_route(context, route_id)
     lane_shipments = {
         s.shipment_id for s in context.shipments if s.lane_id == route_id
     }
@@ -477,6 +496,7 @@ def _console(context, route_id: str) -> dict:
         logged=_LOGGED.get(route_id, {}),
     )
     payload["executions"] = executions
+    payload["decision_flow"] = _flow(context, board, route)
     payload["server_time"] = _now().isoformat()
     return payload
 
@@ -489,6 +509,67 @@ def console(
 ) -> JSONResponse:
     """One lane's operations console: stages, steps, evidence and tools."""
     return JSONResponse(_console(_ctx(as_of, shipments), route_id))
+
+
+@router.post("/console/{route_id}/path")
+def move_path(
+    route_id: str,
+    payload: Annotated[dict, Body()],
+    as_of: str = Query(...),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Move along the response path: complete a block, choose a branch, reopen.
+
+    ``{"action": "complete", "step_id": ...}`` turns a block green;
+    ``{"action": "choose", "path_id": ...}`` opens a different branch;
+    ``{"action": "reopen", "step_id": ...}`` takes a tick back. Every move
+    lands in the trail with who and when, so the decision can be read back.
+    """
+    action = str(payload.get("action", "")).strip()
+    actor = str(payload.get("actor") or "planner").strip()[:60] or "planner"
+    note = str(payload.get("note") or "").strip()[:280] or None
+    context = _ctx(as_of, shipments)
+    board, route = _board_route(context, route_id)
+    graph = paths_mod.build(board, context, route)
+    state = _path_state(route_id)
+    moment = _now().isoformat()
+
+    if action in ("complete", "reopen"):
+        step_id = str(payload.get("step_id", "")).strip()
+        if step_id not in paths_mod.known_steps(graph):
+            raise HTTPException(400, f"no step {step_id!r} on this lane")
+        if action == "complete":
+            if step_id in state["completed"]:
+                return JSONResponse({"ok": True, "flow": _flow(context, board, route)})
+            state["completed"].add(step_id)
+        else:
+            if step_id not in state["completed"]:
+                return JSONResponse({"ok": True, "flow": _flow(context, board, route)})
+            state["completed"].discard(step_id)
+        state["trail"].append({
+            "at": moment, "actor": actor, "kind": action, "step_id": step_id,
+            "label": paths_mod.step_label(graph, step_id), "note": note,
+        })
+    elif action == "choose":
+        path_id = str(payload.get("path_id", "")).strip()
+        known = {p["path_id"]: p for p in graph["paths"]}
+        if path_id not in known:
+            raise HTTPException(400, f"no path {path_id!r}")
+        if not known[path_id]["available"]:
+            raise HTTPException(409, known[path_id]["unavailable_reason"] or "path not available")
+        if state["chosen"] != path_id:
+            state["trail"].append({
+                "at": moment, "actor": actor, "kind": "choose", "path_id": path_id,
+                "from_path": state["chosen"] or graph["recommended"],
+                "label": paths_mod.path_label(graph, path_id),
+                "followed_recommendation": path_id == graph["recommended"],
+                "note": note,
+            })
+            state["chosen"] = path_id
+    else:
+        raise HTTPException(400, "action must be complete, choose or reopen")
+
+    return JSONResponse({"ok": True, "flow": _flow(context, board, route)})
 
 
 @router.post("/console/{route_id}/tool")

@@ -88,15 +88,162 @@ function render() {
       <p class="cons-caution"><b>Thin evidence.</b>
         <span>${esc(c.caution.text)}</span></p>` : ''}
 
+    ${c.decision_flow ? flowHTML(c.decision_flow) : ''}
+
+    <h3 class="cons-sub">Tools by stage</h3>
     ${stages}`;
 
   wire();
+  wireFlow();
   // Put any output the planner had already opened back on screen, so a
   // refresh after running a tool does not throw its result away.
   Object.entries(state.outputs).forEach(([stepId, html]) => {
     const box = document.querySelector(`.out[data-step="${stepId}"]`);
     if (box) { box.innerHTML = html; box.hidden = false; }
   });
+}
+
+// =====================================================================
+// The response path.
+//
+// Horizon recommends a branch; the planner completes blocks (they turn
+// green) and the next block on that branch activates. Choosing another
+// branch opens it instead — nothing already done is lost, and the trail
+// below keeps every completion and every switch with who and when.
+
+const FLOW_WORD = { done: 'done', active: 'next action', next: 'then', idle: '' };
+
+function flowHTML(f) {
+  const current = f.paths.find((p) => p.in_force);
+  const branches = f.paths.map((p) => branchCardHTML(f, p)).join('');
+  const steps = current ? current.steps.map((s, i) => blockHTML(s, i + 1)).join('') : '';
+  const title = f.chosen ? 'Chosen path' : 'Recommended path';
+  return `
+    <section class="flow" id="flow" aria-label="Response path">
+      <header class="flow-head">
+        <h3>Response path</h3>
+        <p>Horizon suggests the next action from the risk and impact on this
+          lane. Complete a block and it turns green; the next one opens. Any
+          other branch can be chosen at any time.</p>
+      </header>
+
+      ${f.caution ? `<p class="cons-caution flow-caution"><b>Not confirmed.</b>
+        <span>${esc(f.caution)}</span></p>` : ''}
+
+      <ol class="flow-steps flow-steps--root">${blockHTML(f.root, 0)}</ol>
+
+      <div class="flow-branches" role="list">${branches}</div>
+
+      ${current ? `
+        <div class="flow-path">
+          <p class="flow-path-title">${esc(title)} · <b>${esc(current.label)}</b>
+            <span class="flow-count">${current.done} / ${current.total}</span>
+            ${current.complete && f.root.state === 'done'
+              ? '<span class="flow-complete">response complete</span>' : ''}</p>
+          <ol class="flow-steps">${steps}</ol>
+        </div>` : ''}
+
+      ${trailHTML(f)}
+    </section>`;
+}
+
+function branchCardHTML(f, p) {
+  const cls = ['branch',
+    p.in_force ? 'is-in-force' : '',
+    p.recommended ? 'is-recommended' : '',
+    p.available ? '' : 'is-unavailable'].filter(Boolean).join(' ');
+  const action = !p.available ? `<span class="branch-why">${esc(p.unavailable_reason || 'Not available')}</span>`
+    : p.in_force && p.chosen ? '<span class="branch-on">On this path</span>'
+    : `<button class="tool${p.recommended && !f.chosen ? ' tool--primary' : ''}" type="button"
+        data-choose="${esc(p.path_id)}">${p.in_force ? 'Confirm this path' : 'Choose this path'}</button>`;
+  return `
+    <article class="${cls}" role="listitem" data-path="${esc(p.path_id)}">
+      <p class="branch-top">
+        ${p.recommended ? '<span class="branch-badge">Horizon suggests</span>' : ''}
+        ${p.done ? `<span class="flow-count">${p.done} / ${p.total}</span>` : ''}
+      </p>
+      <h4>${esc(p.label)}</h4>
+      <p class="branch-sum">${esc(p.summary)}</p>
+      ${p.recommended && f.recommended_why ? `<p class="branch-basis">${esc(f.recommended_why)}</p>`
+        : p.basis && p.available ? `<p class="branch-basis">${esc(p.basis)}</p>` : ''}
+      ${action}
+    </article>`;
+}
+
+function blockHTML(s, n) {
+  const c = s.contact || {};
+  const info = (s.info || []).map((r) => `
+      <div><dt>${esc(r.label)}</dt><dd>${esc(r.value)}</dd></div>`).join('');
+  const open = s.state === 'active' || s.state === 'done';
+  const tel = c.phone ? `<a href="tel:${esc(c.phone.replace(/\s+/g, ''))}">${esc(c.phone)}</a>` : '';
+  const mail = c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '';
+  return `
+    <li class="block is-${esc(s.state)}" data-block="${esc(s.step_id)}">
+      <span class="block-mark" aria-hidden="true">${s.state === 'done' ? '✓' : n || '●'}</span>
+      <div class="block-body">
+        <div class="block-top">
+          <p class="block-label">${esc(s.label)}</p>
+          <span class="block-state">${esc(FLOW_WORD[s.state] || '')}</span>
+        </div>
+        ${open ? `
+          <p class="block-why">${esc(s.why)}</p>
+          <dl class="block-facts">
+            <div><dt>Contact</dt><dd><b>${esc(c.name || '—')}</b>${c.role ? ` · ${esc(c.role)}` : ''}
+              ${tel || mail ? `<br>${[tel, mail].filter(Boolean).join(' · ')}` : ''}</dd></div>
+            <div><dt>Respond within</dt><dd>${s.response_hours ? esc(hrs(s.response_hours)) : '—'}</dd></div>
+            ${info}
+          </dl>
+          <div class="tools block-tools">
+            ${s.state === 'done'
+              ? `<button class="tool" type="button" data-reopen="${esc(s.step_id)}">Reopen</button>`
+              : `<button class="tool tool--primary" type="button" data-complete="${esc(s.step_id)}">Mark done</button>`}
+          </div>` : `
+          <p class="block-meta">${esc(c.name || '')}${s.response_hours ? ` · within ${esc(hrs(s.response_hours))}` : ''}</p>`}
+      </div>
+    </li>`;
+}
+
+function trailHTML(f) {
+  if (!f.trail || !f.trail.length) {
+    return '<p class="flow-trail-empty">No decisions recorded yet on this lane.</p>';
+  }
+  const rows = f.trail.slice().reverse().map((t) => {
+    const what = t.kind === 'choose'
+      ? `chose <b>${esc(t.label)}</b>${t.followed_recommendation ? ' (as suggested)' : ' — not the suggested path'}`
+      : t.kind === 'reopen' ? `reopened <b>${esc(t.label)}</b>`
+      : `completed <b>${esc(t.label)}</b>`;
+    return `<li><time>${esc(when(t.at))}</time> <span>${esc(t.actor)} ${what}${t.note ? ` — ${esc(t.note)}` : ''}</span></li>`;
+  }).join('');
+  return `<details class="flow-trail" open><summary>Decision trail (${f.trail.length})</summary><ol>${rows}</ol></details>`;
+}
+
+function wireFlow() {
+  const box = document.getElementById('flow');
+  if (!box) return;
+  box.querySelectorAll('[data-complete]').forEach((b) =>
+    b.addEventListener('click', () => movePath(b, { action: 'complete', step_id: b.dataset.complete })));
+  box.querySelectorAll('[data-reopen]').forEach((b) =>
+    b.addEventListener('click', () => movePath(b, { action: 'reopen', step_id: b.dataset.reopen })));
+  box.querySelectorAll('[data-choose]').forEach((b) =>
+    b.addEventListener('click', () => movePath(b, { action: 'choose', path_id: b.dataset.choose })));
+}
+
+async function movePath(btn, body) {
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/v2/console/${encodeURIComponent(ROUTE)}/path?${QS}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.detail || `${res.status} ${res.statusText}`);
+    state.console.decision_flow = payload.flow;
+    render();
+  } catch (err) {
+    btn.disabled = false;
+    btn.insertAdjacentHTML('afterend', `<span class="note-line bad">${esc(err.message)}</span>`);
+  }
 }
 
 /* The rail. Four segments, each filled by its own progress — so a glance
