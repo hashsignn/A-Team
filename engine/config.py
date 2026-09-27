@@ -18,6 +18,7 @@ from typing import Any
 
 import yaml
 
+from engine import textfiles
 from engine.schemas import DelayTriple, Mode, Node, RiskVariable
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -202,8 +203,11 @@ def load_config(
                 f"or {example_dir}"
             )
 
-        with path.open(encoding="utf-8") as handle:
-            data = yaml.safe_load(handle)
+        # A customer's overlay may have been saved on Windows in its legacy
+        # encoding, or by Notepad with a byte-order mark; see textfiles.py.
+        # The committed examples are UTF-8 and read the same either way.
+        text, _encoding = textfiles.read_customer_text(path)
+        data = yaml.safe_load(text)
         cfg.files[name] = LoadedFile(
             name=name, path=path, is_example=is_example, data=data
         )

@@ -41,6 +41,7 @@ from pathlib import Path
 
 import yaml
 
+from engine import textfiles
 from engine.config import Config
 
 FLOWS_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "flows.yaml"
@@ -107,11 +108,16 @@ def load(path: Path | None = None) -> Flows:
         )
 
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError) as exc:
+        text, encoding = textfiles.read_customer_text(path)
+        raw = yaml.safe_load(text) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         # A malformed file is a missing file. The generator has a working
-        # fallback and does not need a third state.
+        # fallback and does not need a third state. UnicodeDecodeError is
+        # here because it is not an OSError: a file in the wrong encoding
+        # used to take the whole run down instead of being "unreadable".
         return Flows(available=False, detail=f"unreadable ({exc.__class__.__name__})")
+    if not isinstance(raw, dict):
+        return Flows(available=False, detail=f"{path.name} is not a mapping")
 
     rows = raw.get("flows") or []
     by_pair: dict[tuple[str, str], int] = {}
@@ -143,6 +149,10 @@ def load(path: Path | None = None) -> Flows:
             f"{total:,} purchase document(s) across {len(by_pair)} country "
             f"pair(s), {ordered[0]} to {ordered[-1]}"
             if ordered else f"{total:,} purchase document(s)"
+        ) + (
+            f" (read as {encoding} — an older import wrote it; re-run "
+            "scripts/import_sika_flows.py to rewrite it as UTF-8)"
+            if textfiles.legacy(encoding) else ""
         ),
     )
 

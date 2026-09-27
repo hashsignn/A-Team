@@ -238,3 +238,23 @@ def test_the_file_is_written_sorted_so_a_diff_is_reviewable(live, monkeypatch):
     data = json.loads(written[0].read_text(encoding="utf-8"))
     keys = list(data["entries"])
     assert keys == sorted(keys)
+
+
+# ------------------------------------------------ a long recording on a laptop
+def test_each_answer_is_on_disk_the_moment_it_arrives(live, monkeypatch):
+    """A 14B model on a laptop records for half an hour. A crash or a Ctrl+C in
+    minute twenty-nine used to lose every answer, because they were written
+    once, at the end."""
+    monkeypatch.setenv(cache.RECORD_ENV, "1")
+    seen: list[tuple[str, int]] = []
+    monkeypatch.setattr(cache, "ON_RECORD", lambda stage, held: seen.append((stage, held)))
+
+    llm.parse_with_provenance(Answer, SYSTEM, PROMPT, stage="triage")
+    on_disk = json.loads((cache.STORE / "triage.json").read_text(encoding="utf-8"))
+    assert len(on_disk["entries"]) == 1            # before any flush()
+    assert seen == [("triage", 1)]
+    assert not list(cache.STORE.glob("*.partial"))  # swapped in, not half-written
+
+    # And flush() still says which files this recording wrote.
+    assert [p.name for p in cache.flush()] == ["triage.json"]
+    assert cache.flush() == []

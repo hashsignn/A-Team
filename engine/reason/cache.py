@@ -43,6 +43,7 @@ import hashlib
 import json
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,9 @@ class Store:
     entries: dict[str, dict] = field(default_factory=dict)
     loaded: bool = False
     dirty: bool = False
+    # Written at least once since the last flush(), so flush() can say what a
+    # recording wrote even though each answer is now saved as it arrives.
+    saved: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
@@ -148,12 +152,22 @@ class Store:
         STORE.mkdir(parents=True, exist_ok=True)
         # Sorted keys and an indent, because this file is committed and a diff
         # that reorders itself on every write is a diff nobody reviews.
-        self.path.write_text(json.dumps(
-            {"schema": SCHEMA, "stage": self.stage,
-             "entries": dict(sorted(self.entries.items()))},
-            indent=1, ensure_ascii=False, sort_keys=False,
-        ) + "\n", encoding="utf-8", newline="\n")
-        self.dirty = False
+        #
+        # Written beside the real file and swapped in, because this now runs
+        # after every answer: a Ctrl+C in the middle of a plain write would
+        # leave half a file, which reads as corrupt — and a corrupt recording
+        # is treated as a missing one, every earlier answer with it.
+        with self._lock:
+            text = json.dumps(
+                {"schema": SCHEMA, "stage": self.stage,
+                 "entries": dict(sorted(self.entries.items()))},
+                indent=1, ensure_ascii=False, sort_keys=False,
+            ) + "\n"
+            partial = self.path.with_name(self.path.name + ".partial")
+            partial.write_text(text, encoding="utf-8", newline="\n")
+            os.replace(partial, self.path)
+            self.dirty = False
+            self.saved = True
         return self.path
 
 
@@ -178,23 +192,42 @@ def lookup(stage: str, system: str, prompt: str) -> Hit | None:
     return store(stage).get(_key(stage, system, prompt))
 
 
+# Called with (stage, answers now held for it) after each answer is kept. The
+# recorder prints progress with it; nothing else sets it.
+ON_RECORD: Callable[[str, int], None] | None = None
+
+
 def record(
     stage: str, system: str, prompt: str,
     payload: dict, model: str, at: str,
 ) -> None:
-    """Keep an answer. No-op unless recording is switched on."""
+    """Keep an answer — on disk, now. No-op unless recording is switched on.
+
+    Saved as it arrives rather than once at the end: a recording with a 14B
+    model on a laptop runs for half an hour, and a crash, a timeout or a
+    Ctrl+C in minute twenty-nine used to lose every answer before it.
+    """
     if not recording():
         return
-    store(stage).put(_key(stage, system, prompt), payload, model, at)
+    kept = store(stage)
+    kept.put(_key(stage, system, prompt), payload, model, at)
+    kept.save()
+    if ON_RECORD is not None:
+        ON_RECORD(stage, len(kept.entries))
 
 
 def flush() -> list[Path]:
-    """Write every dirty store. Called once, at the end of a recording run."""
+    """Write anything still unwritten, and say which files this recording wrote.
+
+    Called once, at the end of a recording run. Answers are saved as they
+    arrive, so this mostly reports rather than writes.
+    """
     written = []
     for stage_store in list(_STORES.values()):
-        path = stage_store.save()
-        if path is not None:
-            written.append(path)
+        stage_store.save()
+        if stage_store.saved:
+            written.append(stage_store.path)
+            stage_store.saved = False
     return written
 
 

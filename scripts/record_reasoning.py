@@ -236,6 +236,11 @@ def main() -> int:
     print(f"on disk : {before['entries']} answer(s) already recorded")
     print(f"\nRunning the funnel at {args.as_of} over "
           f"{args.shipments} shipments…")
+    print("  Each answer is saved as it arrives. With a large model on a laptop")
+    print(f"  this can take 10–30 minutes; each answer may take up to "
+          f"{llm.TIMEOUT_S:.0f} s (RADAR_LLM_TIMEOUT).")
+    cache.ON_RECORD = lambda stage, held: print(
+        f"    kept a {stage} answer ({held} held)", flush=True)
 
     context = run(
         clock=Clock.at(args.as_of),
@@ -263,8 +268,16 @@ def main() -> int:
     gained = after["entries"] - before["entries"]
 
     if not written:
-        print("\nNothing new to write — every answer was already recorded.")
-        return 0
+        if before["entries"]:
+            print("\nNothing new to write — every answer was already recorded.")
+            return 0
+        print("\nNo answer was recorded. If the model is running, it is probably")
+        print(f"timing out: each call may take {llm.TIMEOUT_S:.0f} s. Raise it and run again:")
+        setter = "set" if platform.system() == "Windows" else "export"
+        print(f"  {setter} RADAR_LLM_TIMEOUT=900")
+        print("or read with a smaller model, e.g. "
+              f"{setter} RADAR_EXTRACT_MODEL=qwen2.5:7b-instruct")
+        return 1
 
     for path in written:
         print(f"\nwrote {path.relative_to(ROOT)}")
