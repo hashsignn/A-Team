@@ -105,9 +105,21 @@ def main() -> int:
                      clusters: document.querySelectorAll('.mcluster').length }; })()""")
         check(drawn["icons"] + drawn["clusters"] > 0, "[assets] nothing rendered: no icons, no clusters",
               f"{drawn['icons']} icons + {drawn['clusters']} donut clusters on screen")
-        images = page.evaluate("""['sea','barge','rail','road'].flatMap(m => ['green','yellow','red']
-            .map(s => window.__fleetmap.hasImage(`asset-${m}-${s}`))).every(Boolean)""")
-        check(images, "[icons] a modality/status icon failed to load", "12 SVG modality icons loaded")
+        images = page.evaluate("""['sea','barge','rail','road'].flatMap(m =>
+            ['red','yellow','blue','white','green']
+            .map(l => window.__fleetmap.hasImage(`asset-${m}-${l}`))).every(Boolean)""")
+        check(images, "[icons] a modality/level icon failed to load",
+              "20 SVG icons: 4 modes x 5 ladder levels")
+        # One key on the board: every vehicle wears its route's ladder colour.
+        mismatch = page.evaluate("""(() => { const s = MapAgent.getState();
+            return window.__fleetmap.querySourceFeatures('assets')
+              .filter(f => !f.properties.cluster)
+              .filter(f => f.properties.level !== (s.assets.byId[f.properties.id].route_level || 'green'))
+              .length; })()""")
+        check(mismatch == 0, f"[icons] {mismatch} vehicle(s) not in their route's ladder colour",
+              "vehicles coloured by their route's ladder level")
+        check(page.locator("#posture").is_hidden(),
+              "[chrome] the convene strip is drawn over the map", "no convene strip over the map")
         check(page.locator("#map-legend").count() == 0,
               "[legend] a map legend is back beside the ladder",
               "no map legend: the ladder is the board's one key")

@@ -40,6 +40,14 @@
     return `${(a / 24).toFixed(1)} days`;
   };
   const statusColour = (s) => tokenOf(`--status-${s}`);
+  // The card keys to the ROUTE's ladder level, like the vehicle on the map
+  // and the ladder in the top bar; the vehicle's own delay stays in words.
+  const LEVEL_LABEL = { red: 'Critical', yellow: 'Alert', blue: 'Watch', white: 'Bias', green: 'Normal' };
+  const routeLevel = (s, id) => {
+    const a = s.assets.byId[id];
+    return a && LEVEL_LABEL[a.route_level] ? a.route_level : 'green';
+  };
+  const levelColour = (l) => tokenOf(`--lvl-${l}`);
   const tCo2 = (kg) => (kg == null ? '—' : `${(kg / 1000).toFixed(kg < 10000 ? 2 : 1)} t`);
   const pct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v))}%`);
   const altColour = (rank) => tokenOf(`--alt-${Math.max(1, Math.min(4, rank || 4))}`);
@@ -114,7 +122,7 @@
       const crew = d.asset.crew;
       $('hub-title').innerHTML = `
         <h3><span class="mono">${esc(d.asset.asset_id)}</span>
-          <span class="st-chip" style="--c:${statusColour(st.level)}"><i></i>${esc(st.label)}</span></h3>
+          <span class="st-chip" style="--c:${levelColour(routeLevel(s, d.shipment_id))}" title="The route's level on the ladder — how soon a decision on this lane is due"><i></i>${esc(LEVEL_LABEL[routeLevel(s, d.shipment_id)])} route</span></h3>
         <p class="hub-sub">${esc(d.asset.name)} · carrying <b>${esc(d.shipment_id)}</b> · ${esc(d.phase_label)}</p>`;
       const pos = d.position;
       return `
@@ -133,7 +141,7 @@
             <div class="v">${Math.round(d.heading_deg)}° · ${d.leg.index + 1}/${d.leg.count} ${esc(d.leg.mode)}</div>
             <div class="s">${esc(d.leg.from_name)} → ${esc(d.leg.to_name)}</div></div>
         </div>
-        <p class="hreason">${esc(st.reason)}</p>
+        <p class="hreason"><b>${esc(st.label)}:</b> ${esc(st.reason)}</p>
       </section>`;
     }
 
@@ -368,7 +376,7 @@
       if (sp.enabled && !data) {
         body = `<p class="hnote">${sp.status === 'error' ? `Could not evaluate — ${esc(sp.error)}` : 'Working out which containers to move…'}</p>`;
       } else if (data) {
-        const colourOf = (routeId) => (routeId === 'ORIGINAL' ? statusColour(d.status.level)
+        const colourOf = (routeId) => (routeId === 'ORIGINAL' ? levelColour(routeLevel(s, d.shipment_id))
           : altColour((d.candidates.find((c) => c.id === routeId) || {}).rank));
         const target = data.target || s.routing.chosen || (d.candidates[0] && d.candidates[0].id);
         const moved = data.containers.filter((c) => c.route_id !== 'ORIGINAL').length;

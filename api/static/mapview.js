@@ -36,7 +36,15 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  const STATUSES = ['green', 'yellow', 'red'];
+  /* Vehicles are coloured by their ROUTE's ladder level — the same five
+   * colours, and the same meaning, as the ladder in the top bar: how soon a
+   * decision on that lane is due. One key for the whole board. (How late the
+   * vehicle itself is — the red/yellow/green delay status — is still in the
+   * tooltip and the card, in words.) */
+  const LEVELS = ['red', 'yellow', 'blue', 'white', 'green'];
+  const LEVEL_LABEL = { red: 'Critical', yellow: 'Alert', blue: 'Watch', white: 'Bias', green: 'Normal' };
+  const LEVEL_SORT = { green: 1, white: 2, blue: 3, yellow: 4, red: 5 };
+  const levelOf = (a) => (a && LEVEL_LABEL[a.route_level] ? a.route_level : 'green');
   const MODES = ['sea', 'barge', 'rail', 'road'];
   const CLUSTER_MAX_ZOOM = 6;
   // Errors from a provider, with no tile loaded yet, before the next is
@@ -177,7 +185,7 @@
       const n = Math.max(1, Math.min(4, rank || 4));
       return tokenOf(`--alt-${n}`);
     }
-    const statusColour = (s) => tokenOf(`--status-${s}`);
+    const levelColour = (l) => tokenOf(`--lvl-${l}`);
 
     // ---------------------------------------------------------------
     // View switching — map or globe in the left pane
@@ -367,9 +375,9 @@
     async function addIcons(map) {
       const jobs = [];
       for (const mode of MODES) {
-        for (const s of STATUSES) {
-          const name = `asset-${mode}-${s}`;
-          jobs.push(loadImage(assetSvg(mode, statusColour(s))).then((img) => {
+        for (const l of LEVELS) {
+          const name = `asset-${mode}-${l}`;
+          jobs.push(loadImage(assetSvg(mode, levelColour(l))).then((img) => {
             if (map.hasImage(name)) map.removeImage(name);
             map.addImage(name, img, { pixelRatio: 2 });
           }));
@@ -389,9 +397,11 @@
         type: 'geojson', data: empty, cluster: true,
         clusterRadius: 46, clusterMaxZoom: CLUSTER_MAX_ZOOM,
         clusterProperties: {
-          red: ['+', ['case', ['==', ['get', 'status'], 'red'], 1, 0]],
-          yellow: ['+', ['case', ['==', ['get', 'status'], 'yellow'], 1, 0]],
-          green: ['+', ['case', ['==', ['get', 'status'], 'green'], 1, 0]],
+          red: ['+', ['case', ['==', ['get', 'level'], 'red'], 1, 0]],
+          yellow: ['+', ['case', ['==', ['get', 'level'], 'yellow'], 1, 0]],
+          blue: ['+', ['case', ['==', ['get', 'level'], 'blue'], 1, 0]],
+          white: ['+', ['case', ['==', ['get', 'level'], 'white'], 1, 0]],
+          green: ['+', ['case', ['==', ['get', 'level'], 'green'], 1, 0]],
         },
       });
 
@@ -465,7 +475,7 @@
         if (!f) return;
         const a = store.getState().assets.byId[f.properties.id];
         if (!a) return;
-        tip.innerHTML = `<div class="tip-k">${esc(a.status_label)} · ${esc(a.mode)}</div>
+        tip.innerHTML = `<div class="tip-k"><span style="color:${levelColour(levelOf(a))}">${esc(LEVEL_LABEL[levelOf(a)])}</span> route · ${esc(a.mode)} · ${esc(a.status_label.toLowerCase())}</div>
           <b>${esc(a.id)} · ${esc(a.name)}</b>
           <div class="muted">${esc(a.leg)}</div>
           <div style="margin-top:4px">${esc(a.reason)}</div>`;
@@ -521,11 +531,11 @@
       const w = 6;
       const C = 2 * Math.PI * (r - w / 2);
       let offset = 0;
-      const arcs = ['red', 'yellow', 'green'].map((s) => {
+      const arcs = LEVELS.map((s) => {
         const n = p[s] || 0;
         if (!n) return '';
         const len = (n / total) * C;
-        const arc = `<circle r="${r - w / 2}" cx="${r}" cy="${r}" fill="none" stroke="${statusColour(s)}"
+        const arc = `<circle r="${r - w / 2}" cx="${r}" cy="${r}" fill="none" stroke="${levelColour(s)}"
           stroke-width="${w}" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-offset}"
           transform="rotate(-90 ${r} ${r})"/>`;
         offset += len;
@@ -548,11 +558,11 @@
         if (seen.has(id)) continue;
         seen.add(id);
         let m = view.clusters.get(id);
-        const key = `${p.point_count}|${p.red}|${p.yellow}|${p.green}`;
+        const key = LEVELS.map((l) => p[l] || 0).join('|') + `|${p.point_count}`;
         if (!m) {
           const node = document.createElement('div');
           node.className = 'mcluster';
-          node.title = `${p.point_count} assets — ${p.red || 0} red, ${p.yellow || 0} yellow, ${p.green || 0} green. Click to expand.`;
+          node.title = `${p.point_count} assets — ${LEVELS.filter((l) => p[l]).map((l) => `${p[l]} ${LEVEL_LABEL[l]}`).join(', ')}. Click to expand.`;
           node.addEventListener('click', (ev) => {
             ev.stopPropagation();
             expandCluster(id, f.geometry.coordinates);
@@ -594,15 +604,14 @@
 
       if (force || !prev || state.assets.items !== prev.assets.items
           || state.filters !== prev.filters || state.selection.id !== prev.selection.id) {
-        const sort = { green: 1, yellow: 2, red: 3 };
         map.getSource('assets').setData(fc(select.visibleAssets(state).map((a) => ({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
           properties: {
-            id: a.id, status: a.status, mode: a.mode,
-            icon: `asset-${MODES.includes(a.mode) ? a.mode : 'road'}-${a.status}`,
+            id: a.id, status: a.status, level: levelOf(a), mode: a.mode,
+            icon: `asset-${MODES.includes(a.mode) ? a.mode : 'road'}-${levelOf(a)}`,
             selected: a.id === state.selection.id,
-            sort: (a.id === state.selection.id ? 10 : 0) + sort[a.status],
+            sort: (a.id === state.selection.id ? 10 : 0) + LEVEL_SORT[levelOf(a)],
           },
         }))));
       }
@@ -696,12 +705,12 @@
       const letters = 'ABCDEFG';
       map.getSource('split').setData(fc(branches.map((b, i) => {
         const route = select.routeById(state, b.route_id);
-        const colour = b.route_id === 'ORIGINAL' ? statusColour(data.status.level) : altColour(route && route.rank);
+        const colour = b.route_id === 'ORIGINAL' ? levelColour(levelOf(select.selectedAsset(state))) : altColour(route && route.rank);
         return line(b.path, { id: b.route_id, colour, stays: b.route_id === 'ORIGINAL', letter: letters[i] });
       })));
       branches.forEach((b, i) => {
         const route = select.routeById(state, b.route_id);
-        const colour = b.route_id === 'ORIGINAL' ? statusColour(data.status.level) : altColour(route && route.rank);
+        const colour = b.route_id === 'ORIGINAL' ? levelColour(levelOf(select.selectedAsset(state))) : altColour(route && route.rank);
         const at = pointAlong(b.path, b.route_id === 'ORIGINAL' ? 0.3 : 0.62);
         if (!at) return;
         const node = document.createElement('div');
@@ -825,6 +834,9 @@
     document.addEventListener('themechange', async () => {
       if (!view.ready) return;
       const map = view.map;
+      // The ladder colours change with the theme (Bias is slate on a light
+      // page, white on a dark one), so the vehicle icons are redrawn.
+      await addIcons(map);
       map.setPaintProperty('bg', 'background-color', tokenOf('--map-sea'));
       if (map.getLayer('land')) {
         map.setPaintProperty('land', 'fill-color', tokenOf('--map-land'));
