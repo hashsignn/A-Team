@@ -15,9 +15,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from engine.ingest.sources import wikipedia
+from engine.ingest.sources import autobahn, wikipedia
 
-DECODERS = {"wikipedia_current_events": wikipedia.decode}
+DECODERS = {
+    "wikipedia_current_events": wikipedia.decode,
+    "autobahn_closures": autobahn.decode,
+}
 REFUSALS = {"wikipedia_current_events": wikipedia.refusal}
 
 

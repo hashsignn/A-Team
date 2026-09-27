@@ -212,6 +212,14 @@ class SourceSpec:
     # Empty means "no restriction", which is correct for a news index.
     modes: tuple[str, ...] = ()
 
+    # Variables EVERY item of this source is, whatever its text says. For a
+    # feed that only ever lists one kind of thing — a motorway's closures —
+    # asking the keyword router to recognise it from the words is asking the
+    # wrong question: "A3 | Sandgraben - Würzburg/Kist" names two junctions
+    # and no English risk word, so every real closure went to a model to be
+    # recognised as a closure. Empty for any source that reports anything.
+    declares: tuple[str, ...] = ()
+
     enabled: bool = True
     builtin: bool = False
     notes: str = ""

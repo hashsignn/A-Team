@@ -38,8 +38,12 @@ WANTED = (
         "env": "RADAR_TRIAGE_MODEL",
         "model": llm.TRIAGE_MODEL,
         "job": "one yes/no per headline — could this touch freight?",
-        "suggest": "qwen2.5:1.5b-instruct",
-        "size": "~1.0 GB",
+        # The 7B, not the 1.5B. On the first real recording the 1.5B kept a
+        # celebrity trial, a theme-park lawsuit and a fine for eating on
+        # buses as freight news. A recording triages a few dozen headlines,
+        # so the bigger model costs minutes, once.
+        "suggest": "qwen2.5:7b-instruct",
+        "size": "~4.7 GB",
     },
     {
         "stage": "extract",
@@ -75,8 +79,8 @@ def _installed() -> list[str] | None:
 def pick(models: list[dict]) -> dict[str, str] | None:
     """Which of the models already pulled to use for each job.
 
-    The smallest for triage — it answers one yes/no per headline, hundreds of
-    times — and the largest for extraction, where the careful reading
+    The smallest capable one for triage — it answers one yes/no per
+    headline — and the largest for extraction, where the careful reading
     happens, and for the assistant. Embedding models are not chat models and
     are never picked. None when there is nothing to pick from.
     """
@@ -84,7 +88,12 @@ def pick(models: list[dict]) -> dict[str, str] | None:
     if not chat:
         return None
     by_size = sorted(chat, key=lambda m: (m["size"], m["name"]))
-    small, large = by_size[0]["name"], by_size[-1]["name"]
+    # Triage takes the smallest model of at least ~3 GB (a 7B at 4-bit) when
+    # there is one: below that, the first real recording showed a model that
+    # calls a celebrity trial freight news.
+    capable = [m for m in by_size if m["size"] >= 3_000_000_000]
+    small = (capable or by_size)[0]["name"]
+    large = by_size[-1]["name"]
     return {"RADAR_TRIAGE_MODEL": small, "RADAR_EXTRACT_MODEL": large,
             "RADAR_LOCAL_MODEL": large}
 

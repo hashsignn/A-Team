@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import numpy as np
 
@@ -60,7 +61,11 @@ from engine.variables import rules as rules_router
 class RunOptions:
     shipment_count: int = 150
     seed: int | None = None
-    max_reasoned_events: int = 40
+    # Events from items that cleared every deterministic layer. A bound on the
+    # board, not on cost — building one is microseconds — so it is set well
+    # above what a real two-month recording produces (50 on the first one),
+    # and when it is exceeded the rest are counted, never silently skipped.
+    max_reasoned_events: int = 250
     include_delivered: bool = False
 
     # The rescue path (see _to_events). On by default, but it is inert without
@@ -69,9 +74,11 @@ class RunOptions:
     rescue_unmatched: bool = True
 
     # Bounded hard. Rescue runs the STRONG model once per survivor, which is
-    # the most expensive thing in this pipeline. Six is a demo; a deployment
-    # with a real GDELT sweep would raise it and watch the funnel counts.
-    max_rescued_events: int = 6
+    # the most expensive thing in this pipeline. Twelve, the funnel's own
+    # extraction budget: at six, the first real recording spent every read on
+    # a celebrity trial and a theme-park lawsuit that a lenient triage had
+    # kept, and the motorway closures behind them were never read.
+    max_rescued_events: int = 12
 
     # External sources. Inert without RADAR_ALLOW_NETWORK — each one falls back
     # to its fixture — so leaving this on costs nothing offline.
@@ -348,9 +355,12 @@ def _to_events(
         "reasoned": 0,
         "rescued": 0,
         "rescue_considered": 0,
+        "over_event_cap": 0,
     }
     # Items the deterministic router could not name. See the rescue note below.
     rescue_candidates: list[dict] = []
+    # Items that cleared every deterministic layer, before the event cap.
+    admitted: list[tuple[dict, rules_router.RouterResult]] = []
 
     # --- numeric observations: already structured, already ours ---------
     for obs in gauge_obs:
@@ -364,8 +374,9 @@ def _to_events(
     # variables have to exist on every item before any one of them is judged.
     routed_by_item: dict[str, rules_router.RouterResult] = {}
     for item in feed_items:
-        routed_by_item[item["item_id"]] = rules_router.route(
-            item["text"], config.variables
+        routed_by_item[item["item_id"]] = (
+            _declared_route(item, config)
+            or rules_router.route(item["text"], config.variables)
         )
         item["active_variables"] = routed_by_item[item["item_id"]].active_variables
 
@@ -396,6 +407,13 @@ def _to_events(
         # With no model running, rescue does nothing and these drop exactly as
         # they did before. No model is a supported state, not a degraded one.
         routed = routed_by_item[item["item_id"]]
+        if routed.abstained and routed.router == "source":
+            # Not an item the router failed to read: the source named it (an
+            # earthquake) and a table ruled it too small. Nothing to rescue,
+            # and a model asked about a M5 would only be asked the table's
+            # question again.
+            router_notes[item["item_id"]] = routed.abstain_reason or "below the source's floor"
+            continue
         if routed.abstained:
             # A stale item is not a rescue candidate. This branch used to skip
             # the temporal layer altogether, which cost twice: the triage
@@ -424,10 +442,25 @@ def _to_events(
             unpromoted[item["item_id"]] = reason
             continue
 
-        counts["reasoned"] += 1
-        if counts["reasoned"] > options.max_reasoned_events:
-            break
+        admitted.append((item, routed))
 
+    # The cap, applied once every item has been through every layer. It was a
+    # `break` inside the loop, which stopped reading the feed the moment it was
+    # reached: on the first real recording the 45 motorway closures filled it,
+    # and the 1,300 earthquakes and disaster alerts behind them in the list
+    # were never looked at — not filtered, not counted, simply not read. Now
+    # every item is counted, and when there are more than the cap, the most
+    # official and the newest are kept and the rest are counted as dropped.
+    if len(admitted) > options.max_reasoned_events:
+        order = {id(item): n for n, (item, _routed) in enumerate(admitted)}
+        best = sorted(admitted, key=lambda pair: (
+            int(pair[0].get("source_tier") or 3),
+            -pair[0]["published_at"].timestamp() if pair[0].get("published_at") else 0.0,
+        ))[: options.max_reasoned_events]
+        counts["over_event_cap"] = len(admitted) - len(best)
+        admitted = sorted(best, key=lambda pair: order[id(pair[0])])   # feed order again
+    counts["reasoned"] = len(admitted)
+    for item, routed in admitted:
         events.append(_event_from_item(item, routed, config, network, clock))
 
     # --- RESCUE: the shock path -----------------------------------------
@@ -438,7 +471,7 @@ def _to_events(
         kept, funnel_cost = reason_funnel.triage(rescue_candidates)
         counts["funnel"] = funnel_cost.as_dict()
         counts["funnel_sentence"] = funnel_cost.sentence()
-        for item in kept[: options.max_rescued_events]:
+        for item in _reading_order(kept)[: options.max_rescued_events]:
             event = _rescue_event(item, config, network, clock)
             if event is None:
                 continue
@@ -511,6 +544,104 @@ def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:
         payload_fraction=obs.get("payload_fraction"),
         cost_multiplier=obs.get("cost_multiplier", 1.0),
     )
+
+
+def _declared_route(item: dict, config: Config) -> rules_router.RouterResult | None:
+    """The variables a source says every one of its items IS, or None.
+
+    A motorway closure feed lists closures: each item is INF_ROAD_CLOSURE
+    whatever words its title happens to use, and the keyword router is still
+    asked what else the text says (a closure "after an HGV fire" is a fire
+    too). Deterministic — no model — which is the point: a German title the
+    English vocabulary cannot read used to wait for a model to recognise it.
+    """
+    declared = [v for v in item.get("declared_variables") or [] if v in config.variables]
+    if not declared:
+        return None
+    if "FOR_EARTHQUAKE" in declared:
+        quake = _quake_severity(item, config)
+        if quake is None:
+            return rules_router.RouterResult(
+                active_variables=[], severity=Severity.MINOR, modes_affected=[],
+                abstained=True, router="source",
+                abstain_reason=(
+                    f"M {item.get('severity_hint') or '?'} is below the "
+                    "thresholds.yaml → earthquake_magnitude floor"
+                ),
+            )
+    words = rules_router.route(item["text"], config.variables)
+    active = declared + [v for v in words.active_variables if v not in declared]
+    modes: list[Mode] = []
+    for vid in active[:5]:
+        for mode in config.variables[vid].modes_affected:
+            if mode not in modes:
+                modes.append(mode)
+    severity = max(words.severity, _declared_severity(item, config), key=_SEVERITY_RANK.index)
+    return rules_router.RouterResult(
+        active_variables=active[:5],
+        severity=severity,
+        modes_affected=modes,
+        # The headline IS the quote: the source's own words for what it is.
+        matched_spans={**{v: item["headline"] for v in declared}, **words.matched_spans},
+        router="source",
+    )
+
+
+_SEVERITY_RANK = [Severity.MINOR, Severity.MODERATE, Severity.SEVERE]
+
+
+QUAKE_DEFAULTS = {"ignore_below": 6.0, "bands": [
+    {"at_least": 6.0, "severity": "moderate"}, {"at_least": 7.0, "severity": "severe"}]}
+
+
+def _quake_severity(item: dict, config: Config) -> Severity | None:
+    """Severity from the measured magnitude, or None below the floor."""
+    try:
+        magnitude = float(item.get("severity_hint"))
+    except (TypeError, ValueError):
+        return None
+    table = config.thresholds.get("earthquake_magnitude") or QUAKE_DEFAULTS
+    if magnitude < float(table.get("ignore_below", 6.0)):
+        return None
+    found = Severity.MINOR
+    for band in table.get("bands") or []:
+        if magnitude >= float(band["at_least"]):
+            found = Severity(band["severity"])
+    return found
+
+
+def _declared_severity(item: dict, config: Config) -> Severity:
+    """Read from what the source states, not from adjectives: an earthquake's
+    magnitude; a closure's kind and window — a carriageway shut for more than
+    a day is a real detour, a junction ramp or a night closure a minor one."""
+    if "FOR_EARTHQUAKE" in (item.get("declared_variables") or []):
+        return _quake_severity(item, config) or Severity.MINOR
+    starts, ends = item.get("starts_at"), item.get("ends_at")
+    long = bool(starts and ends and (ends - starts) >= timedelta(hours=24))
+    carriageway = str(item.get("severity_hint") or "").upper() == "CLOSURE"
+    return Severity.MODERATE if (carriageway and long) else Severity.MINOR
+
+
+def _reading_order(items: list[dict]) -> list[dict]:
+    """Which triaged items the careful reader sees first.
+
+    The extraction budget is small, and the first real recording spent all
+    of it in feed order on the first things a lenient triage kept. So an item
+    tied to a known place comes first, then one the triage said touches a
+    mode of freight, then the more official source, then the newest.
+    Deterministic, so a replay reads the same items in the same order.
+    """
+    def key(item: dict) -> tuple:
+        mode = (item.get("triage") or {}).get("freight_mode")
+        published = item.get("published_at")
+        return (
+            0 if item.get("node_hint") else 1,
+            0 if mode and mode != "none" else 1,
+            int(item.get("source_tier") or 3),
+            -published.timestamp() if published else 0.0,
+            str(item.get("item_id", "")),
+        )
+    return sorted(items, key=key)
 
 
 def _restrict_modes(modes: list[Mode], item: dict) -> list[Mode]:

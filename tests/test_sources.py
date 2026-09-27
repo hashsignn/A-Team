@@ -337,11 +337,20 @@ def test_a_wire_story_resolves_to_a_node(config):
     "Suezmax tanker rates climb again",
     "Basel III capital rules tightened",
     "The New York Times reported yesterday",
+    # From the first real recording of Wikipedia's news portal.
+    "Three lawsuits are filed against an amusement park in Valencia, California, U.S.",
+    "Leaders meet at the Shanghai Cooperation Organisation summit in Tianjin",
+    "A driver crashes at the Shanghai International Circuit",
 ])
 def test_lookalikes_do_not_resolve(decoy, config):
     """Substring matching would make Suez match Suezmax — a vessel class, not
     a canal. Every false node here manufactures an event."""
     assert places.resolve_nodes(decoy, config) == []
+
+
+def test_the_real_place_still_resolves_beside_its_lookalike(config):
+    assert places.resolve_nodes("Dockworkers strike at the port of Valencia, Spain", config) == ["ESVLC"]
+    assert places.resolve_nodes("Fog closes the port of Shanghai", config) == ["CNSHA"]
 
 
 def test_a_source_supplied_hint_is_never_overwritten(config):

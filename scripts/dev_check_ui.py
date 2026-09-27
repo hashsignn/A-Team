@@ -164,6 +164,18 @@ def _cards(page):
     return page.locator("#rlist .rli")
 
 
+def _settle(page, script: str, timeout: int = 60_000) -> None:
+    """Wait until *script* is true, and carry on if it never is: the check
+    that follows reports the failure it is. A fixed pause stopped being
+    enough once the board ran on a real recording — a save re-runs the whole
+    pipeline, about 3.5 s over 5,500 items, and every check read the page
+    one step behind: the save not yet reported, then the reset not yet."""
+    try:
+        page.wait_for_function(script, timeout=timeout)
+    except Exception:  # noqa: BLE001 — reported by the check that follows
+        pass
+
+
 def _board(page, check) -> None:
     _open_board(page)
     # The globe needs a few frames to build its geometry and settle.
@@ -453,7 +465,8 @@ def _profile(page, check, expecting_refusal) -> None:
     agreed.dispatch_event("input")
     page.wait_for_timeout(200)
     page.locator("#btn-save").click()
-    page.wait_for_timeout(2_500)
+    _settle(page, "document.getElementById('overlay-flag').innerText.includes('config/')"
+                  " && document.getElementById('btn-save').disabled")
     saved = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
     check(saved == "4", f"[profile] saved value did not come back: {saved!r}")
     flag = page.locator("#overlay-flag").inner_text()
@@ -466,7 +479,7 @@ def _profile(page, check, expecting_refusal) -> None:
     page.screenshot(path=str(OUT / "profile-saved.png"))
 
     page.locator("#btn-reset-profile").click()
-    page.wait_for_timeout(2_500)
+    _settle(page, "document.getElementById('overlay-flag').innerText.includes('stand-in')")
     restored = page.locator('input[data-path="alert_levels.red_hours"]').input_value()
     check(restored != "4", "[profile] reset did not restore the committed stand-in",
           f"reset: red_hours back to {restored!r}")

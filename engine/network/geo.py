@@ -90,7 +90,13 @@ def great_circle_points(a: Point, b: Point, segments: int = 24) -> list[Point]:
 
 
 def cross_track_distance_km(point: Point, seg_a: Point, seg_b: Point) -> float:
-    """Shortest distance from *point* to the great-circle segment a->b.
+    """Shortest distance from *point* to the great-circle segment a->b."""
+    return segment_distance_km(point, seg_a, seg_b)[0]
+
+
+def segment_distance_km(point: Point, seg_a: Point, seg_b: Point) -> tuple[float, str]:
+    """(shortest distance to the segment a->b, where on it the nearest point is:
+    "start", "interior" or "end").
 
     This is the whole spatial gate. BRIEF §3.2 calls layer 1 the filter that
     does the most work and has zero parameters — either the event is near a
@@ -99,17 +105,17 @@ def cross_track_distance_km(point: Point, seg_a: Point, seg_b: Point) -> float:
     """
     d13 = haversine_km(seg_a, point) / EARTH_RADIUS_KM
     if d13 == 0.0:
-        return 0.0
+        return 0.0, "start"
 
     d12 = haversine_km(seg_a, seg_b) / EARTH_RADIUS_KM
     if d12 == 0.0:  # degenerate segment
-        return d13 * EARTH_RADIUS_KM
+        return d13 * EARTH_RADIUS_KM, "start"
 
     delta_bearing = _bearing_rad(seg_a, point) - _bearing_rad(seg_a, seg_b)
 
     # Behind the start: the perpendicular foot is off the segment.
     if math.cos(delta_bearing) < 0.0:
-        return haversine_km(point, seg_a)
+        return haversine_km(point, seg_a), "start"
 
     cross_track = math.asin(math.sin(d13) * math.sin(delta_bearing))
     along_track = math.acos(
@@ -118,9 +124,9 @@ def cross_track_distance_km(point: Point, seg_a: Point, seg_b: Point) -> float:
 
     # Past the end: likewise off the segment.
     if along_track > d12:
-        return haversine_km(point, seg_b)
+        return haversine_km(point, seg_b), "end"
 
-    return abs(cross_track) * EARTH_RADIUS_KM
+    return abs(cross_track) * EARTH_RADIUS_KM, "interior"
 
 
 def _bearing_rad(a: Point, b: Point) -> float:
@@ -154,8 +160,17 @@ def on_corridor(
     path: list[Point],
     mode: str,
     width_km: float | None = None,
+    ends: bool = True,
 ) -> tuple[bool, float]:
-    """Is *point* within the corridor of *path*? Returns (hit, distance_km)."""
+    """Is *point* within the corridor of *path*? Returns (hit, distance_km).
+
+    ``ends=False`` asks for the corridor BETWEEN the ends only. The distance to
+    a segment is the distance to its endpoint once the point is past it, so
+    the corridor also reaches ``width_km`` beyond each end of the path — a
+    60 km road corridor from Düdingen to Basel took in the A5 at Freiburg,
+    45 km past Basel on a road that leg never drives. The gate asks this way
+    because it tests each end's own catchment first.
+    """
     width = width_km if width_km is not None else CORRIDOR_WIDTH_KM.get(mode, 60.0)
     if len(path) < 2:
         if not path:
@@ -163,9 +178,20 @@ def on_corridor(
         d = haversine_km(point, path[0])
         return (d <= width, d)
 
-    best = float("inf")
-    for a, b in zip(path, path[1:], strict=False):
-        best = min(best, cross_track_distance_km(point, a, b))
+    segments = list(zip(path, path[1:], strict=False))
+    best, at = float("inf"), (0, "interior")
+    for index, (a, b) in enumerate(segments):
+        distance, where = segment_distance_km(point, a, b)
+        if distance < best:
+            best, at = distance, (index, where)
+    if not ends:
+        # Past an end, EVERY segment's nearest point clamps to a vertex, and a
+        # densified path has many: so it is the nearest point of the whole
+        # path that decides. If that is the path's first or last point, the
+        # event lies beyond the leg, not beside it.
+        index, where = at
+        if (index == 0 and where == "start") or (index == len(segments) - 1 and where == "end"):
+            return (False, best)
     return (best <= width, best)
 
 

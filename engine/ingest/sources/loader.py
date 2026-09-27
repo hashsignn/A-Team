@@ -188,6 +188,7 @@ def _custom(entry: Any) -> SourceSpec:
             ),
             fixture=str(entry.get("fixture", "")),
             families=tuple(entry.get("families") or ()),
+            declares=tuple(str(v) for v in entry.get("declares") or ()),
             enabled=bool(entry.get("enabled", True)),
             unlocks_if_connected=str(entry.get("unlocks_if_connected", "")),
             notes=str(entry.get("notes", "")),

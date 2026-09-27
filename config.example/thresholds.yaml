@@ -126,6 +126,22 @@ weather_rules:
   - {id: hard_frost,   reading: temperature_2m_min, below: -10.0, variable: CLI_ICE,         kinds: [plant, distribution, inland_port, gauge], severity: minor, source: assumed, says: "hard frost"}
 
 # ===================================================================
+# EARTHQUAKES (USGS) — magnitude to severity
+# ===================================================================
+# Every item of the USGS feed is an earthquake; its magnitude is measured, so
+# the severity is read from a table, not from words. Below `ignore_below` a
+# quake raises nothing: the feed lists every M4.5+ on earth, and a M5 at sea
+# or inland is not a freight disruption. Where it strikes is still the gate's
+# question — near a port or on a corridor, or nothing.
+#
+# !! ASSUMED !! Round figures of the right order, not a damage model.
+earthquake_magnitude:
+  ignore_below: 6.0
+  bands:
+    - {at_least: 6.0, severity: moderate, source: assumed}
+    - {at_least: 7.0, severity: severe,   source: assumed}
+
+# ===================================================================
 # PORT CONGESTION (IMF PortWatch)
 # ===================================================================
 port_congestion:

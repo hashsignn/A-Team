@@ -189,7 +189,9 @@ def _spatial_check(
 
     # On the corridor between them.
     geometry = network.geometry(leg.from_node, leg.to_node, leg.mode)
-    on_path, distance = geometry.touches(event_point)
+    # Between the ends only: each end's own catchment was tested just above,
+    # and past an end the corridor would claim roads the leg never drives.
+    on_path, distance = geometry.touches(event_point, ends=False)
     if on_path:
         return (
             True,

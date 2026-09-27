@@ -78,6 +78,12 @@ ALIASES: dict[str, tuple[str, ...]] = {
 NOT_A_PLACE = (
     "suezmax", "panamax", "aframax", "capesize", "baselworld",
     "basel iii", "basel ii", "basel convention", "new york times",
+    # Seen in the first real recording of Wikipedia's news portal: a theme
+    # park lawsuit "in Valencia, California" became a Port of Valencia item,
+    # and a summit of the Shanghai Cooperation Organisation a Shanghai one.
+    "valencia, california", "shanghai cooperation organisation",
+    "shanghai cooperation organization", "shanghai international circuit",
+    "red sea international film festival", "los angeles times",
 )
 
 
@@ -121,6 +127,14 @@ def enrich(items: list[dict], config: Config) -> int:
     resolved = 0
     for item in items:
         if item.get("node_hint"):
+            continue
+        # The docstring always said "neither coordinates nor a hint"; the
+        # code never checked the coordinates. A source that says where a
+        # thing is knows better than a search over its words — and the words
+        # can name somewhere else entirely: a motorway closure at Rust, on
+        # the carriageway "Basel -> Karlsruhe", was read as a Basel event
+        # and landed on a route whose only road leg ends in Basel.
+        if item.get("lat") is not None and item.get("lon") is not None:
             continue
         hints = resolve_nodes(item.get("text") or item.get("headline", ""), config)
         if hints:

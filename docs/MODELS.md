@@ -66,6 +66,20 @@ export RADAR_EXTRACT_MODEL=qwen2.5:14b-instruct   # ~9 GB
 A recording pass over one as-of is a few hundred calls. At 14B on CPU that is
 tens of minutes — once. The Codespace still needs nothing.
 
+Do not record with the 1.5B as the sorter. On the first real recording it
+kept a celebrity sentencing, a theme-park lawsuit and fines for eating on
+Singapore's buses as freight news, and every careful read went on them.
+`check_models.py` suggests the 7B for sorting whenever one is pulled.
+
+**Re-recording with another model keeps the old answers.** A saved answer is
+replayed before any model is asked, and the key is the prompt, not the model,
+so a second pass with a bigger model changes nothing. Delete them first:
+
+```bash
+rm data/reasoning/triage.json data/reasoning/extract.json          # Unix
+del data\reasoning\triage.json data\reasoning\extract.json         # Windows
+```
+
 `check_models.py` checks whatever the environment is set to, so set the
 variables first and it will look for the models you actually chose.
 
@@ -231,6 +245,14 @@ The triage model **fails open, may only REMOVE, is bounded, and overflow
 passes through unfiltered**. It can never add an item, and it can never
 promote one.
 
+**Twelve careful reads, in an order.** Whatever the sorter keeps, the
+extraction model reads at most `max_rescued_events` (12) items per run. They
+used to be read in feed order, six of them, and on the first real recording
+all six went to the first things a lenient sorter kept. Now an item naming a
+place on the network is read first, then one the sorter said touches a mode
+of freight, then the more official source, then the newest — deterministic,
+so a replay reads the same items.
+
 ---
 
 ## 4. News and event ingestion
@@ -259,6 +281,22 @@ through the funnel.
 That is the encoding of "it is not built for events we can predict with an
 API like weather": weather and water are instruments, and the model never
 sees them.
+
+**A source can say what every one of its items is** (`declares` in the
+spec). The Autobahn closure endpoint lists nothing but closures, and USGS
+nothing but earthquakes, yet their titles ("A3 | Sandgraben - Würzburg/Kist",
+"M 4.9 - 78 km ESE of Kokopo") hold no word the keyword router knows. Until
+they declared it, not one of the first real recording's 45 closures or 1,310
+quakes became an event. Now:
+
+- a **closure** is `INF_ROAD_CLOSURE`, its window is read from the German
+  description (the feed has no end field — a six-hour night closure used to
+  get the mapper's default week), and it is *moderate* only if a carriageway
+  is shut for a day or more;
+- a **quake's** severity is its magnitude, by the table in
+  `thresholds.yaml → earthquake_magnitude`: nothing below M6, *moderate* from
+  M6, *severe* from M7. A quake below the floor is dropped with a note, not
+  handed to a model.
 
 ### Fetching events that already happened
 

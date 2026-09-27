@@ -159,6 +159,7 @@ def to_items(
             "source_key": spec.key,
             "source_nature": spec.nature.value,
             "source_modes": list(spec.modes),
+            "declared_variables": list(spec.declares),
             "published_at": published or retrieved_at,
             "starts_at": starts or published or retrieved_at,
             "ends_at": ends,

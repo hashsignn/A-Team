@@ -40,15 +40,20 @@ def _wanted(checker, monkeypatch, triage, extract):
         {**checker.WANTED[0], "model": triage}, {**checker.WANTED[1], "model": extract}))
 
 
-def test_the_smallest_triages_and_the_largest_reads(checker):
+def test_the_smallest_capable_model_triages_and_the_largest_reads(checker):
     choice = checker.pick([
         {"name": "qwen2.5:14b", "size": 9_000_000_000},
         {"name": "nomic-embed-text:latest", "size": 300_000_000},
+        {"name": "qwen2.5:1.5b-instruct", "size": 986_000_000},
         {"name": "qwen2.5:7b", "size": 4_700_000_000},
     ])
+    # Not the 1.5B: it kept a celebrity trial as freight news.
     assert choice == {"RADAR_TRIAGE_MODEL": "qwen2.5:7b",
                       "RADAR_EXTRACT_MODEL": "qwen2.5:14b",
                       "RADAR_LOCAL_MODEL": "qwen2.5:14b"}
+    # With nothing bigger, the small one is still better than none.
+    only_small = checker.pick([{"name": "qwen2.5:1.5b-instruct", "size": 986_000_000}])
+    assert only_small["RADAR_TRIAGE_MODEL"] == "qwen2.5:1.5b-instruct"
     assert checker.pick([]) is None
     assert checker.pick([{"name": "nomic-embed-text", "size": 1}]) is None
 

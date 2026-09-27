@@ -78,8 +78,8 @@ class LegGeometry:
     distance_km: float
     routed_by: str  # "river" | "sea_waypoints" | "searoute" | "great_circle"
 
-    def touches(self, point: Point) -> tuple[bool, float]:
-        return on_corridor(point, self.path, self.mode.value, self.corridor_km)
+    def touches(self, point: Point, ends: bool = True) -> tuple[bool, float]:
+        return on_corridor(point, self.path, self.mode.value, self.corridor_km, ends=ends)
 
 
 class Network:

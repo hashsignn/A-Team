@@ -116,20 +116,29 @@ def _autobahn(road: str) -> SourceSpec:
         date_format="iso",
         families=("infrastructure",),
         modes=("road",),
+        # The endpoint lists closures and nothing else, and the windows are
+        # written in German prose: see sources/autobahn.py.
+        declares=("INF_ROAD_CLOSURE",),
+        decode="autobahn_closures",
         cost=Cost.FREE,
         fixture=f"autobahn_{road.lower()}.json",
         unlocks_if_connected=(
             f"Live closures on the {road}, which carries the Rhine-corridor road legs. "
             "Without it a road closure is only seen when a driver reports it."
         ),
+        # No `published`. The start is not when a closure became known: a
+        # planned closure from next month is listed — and known — today, which
+        # is the lead time a planner wants. Dating it by its start would have
+        # the board refuse it as "published after the as-of" until it began.
         fields=FieldMap(
             headline="title",
-            body="description[0]",
+            body="_body",
             identifier="identifier",
             lat="coordinate.lat",
             lon="coordinate.long",
-            published="startTimestamp",
-            starts="startTimestamp",
+            starts="_starts",
+            ends="_ends",
+            severity_hint="display_type",
             source_name="const:autobahn.de",
         ),
         builtin=True,
@@ -378,6 +387,11 @@ CATALOG: tuple[SourceSpec, ...] = (
         # the last two months and a replay can ask about any day in them.
         url="https://earthquake.usgs.gov/fdsnws/event/1/query",
         items_path="features",
+        # Every item is an earthquake, titled "M 4.9 - 78 km ESE of Kokopo":
+        # no word the keyword router knows, so until this was declared the
+        # feed never produced a single event. Severity is the magnitude, read
+        # from thresholds.yaml → earthquake_magnitude.
+        declares=("FOR_EARTHQUAKE",),
         params={"format": "geojson", "minmagnitude": "4.5", "orderby": "time"},
         window=Window(start_param="starttime", end_param="endtime", format="iso", days=2.0),
         date_format="epoch_ms",
@@ -401,7 +415,10 @@ CATALOG: tuple[SourceSpec, ...] = (
             source_name="const:USGS",
         ),
         builtin=True,
-        notes="Free, no key. Magnitude maps to a band by table — no model needed.",
+        notes=(
+            "Free, no key. Magnitude maps to a band by table "
+            "(thresholds.yaml → earthquake_magnitude) — no model needed."
+        ),
     ),
     SourceSpec(
         key="open_meteo_marine",
