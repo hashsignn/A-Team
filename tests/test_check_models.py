@@ -140,3 +140,15 @@ def test_in_powershell_the_lines_to_paste_are_powershell_lines(checker, monkeypa
     assert '$env:RADAR_TRIAGE_MODEL = "qwen2.5:7b"' in out
     assert "set RADAR_TRIAGE_MODEL" not in out
     assert "In cmd.exe the form is" in out
+
+
+def test_a_trailing_space_is_not_part_of_the_model_name(monkeypatch):
+    """cmd.exe keeps the space at the end of `set NAME=value ` in the value,
+    and "qwen2.5:7b-instruct " is not a tag Ollama has."""
+    from engine.reason import llm
+
+    monkeypatch.setenv("RADAR_TRIAGE_MODEL", "qwen2.5:7b-instruct ")
+    assert llm._named("RADAR_TRIAGE_MODEL") == "qwen2.5:7b-instruct"
+    monkeypatch.setenv("RADAR_TRIAGE_MODEL", "   ")
+    monkeypatch.delenv("RADAR_LOCAL_MODEL", raising=False)
+    assert llm.configured_by("RADAR_TRIAGE_MODEL") is None

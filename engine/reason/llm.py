@@ -58,22 +58,29 @@ T = TypeVar("T", bound=BaseModel)
 # ---------------------------------------------------------------------
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
+def _named(env: str) -> str:
+    """A model name from the environment, trimmed. cmd.exe keeps the space
+    at the end of `set NAME=value ` as part of the value, and to Ollama
+    "qwen2.5:7b-instruct " is a tag it does not have."""
+    return os.environ.get(env, "").strip()
+
+
 # qwen2.5 at 7B is the recommendation for this workload, and the reasoning is
 # in README.md rather than here: it follows a JSON schema without a grammar,
 # it is multilingual (Rhine and port notices are German and Dutch), and 7B fits
 # in the ~5 GB a planner's laptop can spare beside everything else they run.
-LOCAL_MODEL = os.environ.get("RADAR_LOCAL_MODEL", "qwen2.5:7b-instruct")
+LOCAL_MODEL = _named("RADAR_LOCAL_MODEL") or "qwen2.5:7b-instruct"
 
 # The triage model. Deliberately small: stage 1 answers one yes/no question
 # over hundreds of headlines, and a 7B reading each of them is most of the
 # cost of the funnel for none of the judgement. Falls back to LOCAL_MODEL
 # when unset, so a single-model install still works.
-TRIAGE_MODEL = os.environ.get("RADAR_TRIAGE_MODEL", "") or LOCAL_MODEL
+TRIAGE_MODEL = _named("RADAR_TRIAGE_MODEL") or LOCAL_MODEL
 
 # The extraction model. Where the hard reading happens: a conditional
 # ("unless talks resume"), a second-order effect, a stated duration that
 # contradicts the headline.
-EXTRACT_MODEL = os.environ.get("RADAR_EXTRACT_MODEL", "") or LOCAL_MODEL
+EXTRACT_MODEL = _named("RADAR_EXTRACT_MODEL") or LOCAL_MODEL
 
 
 def configured_by(env: str) -> str | None:
@@ -82,7 +89,7 @@ def configured_by(env: str) -> str | None:
     because a line that failed to set one leaves the default in place with
     no sign of it."""
     for name in (env, "RADAR_LOCAL_MODEL"):
-        if os.environ.get(name):
+        if _named(name):
             return name
     return None
 
