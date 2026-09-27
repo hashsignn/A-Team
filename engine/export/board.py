@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from engine import desk as desk_mod
 from engine import focus as focus_mod
 from engine.act import contacts as contacts_mod
 from engine.ingest import flows as flows_mod
@@ -63,6 +64,18 @@ def build_board(context: RunContext) -> dict:
     ]
     routes.sort(key=lambda r: r["severity_score"], reverse=True)
 
+    all_risks = [r for risks in risks_by_route.values() for r in risks]
+    posture_value = result.convene.posture.value
+    site_rows = []
+    for site in desk_mod.sites(config):
+        mine = [r for r in routes if r["site"]["id"] == site["id"]]
+        site_rows.append(site | {
+            "routes": len(mine),
+            "urgent_routes": sum(1 for r in mine if r["level"] in ("red", "yellow")),
+            "shipments": sum(r["shipments"] for r in mine),
+            "shipments_at_risk": sum(r["shipments_at_risk"] for r in mine),
+        })
+
     return {
         "as_of": result.as_of.isoformat(),
         "as_of_label": str(context.clock),
@@ -86,6 +99,17 @@ def build_board(context: RunContext) -> dict:
         "matrix_grid": band_grid(config),
         "nodes": _nodes(context),
         "routes": routes,
+        # How the desk is organised (engine/desk.py, desk.yaml): the sites a
+        # planner filters by, the customer tiers, the key-account orders at
+        # risk on every site, and the all-hands with each function's levers.
+        "sites": site_rows,
+        "priorities": desk_mod.tiers(config),
+        "key_accounts": desk_mod.key_accounts(routes, context.shipments, all_risks, config),
+        "all_hands": desk_mod.meeting(result.convene, config, context.clock) | {
+            "levers": desk_mod.levers(routes, context.shipments, all_risks, config,
+                                      context.clock, posture_value),
+        },
+        "carrier_signals": context.carrier_signals,
         "funnel": {
             "raw_observations": result.funnel.raw_observations,
             "after_geographic": result.funnel.after_geographic,
@@ -162,6 +186,10 @@ def _build_route(
         "route_id": lane_id,
         "name": lane["name"],
         "focus": lane.get("focus", ""),
+        # The site this route ships from — the unit a planner's work is
+        # allocated by — and who it serves, most important first.
+        "site": desk_mod.site_of_lane(lane, context.config),
+        "customers": desk_mod.route_customers(shipments, risks, context.config),
         # Every node this lane touches, in order. The globe needs it to answer
         # "what is happening at Antwerp" — a question a planner asks by
         # pointing at Antwerp, not by reading a table of lanes and working out
@@ -770,8 +798,14 @@ def _actions(risks: list[ShipmentRisk], context: RunContext) -> list[dict]:
     from engine.score.impact import explain
     from engine.score.leadtime import deadline_text
 
+    # Key accounts first, whatever the crisis (desk.yaml → customers), then
+    # the most valuable. The cut at twelve can then never drop a key account
+    # behind a larger order for a flexible one.
+    config = context.config
     out = []
-    for risk in sorted(risks, key=lambda r: r.value_of_acting_chf, reverse=True):
+    ranked = sorted(risks, key=lambda r: (desk_mod.priority_rank(r.customer, config),
+                                          -r.value_of_acting_chf))
+    for risk in ranked:
         if risk.best_action is None or risk.value_of_acting_chf <= 0:
             continue
         action = risk.best_action
@@ -779,6 +813,7 @@ def _actions(risks: list[ShipmentRisk], context: RunContext) -> list[dict]:
             {
                 "shipment_id": risk.shipment_id,
                 "customer": risk.customer,
+                "customer_priority": desk_mod.priority_of(risk.customer, config),
                 "label": action.label,
                 # The machine-readable kind, not just the human label. The
                 # operational flow gates on this: matching a reroute by its

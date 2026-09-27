@@ -28,6 +28,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from engine import desk as desk_mod
 from engine.export import progress as progress_mod
 from engine.fleet import manifest
 from engine.fleet.paths import as_latlon, bearing_deg, length_km, split_at
@@ -249,6 +250,8 @@ def fleet_assets(board: dict, context: RunContext) -> dict:
     nodes = context.config.nodes
 
     reports = field_reports(context)
+    site_of = {lane_id: desk_mod.site_of_lane(lane, context.config)["id"]
+               for lane_id, lane in lanes.items()}
     assets = []
     for shipment in context.shipments:
         where = locate(context, shipment)
@@ -287,6 +290,8 @@ def fleet_assets(board: dict, context: RunContext) -> dict:
             "leg": f"{nodes[leg.from_node].name} → {nodes[leg.to_node].name}",
             "destination": nodes[shipment.destination_node].name,
             "customer": shipment.customer,
+            "customer_priority": desk_mod.priority_of(shipment.customer, context.config),
+            "site_id": site_of.get(shipment.lane_id),
             "eta": eta.isoformat(),
             "eta_revised": (eta + timedelta(hours=status["delay_hours"])).isoformat(),
         })

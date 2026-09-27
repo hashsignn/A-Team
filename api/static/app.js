@@ -63,6 +63,14 @@ const state = {
   selected: null,
   hidden: new Set(),   // levels toggled off in the ladder
   focusOnly: false,    // the list narrowed to the focus routes
+  // WHOSE BOARD THIS IS. The site a planner answers for, and which
+  // customers they are looking at ('' all, 'A' key accounts, 'AB' key and
+  // standard). Remembered, and in the URL, so a planner's view is a link.
+  site: '',
+  cust: '',
+  // The shipment highlighted inside the open route — set when the route was
+  // opened by clicking that shipment on the map.
+  shipFocus: null,
   globe: null,
   spinning: true,
   resumeTimer: null,
@@ -115,6 +123,8 @@ function writeParams({ as_of, shipments }) {
   // The left pane's view belongs to the map (mapview.js); carry it across.
   const view = new URLSearchParams(location.search).get('view');
   if (view) q.set('view', view);
+  if (state.site) q.set('site', state.site);
+  if (state.cust) q.set('cust', state.cust);
   const url = q.toString() ? `${location.pathname}?${q}` : location.pathname;
   history.replaceState(null, '', url);
 }
@@ -127,6 +137,137 @@ function isoToInput(iso) {
 }
 function inputToIso(value) {
   return `${value.length === 16 ? value : value.slice(0, 16)}:00+00:00`;
+}
+
+// ===============================================================
+// The desk: whose board this is
+// ===============================================================
+const DESK_KEY = 'radar.desk';
+const PRIORITY_LABEL = { A: 'Key account', B: 'Standard', C: 'Flexible' };
+
+function readDesk() {
+  const q = new URLSearchParams(location.search);
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(DESK_KEY) || '{}') || {}; } catch { saved = {}; }
+  const cust = q.has('cust') ? q.get('cust') : (saved.cust || '');
+  return {
+    site: q.has('site') ? q.get('site') : (saved.site || ''),
+    cust: ['', 'A', 'AB'].includes(cust) ? cust : '',
+  };
+}
+
+function writeDesk() {
+  try { localStorage.setItem(DESK_KEY, JSON.stringify({ site: state.site, cust: state.cust })); } catch { /* private window */ }
+  const q = new URLSearchParams(location.search);
+  state.site ? q.set('site', state.site) : q.delete('site');
+  state.cust ? q.set('cust', state.cust) : q.delete('cust');
+  const url = q.toString() ? `${location.pathname}?${q}` : location.pathname;
+  history.replaceState(null, '', url);
+}
+
+function priLabel(p) {
+  const tiers = (state.board && state.board.priorities) || {};
+  return (tiers[p] && tiers[p].label) || PRIORITY_LABEL[p] || p;
+}
+function priBadge(p) {
+  if (!p) return '';
+  return `<span class="pri pri-${esc(p)}" title="${esc(priLabel(p))}">${p === 'A' ? '★ ' : ''}${esc(priLabel(p))}</span>`;
+}
+function siteName(id) {
+  const site = ((state.board && state.board.sites) || []).find((x) => x.id === id);
+  return site ? site.name : id;
+}
+
+function custMatches(r) {
+  if (!state.cust) return true;
+  const want = state.cust === 'A' ? ['A'] : ['A', 'B'];
+  return (r.customers || []).some((c) => want.includes(c.priority));
+}
+
+/* The routes of this desk: the site and customer filters only. The ladder
+ * counts these, so a rung reads "how many of MY routes", not the world's. */
+function deskRoutes() {
+  if (!state.board) return [];
+  return state.board.routes.filter((r) =>
+    (!state.site || (r.site && r.site.id === state.site)) && custMatches(r));
+}
+
+function keyAtRisk(r) {
+  return (r.customers || []).filter((c) => c.priority === 'A')
+    .reduce((n, c) => n + (c.at_risk || 0), 0);
+}
+
+/* Run fn once the map's agent exists. actionhub.js boots after this file,
+ * and a filter chosen before it is up must still reach the map. */
+function withAgent(fn, tries = 40) {
+  if (window.MapAgent) { fn(window.MapAgent); return; }
+  if (tries > 0) setTimeout(() => withAgent(fn, tries - 1), 150);
+}
+
+function syncMapFilters() {
+  const filtered = state.site || state.cust || state.hidden.size || state.focusOnly;
+  const lanes = filtered ? visibleRoutes().map((r) => r.route_id) : null;
+  const priorities = state.cust === 'A' ? ['A'] : state.cust === 'AB' ? ['A', 'B'] : null;
+  withAgent((agent) => agent.setFilter({ lanes, priorities },
+    { actor: 'board', summary: 'follow the board filters' }));
+}
+
+function initDesk() {
+  const pick = $('f-site');
+  const sites = state.board.sites || [];
+  pick.innerHTML = '<option value="">All sites</option>' + sites.map((x) =>
+    `<option value="${esc(x.id)}">${esc(x.name)} — ${x.routes} route${x.routes === 1 ? '' : 's'}${
+      x.urgent_routes ? `, ${x.urgent_routes} urgent` : ''}</option>`).join('');
+  if (state.site && !sites.some((x) => x.id === state.site)) state.site = '';
+  pick.value = state.site;
+  if (!pick.dataset.bound) {
+    pick.dataset.bound = '1';
+    pick.addEventListener('change', () => { state.site = pick.value; applyDesk(); });
+    $('f-cust').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-cust]');
+      if (!b) return;
+      state.cust = b.dataset.cust;
+      applyDesk();
+    });
+  }
+  markCust();
+}
+
+function markCust() {
+  $('f-cust').querySelectorAll('button').forEach((b) =>
+    b.classList.toggle('is-on', b.dataset.cust === state.cust));
+}
+
+/* A filter changed: everything that reads it redraws, in place. The open
+ * route stays open if it is still in view; otherwise the list comes back,
+ * because a detail pane for a route you just filtered away is a lie. */
+function applyDesk() {
+  markCust();
+  writeDesk();
+  const mine = deskRoutes();
+  const siteLabel = state.site ? siteName(state.site) : 'all sites';
+  const custLabel = state.cust === 'A' ? 'key accounts' : state.cust === 'AB' ? 'key and standard customers' : 'all customers';
+  const site = (state.board.sites || []).find((x) => x.id === state.site);
+  $('desk-scope').innerHTML = `Showing <b>${mine.length}</b> route${mine.length === 1 ? '' : 's'} from <b>${esc(siteLabel)}</b>, ${esc(custLabel)}${
+    site && site.planner ? ` · planner ${esc(site.planner)}` : ''}`;
+  renderLadder(state.board.levels);
+  refreshPaths();
+  renderTable();
+  renderKeyAccounts();
+  syncMapFilters();
+  if (state.selected && !visibleRoutes().some((r) => r.route_id === state.selected)) {
+    state.selected = null;
+    refreshPaths();
+    showRouteList();
+  }
+}
+
+function setStep(n) {
+  document.querySelectorAll('#steps li').forEach((li) => {
+    const k = Number(li.dataset.step);
+    li.classList.toggle('is-on', k === n);
+    li.classList.toggle('is-done', k < n);
+  });
 }
 
 async function fetchBoard({ as_of, shipments }) {
@@ -153,7 +294,12 @@ async function fetchBoard({ as_of, shipments }) {
 async function boot() {
   const params = readParams();
   state.params = params;
+  Object.assign(state, readDesk());
   $('asof-input').value = isoToInput(params.as_of);
+  // Drawn before the board arrives, so the header has its final shape on
+  // the first paint and nothing below it moves when the counts come in.
+  renderLadder(null);
+  initHowto();
 
   const [board, topo] = await Promise.all([
     fetchBoard(params),
@@ -217,11 +363,14 @@ function applyBoard(board) {
     `${board.as_of_label} · ${board.shipments_total} shipments (synthetic) · ` +
     `${board.variables_total} risk variables · ${board.routes.length} routes`;
 
-  renderPosture(board.posture);
-  renderLadder(board.levels);
+  renderPosture(board.posture, board.all_hands);
+  initDesk();
   initPanelTabs();
-  refreshPaths();
-  renderTable();
+  renderAllHands();
+  applyDesk();
+  // A later instant's signals are a different answer; read them again.
+  signalsLoaded = false;
+  if ($('siglist') && !$('siglist').hidden) loadSignals();
 
   /* No auto-selection. The board used to open on its worst lane, which
    * meant the right column showed one route and the other sixteen were
@@ -229,6 +378,7 @@ function applyBoard(board) {
    * before being asked, and picking a lane is one click from there. */
   $('panel-body').hidden = true;
   $('panel-list').hidden = false;
+  setStep(2);
 
   /* Re-measure now that the ladder has rendered. The first measurement runs
    * before the level chips exist, so it reads a header one row shorter than
@@ -304,6 +454,9 @@ document.addEventListener('themechange', () => {
   refreshMarkers();
   renderLadder(state.board.levels);
   renderTable();
+  renderKeyAccounts();
+  renderAllHands();
+  renderPosture(state.board.posture, state.board.all_hands);
   // Re-select rather than re-render: the detail panel draws an SVG radar in
   // band colours, and the cheapest correct way to repaint it is the path that
   // already knows how to build it. `fly: false` keeps the camera where it is.
@@ -605,28 +758,62 @@ function nodeTip(n) {
 // ===============================================================
 // Ladder & posture
 // ===============================================================
-function renderPosture(p) {
+/* The convene posture, as one line at the top of the right column. Clicking
+ * it opens the all-hands: the posture is only useful next to what the room
+ * does about it. */
+function renderPosture(p, hands) {
   const tone = { convene: 'red', watch: 'yellow', normal: 'green' }[p.posture] || 'blue';
   const c = LEVEL_COLOR[tone];
-  $('posture').style.borderLeftColor = c;
-  $('posture').innerHTML =
+  const el = $('posture');
+  el.hidden = false;
+  el.style.borderLeftColor = c;
+  // Two short lines, not the full paragraph: what was crossed, and what the
+  // room does about it. The whole headline is one click away.
+  const fired = hands && hands.triggers && hands.triggers.length ? hands.triggers[0] : null;
+  const what = fired
+    ? `${hands.rule_agreed ? 'Convene rule crossed' : 'Proposed convene rule crossed'}: ${fired}`
+    : p.headline;
+  const meet = hands
+    ? `All-hands ${esc(hands.cadence_label)}${hands.changed ? ` (normally ${esc(hands.normal_label)})` : ''} · next ${esc(hands.next_label)}`
+    : '';
+  el.innerHTML =
     `<span class="posture-label" style="color:${c}">${esc(p.posture)}</span>
-     <span class="posture-text">${esc(p.headline)}</span>`;
+     <span class="posture-text">${esc(what)}<span class="posture-meet">${meet}</span></span>
+     <span class="posture-go" aria-hidden="true">›</span>`;
+  el.setAttribute('aria-label', `${p.posture}: ${p.headline}`);
+  el.title = `${p.headline}\n\nClick: the all-hands — cadence, who is in the room, each function's levers.`;
+  if (!el.dataset.bound) {
+    el.dataset.bound = '1';
+    el.addEventListener('click', () => { showRouteList(); openPanelTab('allhands'); });
+  }
 }
 
+const LADDER_SKELETON = [
+  ['red', 'Critical'], ['yellow', 'Alert'], ['blue', 'Watch'], ['white', 'Bias'], ['green', 'Normal'],
+].map(([level, label]) => ({ level, label, directive: '', count: null }));
+
 function renderLadder(levels) {
-  $('ladder').innerHTML = levels.map((l) => `
+  // Counts are of THIS desk's routes — the site and customer filters — so a
+  // rung reads "how many of mine". Null before the board arrives: the rungs
+  // are drawn at their final size and filled in, so the header never moves.
+  const rows = levels || LADDER_SKELETON;
+  const mine = state.board ? deskRoutes() : null;
+  $('ladder').innerHTML = rows.map((l) => {
+    const count = mine ? mine.filter((r) => r.level === l.level).length : null;
+    return `
     <button type="button" class="rung${state.hidden.has(l.level) ? ' is-off' : ''}"
             data-level="${l.level}" title="${esc(l.directive)}"
             aria-pressed="${!state.hidden.has(l.level)}">
       <span class="rung-dot" style="background:${LEVEL_COLOR[l.level]}"></span>
       <span>
         <span class="rung-name">${esc(l.label)}</span>
-        <span class="rung-count">${l.count}</span>
+        <span class="rung-count">${count == null ? '–' : count}</span>
         <span class="rung-when">${esc(LEVEL_WHEN[l.level])}</span>
       </span>
-    </button>`).join('');
+    </button>`;
+  }).join('');
 
+  if (!levels) return;
   $('ladder').querySelectorAll('.rung').forEach((b) => {
     b.addEventListener('click', () => {
       const lvl = b.dataset.level;
@@ -635,6 +822,7 @@ function renderLadder(levels) {
       b.setAttribute('aria-pressed', String(!state.hidden.has(lvl)));
       refreshPaths();
       renderTable();
+      syncMapFilters();
     });
   });
 }
@@ -653,7 +841,7 @@ function busiestRouteThrough(nodeId) {
 }
 
 function visibleRoutes() {
-  return state.board.routes.filter((r) => !state.hidden.has(r.level)
+  return deskRoutes().filter((r) => !state.hidden.has(r.level)
     && (!state.focusOnly || (r.real_data && r.real_data.focus)));
 }
 
@@ -674,19 +862,22 @@ function focusBadge(r) {
 // ===============================================================
 // Selection & detail panel
 // ===============================================================
-function select(routeId, { fly } = {}) {
+function select(routeId, { fly, fit, ship } = {}) {
   const r = state.board.routes.find((x) => x.route_id === routeId);
   if (!r) return;
   state.selected = routeId;
+  state.shipFocus = ship || null;
 
   refreshPaths();
   renderDetail(r);
   renderResponse(r);
   markTableRow(routeId);
   linkOps(routeId);
-  // Highlight the lane on the 2D map too. No camera move: the map is showing
-  // assets, and a table click should not drag it away from them.
-  if (window.MapAgent) window.MapAgent.focusLane(routeId);
+  setStep(3);
+  // Highlight the lane on the 2D map too. Framed only when the pick came
+  // from the list (`fit`) and the lane is off screen; a click on the map
+  // itself never moves it — the planner is already looking there.
+  withAgent((agent) => agent.focusLane(routeId, undefined, { fit: !!fit }));
 
   if (fly && state.globe && r.legs.length) {
     const pts = r.legs.flatMap((l) => l.path);
@@ -745,11 +936,123 @@ function renderDetail(r) {
       <div class="stat-sub">worth more than they cost</div>
     </div>`;
 
+  renderAlloc(r);
+  renderShips(r);
+
   // No radar, no event list, no matrix here. They were on this panel AND on
   // the route page AND in a modal — three copies of three charts, none big
   // enough to read. One copy, on /route/<id>, which is a page you can send.
   $('panel').scrollTop = 0;
 }
+
+/* Who the route is for. The review said it was unclear how things were
+ * allocated to shipping points and customers, so it is said outright: the
+ * site, the port, and every customer with what is at risk, key accounts
+ * first. */
+function renderAlloc(r) {
+  const site = r.site || {};
+  const port = r.real_data && r.real_data.port && r.real_data.port.name;
+  const customers = r.customers || [];
+  const rows = customers.map((c) => `
+    <tr class="${c.at_risk ? 'is-risk' : ''}">
+      <td>${esc(c.name)}</td>
+      <td>${priBadge(c.priority)}</td>
+      <td class="num">${c.at_risk} of ${c.shipments}</td>
+      <td class="num">${c.expected_loss_chf > 0 ? chf(c.expected_loss_chf) : '—'}</td>
+    </tr>`).join('');
+  $('d-alloc').innerHTML = `
+    <div class="alloc-line">
+      <span><i>Ships from</i> <b>${esc(site.name || '—')}</b>${site.planner ? ` <span class="muted">· ${esc(site.planner)}</span>` : ''}</span>
+      ${port ? `<span><i>Leaves by</i> <b>${esc(port)}</b></span>` : ''}
+      <span><i>Serves</i> <b>${customers.length}</b> customer${customers.length === 1 ? '' : 's'}</span>
+    </div>
+    ${customers.length ? `<table class="alloc-tab">
+      <thead><tr><th>Customer</th><th>Importance</th><th>At risk</th><th>If nobody acts</th></tr></thead>
+      <tbody>${rows}</tbody></table>` : ''}`;
+}
+
+/* The route's shipments, from the map's own asset list, so the list here
+ * and the icons there are the same freight. Recovery opens from a row. */
+function renderShips(r) {
+  const host = $('d-ships');
+  if (!host) return;
+  const agent = window.MapAgent;
+  const st = agent && agent.getState();
+  if (!st || st.assets.status !== 'ready') {
+    host.innerHTML = '<p class="muted dship-note">Loading this route\'s shipments…</p>';
+    return;
+  }
+  const order = { red: 0, yellow: 1, green: 2 };
+  const rank = { A: 0, B: 1, C: 2 };
+  const items = st.assets.items.filter((a) => a.lane_id === r.route_id)
+    .sort((a, b) => order[a.status] - order[b.status]
+      || rank[a.customer_priority || 'B'] - rank[b.customer_priority || 'B']
+      || b.delay_hours - a.delay_hours);
+  if (!items.length) {
+    host.innerHTML = '<p class="muted dship-note">No shipment on this route is under way or staged.</p>';
+    return;
+  }
+  const hint = state.shipFocus
+    ? `<p class="dship-hint">Opened from the map: <b>${esc(state.shipFocus)}</b> is marked below.
+        <b>Plan recovery</b> shows the ways round.</p>` : '';
+  host.innerHTML = `<h4>Shipments on this route <span class="muted">· ${items.length}</span></h4>${hint}
+    <div class="dship-list">${items.map((a) => `
+      <div class="dship-row${a.id === state.shipFocus ? ' is-focus' : ''}${a.status !== 'green' ? ' is-late' : ''}" data-ship="${esc(a.id)}">
+        <span class="dship-main">
+          <b>${esc(a.id)}</b> · ${esc(a.customer)} ${priBadge(a.customer_priority)}
+          <span class="muted"><span class="dship-status">${esc(a.status_label)}</span> · ${esc(a.leg)}</span>
+        </span>
+        <button type="button" class="ctl ctl--mini${a.status !== 'green' ? ' ctl--primary' : ''}" data-plan="${esc(a.id)}">
+          ${a.status !== 'green' ? 'Plan recovery' : 'Show'}</button>
+      </div>`).join('')}</div>`;
+  host.querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.plan;
+    state.shipFocus = id;
+    host.querySelectorAll('.dship-row').forEach((row) => row.classList.toggle('is-focus', row.dataset.ship === id));
+    withAgent((agent) => {
+      agent.setView('map');
+      agent.selectAsset(id);
+    });
+  }));
+  const focus = host.querySelector('.dship-row.is-focus');
+  if (focus) focus.scrollIntoView({ block: 'nearest' });
+}
+
+/* ROUTE FIRST, from the map. A click on a shipment whose route is not the
+ * open one opens the ROUTE (and marks the shipment in it); a click on a
+ * shipment of the open route opens its recovery. */
+function onAssetClick(id) {
+  const agent = window.MapAgent;
+  const a = agent && agent.getState().assets.byId[id];
+  if (!a || !state.board) { if (agent) agent.selectAsset(id); return; }
+  const open = state.selected === a.lane_id && !$('panel-body').hidden;
+  if (open) {
+    state.shipFocus = id;
+    renderShips(state.board.routes.find((r) => r.route_id === a.lane_id));
+    agent.selectAsset(id);
+    return;
+  }
+  select(a.lane_id, { fly: false, fit: false, ship: id });
+}
+window.RadarBoard = { onAssetClick };
+
+/* The other way round: when the Action Hub opens by any path — a link, an
+ * agent, "Plan recovery" — the column shows that shipment's route, so the
+ * card and the column are never about two different things. */
+withAgent((agent) => {
+  agent.subscribe((st, prev) => {
+    if (!state.board) return;
+    if (st.selection.id && st.selection.id !== (prev && prev.selection.id)) {
+      const a = st.assets.byId[st.selection.id];
+      if (a && (state.selected !== a.lane_id || $('panel-body').hidden)) {
+        select(a.lane_id, { fly: false, fit: false, ship: a.id });
+      }
+    }
+    if (st.assets.items !== (prev && prev.assets.items) && state.selected && !$('panel-body').hidden) {
+      renderShips(state.board.routes.find((r) => r.route_id === state.selected));
+    }
+  });
+});
 
 // ===============================================================
 // Radar — hand-drawn SVG
@@ -801,9 +1104,10 @@ function renderRActions(r) {
     return;
   }
   $('r-actions').innerHTML = actions.map((a) => `
-    <div class="act">
+    <div class="act${a.customer_priority === 'A' ? ' is-key' : ''}">
       <div class="act-sentence">${esc(a.sentence)}</div>
       <div class="act-meta">
+        ${priBadge(a.customer_priority)}
         ${esc(a.shipment_id)} · ${esc(a.customer)} · lead ${hours(a.lead_time_hours)} ·
         needs ${Math.round(a.min_hours)} h · lever held by <b>${esc(a.owner)}</b>
       </div>
@@ -962,28 +1266,118 @@ let signalsLoaded = false;
 
 function initPanelTabs() {
   const tabs = $('ptabs');
-  if (!tabs) return;
+  if (!tabs || tabs.dataset.bound) return;
+  tabs.dataset.bound = '1';
   tabs.addEventListener('click', (event) => {
     const tab = event.target.closest('.ptab');
-    if (!tab) return;
-    tabs.querySelectorAll('.ptab').forEach((t) => t.classList.remove('is-on'));
-    tab.classList.add('is-on');
-    const signals = tab.dataset.ptab === 'signals';
-    $('rlist').hidden = signals;
-    $('siglist').hidden = !signals;
-    $('f-all').hidden = signals;
-    if ($('f-focus')) {
-      $('f-focus').hidden = signals
-        || !state.board.routes.some((r) => r.real_data && r.real_data.focus);
-    }
-    // The subtitle belongs to the routes list. Leaving "17 of 17 routes"
-    // above a funnel is the kind of stale line that makes a planner distrust
-    // every other number on the page.
-    $('panel-list-count').textContent = signals
-      ? 'What arrived, what the filter removed, and what read the rest'
-      : state.listSubtitle || '';
-    if (signals && !signalsLoaded) loadSignals();
+    if (tab) openPanelTab(tab.dataset.ptab);
   });
+}
+
+function openPanelTab(name) {
+  const tabs = $('ptabs');
+  tabs.querySelectorAll('.ptab').forEach((t) => t.classList.toggle('is-on', t.dataset.ptab === name));
+  const routes = name === 'routes';
+  $('rlist').hidden = !routes;
+  $('keyacc').hidden = !routes || !(state.board && state.board.key_accounts.length);
+  $('allhands').hidden = name !== 'allhands';
+  $('siglist').hidden = name !== 'signals';
+  $('f-all').hidden = !routes;
+  if ($('f-focus')) {
+    $('f-focus').hidden = !routes
+      || !state.board.routes.some((r) => r.real_data && r.real_data.focus);
+  }
+  // The subtitle belongs to the tab. Leaving "17 of 17 routes" above a
+  // funnel is the kind of stale line that makes a planner distrust every
+  // other number on the page.
+  $('panel-list-count').textContent = {
+    routes: state.listSubtitle || '',
+    allhands: 'The cross-functional meeting: how often it sits now, who is in it, and what each function can pull',
+    signals: 'What arrived, what the filter removed, and what read the rest',
+  }[name];
+  if (name === 'signals' && !signalsLoaded) loadSignals();
+}
+
+/* THE ALL-HANDS.
+ *
+ * Sika: once a crisis looms, Procurement, Supply Chain, Manufacturing and
+ * Controlling go from meeting every two weeks to every day, with full
+ * authority to act. So this tab is the room's agenda: the cadence the team's
+ * own convene rule now calls for, who sits in it, and one card per function
+ * with the lever that function holds — computed from this board, proposed,
+ * never pulled. */
+function renderAllHands() {
+  const host = $('allhands');
+  const h = state.board && state.board.all_hands;
+  if (!host || !h) return;
+  const tone = { convene: 'red', watch: 'yellow', normal: 'green' }[h.posture] || 'blue';
+  const c = LEVEL_COLOR[tone];
+  const people = (h.attendees || []).map((a) =>
+    `<span class="ah-person" title="${esc(a.role)}">${esc(a.function)}</span>`).join('');
+  const cards = (h.levers || []).map((l) => `
+    <section class="ah-card">
+      <div class="ah-card-head"><b>${esc(l.function)}</b><span>${esc(l.lever)}</span></div>
+      <p class="ah-sum">${esc(l.summary)}</p>
+      ${(l.items || []).length ? `<ul class="ah-items">${l.items.map((i) => `
+        <li${i.route_id ? ` data-route="${esc(i.route_id)}" tabindex="0"` : ''}>
+          ${i.priority === 'A' ? priBadge('A') : ''}
+          <span class="ah-text">${esc(i.text)}</span>
+          ${i.detail ? `<span class="ah-detail">${esc(i.detail)}</span>` : ''}
+        </li>`).join('')}</ul>` : ''}
+      ${l.basis ? `<p class="ah-basis">${esc(l.basis)}</p>` : ''}
+    </section>`).join('');
+  host.innerHTML = `
+    <div class="ah-head" style="border-left-color:${c}">
+      <div class="ah-cadence">
+        <span class="ah-k">Meets</span>
+        <span class="ah-v" style="color:${c}">${esc(h.cadence_label)}</span>
+        ${h.changed ? `<span class="ah-was">normally ${esc(h.normal_label)}</span>` : ''}
+      </div>
+      <div class="ah-cadence">
+        <span class="ah-k">Next</span>
+        <span class="ah-v">${esc(h.next_label)}</span>
+      </div>
+      <p class="ah-change">${esc(h.change)}</p>
+      ${(h.triggers || []).length ? `<ul class="ah-triggers">${h.triggers.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+      <div class="ah-people"><span class="ah-k">In the room</span>${people}</div>
+    </div>
+    ${cards}
+    <p class="ah-foot">Proposals from this board, for the room to accept or reject. Nothing
+      here is booked, ordered or approved.</p>`;
+  host.querySelectorAll('li[data-route]').forEach((li) => {
+    const go = () => { openPanelTab('routes'); select(li.dataset.route, { fly: true, fit: true }); };
+    li.addEventListener('click', go);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  });
+}
+
+/* Key accounts at risk, on every site. Shown whatever site is picked: those
+ * contracts are kept whatever the crisis, so a planner at Stuttgart still
+ * sees the Düdingen key account going late — marked as another desk's. */
+function renderKeyAccounts() {
+  const host = $('keyacc');
+  const rows = (state.board && state.board.key_accounts) || [];
+  const onRoutes = !$('rlist').hidden;
+  host.hidden = !rows.length || !onRoutes;
+  if (!rows.length) { host.innerHTML = ''; return; }
+  const open = host.dataset.open !== 'false';
+  host.innerHTML = `<details${open ? ' open' : ''}>
+    <summary>${priBadge('A')} <b>${rows.length}</b> key-account order${rows.length === 1 ? '' : 's'} at risk
+      <span class="muted">— served first, shown on every site</span></summary>
+    ${rows.map((k) => `
+      <button type="button" class="ka-row" data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}"
+              style="--lvl:${LEVEL_COLOR[k.level] || 'var(--muted)'}">
+        <span class="ka-when" style="color:${LEVEL_COLOR[k.level] || 'inherit'}">${hours(k.lead_time_hours)}</span>
+        <span class="ka-main"><b>${esc(k.customer)}</b> · ${esc(k.shipment_id)}
+          <span class="muted">${esc(k.route)}${state.site && k.site !== state.site ? ` · ${esc(siteName(k.site))} desk` : ''}</span></span>
+        <span class="ka-act">${esc(k.action || 'no option worth its cost')}</span>
+      </button>`).join('')}
+  </details>`;
+  host.querySelector('details').addEventListener('toggle', (e) => {
+    host.dataset.open = String(e.target.open);
+  });
+  host.querySelectorAll('.ka-row').forEach((b) => b.addEventListener('click', () =>
+    select(b.dataset.route, { fly: true, fit: true, ship: b.dataset.ship })));
 }
 
 async function loadSignals() {
@@ -997,10 +1391,37 @@ async function loadSignals() {
       shipments: String(p.shipments || 150),
     });
     const data = await (await fetch(`/api/v2/signals?${query}`)).json();
-    host.innerHTML = signalsHTML(data);
+    host.innerHTML = carrierHTML(state.board && state.board.carrier_signals) + signalsHTML(data);
   } catch (err) {
     host.innerHTML = `<p class="sig-note">Could not read it — ${esc(err.message)}</p>`;
   }
+}
+
+/* Carriers pushing out orders — the signal Sika said arrives before any
+ * announcement. Patterns were raised as warnings; singles are only watched,
+ * so the planner can see one becoming a pattern. */
+function carrierHTML(c) {
+  if (!c) return '';
+  const patterns = c.patterns || [];
+  const singles = c.singles || [];
+  const row = (p, raised) => `
+    <div class="cs-row${raised ? ' is-raised' : ''}">
+      <span class="cs-count">${p.orders}</span>
+      <span><b>${esc(p.carrier_name)}</b> at ${esc(p.node_name)}
+        <span class="muted">— ${p.orders} order${p.orders === 1 ? '' : 's'} moved, on average ${Math.round(p.mean_hours)} h later</span>
+        <span class="cs-notes">${(p.notices || []).slice(0, 5).map((n) =>
+          `${esc(n.order_id)} ${esc(n.planned_departure.slice(5, 16).replace('T', ' '))} → ${esc(n.new_departure.slice(5, 16).replace('T', ' '))}${n.reason ? ` (${esc(n.reason)})` : ''}`).join(' · ')}</span>
+      </span>
+    </div>`;
+  return `
+    <section class="cs">
+      <p class="sig-head"><b>Carriers pushing out orders</b> — often the first sign, before any
+        announcement. Raised when ${esc(c.rule || 'a pattern forms')}.</p>
+      ${patterns.length ? patterns.map((p) => row(p, true)).join('')
+        : '<p class="sig-note">No pattern this week.</p>'}
+      ${singles.length ? `<p class="cs-sub">Watched, not raised (${singles.length})</p>${singles.map((p) => row(p, false)).join('')}` : ''}
+      ${c.synthetic ? '<p class="sig-src">Booking changes generated from the SYNTHETIC book. A carrier export at config/carrier_notices.csv replaces them.</p>' : ''}
+    </section>`;
 }
 
 function signalsHTML(data) {
@@ -1067,6 +1488,7 @@ function renderFilters() {
     $('ladder').querySelectorAll('.rung').forEach((b) => b.classList.remove('is-off'));
     refreshPaths();
     renderTable();
+    syncMapFilters();
   });
   const focus = $('f-focus');
   if (!focus) return;
@@ -1079,6 +1501,7 @@ function renderFilters() {
     focus.setAttribute('aria-pressed', String(state.focusOnly));
     refreshPaths();
     renderTable();
+    syncMapFilters();
   });
 }
 
@@ -1094,33 +1517,52 @@ function renderTable() {
   const rows = visibleRoutes();
   const list = $('rlist');
   if (!list) return;
+  // Redrawn in place: a filter click must not throw the planner back to the
+  // top of a list they were halfway down.
+  const keep = list.scrollTop;
 
-  list.innerHTML = rows.map((r) => `
+  const customersLine = (r) => {
+    const cs = r.customers || [];
+    if (!cs.length) return '';
+    const shown = cs.slice(0, 2).map((c) => `${esc(c.name)}${c.priority === 'A' ? ' ★' : ''}`).join(', ');
+    return `<span class="rli-cust">For ${shown}${cs.length > 2 ? ` +${cs.length - 2}` : ''}</span>`;
+  };
+
+  list.innerHTML = rows.length ? rows.map((r) => {
+    const key = keyAtRisk(r);
+    return `
     <button type="button" role="listitem" class="rli${state.selected === r.route_id ? ' is-selected' : ''}"
             data-route="${esc(r.route_id)}" style="--lvl:${LEVEL_COLOR[r.level]}">
       <span class="rli-top">
         <span class="level-chip" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span>
+        <span class="rli-site">from ${esc(r.site ? r.site.name : '—')}</span>
         <span class="rli-when" style="color:${LEVEL_COLOR[r.level]}">${hours(r.lead_time_hours)}</span>
       </span>
       <span class="rli-name">${esc(r.name)}</span>
       ${focusBadge(r)}
+      ${key ? `<span class="rli-key">★ ${key} key-account order${key === 1 ? '' : 's'} at risk</span>` : ''}
       <span class="rli-driver">${esc(r.events[0] ? r.events[0].title : 'no event recorded')}</span>
+      ${customersLine(r)}
       <span class="rli-foot">
         <span>${r.shipments_at_risk} of ${r.shipments} shipments</span>
         <span>${r.exposure_chf > 0 ? chf(r.exposure_chf) : '—'}</span>
       </span>
-    </button>`).join('');
+    </button>`;
+  }).join('') : `<p class="rlist-empty">No route ${state.site ? `from ${esc(siteName(state.site))} ` : ''}matches
+      these filters. Try <b>All</b> customers, or <b>All levels</b>.</p>`;
 
   list.querySelectorAll('.rli').forEach((li) => {
-    li.addEventListener('click', () => select(li.dataset.route, { fly: true }));
+    li.addEventListener('click', () => select(li.dataset.route, { fly: true, fit: true }));
   });
+  list.scrollTop = keep;
 
+  const mine = deskRoutes().length;
   state.listSubtitle =
-    `${rows.length} of ${state.board.routes.length} routes · ranked by level, ` +
-    `then CHF within the level`;
+    `${rows.length} of ${mine} route${mine === 1 ? '' : 's'}${state.site ? ` from ${siteName(state.site)}` : ''} · ` +
+    'ranked by how soon someone must decide, then CHF';
   const count = $('panel-list-count');
-  const onSignals = $('siglist') && !$('siglist').hidden;
-  if (count && !onSignals) count.textContent = state.listSubtitle;
+  const onRoutes = !$('rlist').hidden;
+  if (count && onRoutes) count.textContent = state.listSubtitle;
 
   const f = state.board.funnel;
   $('ranked-foot').innerHTML =
@@ -1145,6 +1587,27 @@ function showRouteList() {
   $('panel-body').hidden = true;
   $('panel-list').hidden = false;
   $('panel').scrollTop = 0;
+  setStep(2);
+}
+
+/* How the board works, in three lines — open on a first visit, one click
+ * away after. The review's first word was that it was not self-explanatory. */
+function initHowto() {
+  const box = $('howto');
+  const btn = $('btn-help');
+  let seen = false;
+  try { seen = localStorage.getItem('radar.howto') === 'seen'; } catch { seen = false; }
+  const show = (on) => {
+    box.hidden = !on;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+  };
+  show(!seen);
+  btn.addEventListener('click', () => show(box.hidden));
+  $('howto-close').addEventListener('click', () => {
+    show(false);
+    try { localStorage.setItem('radar.howto', 'seen'); } catch { /* private window */ }
+  });
 }
 
 boot().catch((err) => {

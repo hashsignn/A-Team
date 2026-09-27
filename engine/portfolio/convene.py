@@ -63,11 +63,17 @@ PRESSING_HOURS = 48.0
 
 
 def next_meeting(config: Config, clock: Clock) -> datetime | None:
-    """When the standing meeting next sits.
+    """When the standing meeting next sits, at its NORMAL cadence.
 
-    Modelled as a cadence because we do not have their calendar. Swapping in
-    the real one is a config change.
+    Modelled as a cadence because we do not have their calendar. With
+    desk.yaml the all-hands' own calendar is used (biweekly, per Sika);
+    without it, the old weekly Tuesday stand-in. Swapping in the real
+    calendar is a config change.
     """
+    from engine import desk  # noqa: PLC0415
+
+    if (config.desk.get("all_hands") or {}).get("anchor"):
+        return desk.next_meeting("normal", config, clock)
     cadence = config.scoring["convene_rule"].get("meeting_cadence_days")
     if not cadence:
         return None

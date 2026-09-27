@@ -247,9 +247,9 @@ def test_unknown_exposure_rule_refuses_rather_than_guessing(config):
 def test_mask_is_sparse_and_describes_itself(config):
     mask = build_mask(["WAT_LOW_WATER", "POR_CONGESTION"], config.variables)
     assert sum(mask.values()) == 2
-    assert len(mask) == 45
+    assert len(mask) == 46
     description = describe_mask(mask, config.variables)
-    assert "2 of 45" in description
+    assert "2 of 46" in description
     assert "Low water" in description
 
 

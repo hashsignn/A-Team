@@ -66,6 +66,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field, replace
 
+from engine import desk as desk_mod
 from engine.clock import Clock
 from engine.config import Config
 from engine.fast import margin as margin_mod
@@ -208,6 +209,9 @@ class Displaced:
     original_mode: str
     value_chf: float
     product_family: str
+    # Customer importance (desk.yaml): A = key account, served first onto
+    # scarce capacity and never deferred by choice.
+    priority: str = "B"
 
 
 @dataclass
@@ -548,6 +552,7 @@ def displaced_from(
             original_mode=_original_mode(s),
             value_chf=float(s.value_chf),
             product_family=s.product_family,
+            priority=desk_mod.priority_of(s.customer, config),
         )
         for s in shipments
     ]
@@ -746,17 +751,20 @@ def _assign(
 
 # --- the four preferences -------------------------------------------
 def _by_deadline(items: list[Displaced]) -> list[Displaced]:
-    """Tightest first. The default, and the only defensible dispatch rule:
-    serving a consignment with a week of slack ahead of one due tomorrow is
-    how a plan that looks fine on paper loses a delivery."""
-    return sorted(items, key=lambda d: (d.hours_of_slack, -d.tonnes, d.shipment_id))
+    """Key accounts first, then tightest first. Tightest-first is the only
+    defensible dispatch rule among equals: serving a consignment with a week
+    of slack ahead of one due tomorrow is how a plan that looks fine on paper
+    loses a delivery. But Sika serves its key accounts whatever the crisis,
+    so they are not "equals" (desk.yaml → customers)."""
+    return sorted(items, key=lambda d: (d.priority != "A", d.hours_of_slack, -d.tonnes,
+                                        d.shipment_id))
 
 
 def _by_slack_then_value(items: list[Displaced]) -> list[Displaced]:
     """Tightest first, and among equals the most valuable — the one whose
     customer notices."""
     return sorted(
-        items, key=lambda d: (d.hours_of_slack, -d.value_chf, d.shipment_id)
+        items, key=lambda d: (d.priority != "A", d.hours_of_slack, -d.value_chf, d.shipment_id)
     )
 
 
@@ -919,6 +927,10 @@ def _triage_set(displaced: list[Displaced], cap_t: float) -> list[Displaced]:
     for item in by_slack:
         if item.hours_of_slack <= DEFER_WAIT_HOURS / 2:
             break
+        if item.priority == "A":
+            # A key account is not held back to make room: its contract is
+            # kept whatever the crisis (desk.yaml → customers).
+            continue
         if running + item.tonnes > cap_t:
             break
         held.append(item.shipment_id)

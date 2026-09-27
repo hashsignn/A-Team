@@ -465,9 +465,17 @@
         tip.style.top = `${Math.min(e.point.y + 14, r.height - 90)}px`;
       };
 
+      /* ROUTE FIRST. A click on a shipment opens its ROUTE in the right
+       * column — who it is for, what else is on it — and only a second
+       * click, or "Plan recovery" there, opens the recovery options. The
+       * review asked for exactly that order: route, then proposals. With no
+       * board beside the map (a test page), it opens the hub directly. */
       map.on('click', 'asset-icons', (e) => {
         const f = e.features && e.features[0];
-        if (f) agent.selectAsset(f.properties.id);
+        if (!f) return;
+        const board = root.RadarBoard;
+        if (board && board.onAssetClick) board.onAssetClick(f.properties.id);
+        else agent.selectAsset(f.properties.id);
       });
       map.on('mouseenter', 'asset-icons', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mousemove', 'asset-icons', (e) => {
@@ -595,8 +603,9 @@
 
       if (force || !prev || state.assets.meta !== prev.assets.meta) ensureBasemap(state.assets.meta);
 
-      if (force || !prev || state.assets.lanes !== prev.assets.lanes || state.focusLane !== prev.focusLane) {
-        map.getSource('lanes').setData(fc(state.assets.lanes.map((l) =>
+      if (force || !prev || state.assets.lanes !== prev.assets.lanes || state.focusLane !== prev.focusLane
+          || state.filters.lanes !== prev.filters.lanes) {
+        map.getSource('lanes').setData(fc(select.visibleLanes(state).map((l) =>
           line(l.path, { id: l.route_id, focus: l.route_id === state.focusLane }))));
         map.setPaintProperty('lanes', 'line-width', ['case', ['get', 'focus'], 3.2, 1.1]);
         map.setPaintProperty('lanes', 'line-opacity', ['case', ['get', 'focus'], 0.85, 0.35]);
@@ -616,6 +625,8 @@
         }))));
       }
 
+      if (prev && state.fitLane !== prev.fitLane && state.fitLane.id) fitLane(state, state.fitLane.id);
+
       if (force || !prev || state.selection.id !== prev.selection.id) {
         const a = select.selectedAsset(state);
         if (a) ensureVisible(a);
@@ -628,6 +639,29 @@
       else if (state.routing.hovered !== prev.routing.hovered
                || state.routing.chosen !== prev.routing.chosen) emphasise(state);
       if (force || !prev || state.vendors !== prev.vendors || state.routing.data !== (prev && prev.routing.data)) renderVendors(state);
+    }
+
+    /* Frame a lane the planner picked from the list — once, gently, and
+     * only if it is not already on screen. Picking a route is asking to see
+     * it; re-framing a lane already in view is the jump nobody asked for. */
+    function fitLane(state, routeId) {
+      const map = view.map;
+      const lane = state.assets.lanes.find((l) => l.route_id === routeId);
+      if (!lane || !lane.path.length) return;
+      const b = new root.maplibregl.LngLatBounds();
+      let prev = null;
+      for (const [lat, lon] of lane.path) {
+        let x = lon;
+        if (prev !== null) { while (x - prev > 180) x -= 360; while (x - prev < -180) x += 360; }
+        b.extend([x, lat]); prev = x;
+      }
+      const shown = map.getBounds();
+      if (shown.contains(b.getSouthWest()) && shown.contains(b.getNorthEast())) return;
+      const legend = $('map-legend');
+      map.fitBounds(b, {
+        padding: { top: 70, left: 50, right: 80, bottom: legend ? legend.offsetHeight + 40 : 60 },
+        maxZoom: 6, duration: 600,
+      });
     }
 
     /* Only move the camera if the asset cannot be seen: off screen, or

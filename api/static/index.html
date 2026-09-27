@@ -23,6 +23,12 @@
      whichever view you happen to be reading, and re-rendering them per view
      would make switching feel like a page load. -->
 <header class="topbar">
+  <!-- Two rows, both always there. The ladder used to arrive after the
+       board and wrap the bar onto a second row, pushing the whole page down
+       a line a second after it had drawn — the first thing the Sika team
+       called "jumpy". Now the second row exists from the first paint, and
+       the rungs are drawn empty until the counts arrive. -->
+  <div class="topbar-row">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
       <div>
@@ -43,30 +49,51 @@
       <button type="button" class="ctl ctl--ghost" id="asof-now">Default</button>
     </form>
 
+    <div class="topbar-links">
+      <button type="button" class="ctl" id="btn-help" aria-pressed="false"
+              title="How to read this board">How it works</button>
+      <button type="button" class="ctl" id="btn-ask" aria-label="Assistant">
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+          <path d="M15 9.5a2 2 0 0 1-2 2H7l-3.5 2.6V11.5H3a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+                fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        Ask
+      </button>
+      <a class="ctl" id="link-fast" href="/fast">Act fast</a>
+      <a class="ctl" id="link-profile" href="/profile">Risk profile</a>
+      <!-- Four themes. The swatches preview the theme they switch to. -->
+      <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+    </div>
+  </div>
+
+  <!-- THE DESK BAR — whose board this is.
+       Planners own SITES, not routes (Sika review): the site picker narrows
+       every part of the board — list, ladder counts, map, globe — to the
+       freight that ships from there. The customer picker narrows it to the
+       contracts that are served first. Both are remembered, and both are in
+       the URL, so a planner's own view is a link. -->
+  <div class="topbar-row deskbar">
+    <label class="desk-fld">
+      <span>My site</span>
+      <select id="f-site" aria-label="Site of responsibility">
+        <option value="">All sites</option>
+      </select>
+    </label>
+    <div class="desk-fld" role="group" aria-label="Customer importance">
+      <span>Customers</span>
+      <div class="seg" id="f-cust">
+        <button type="button" data-cust="" class="is-on">All</button>
+        <button type="button" data-cust="A" title="Key accounts only">Key accounts</button>
+        <button type="button" data-cust="AB" title="Key accounts and standard customers">Key + standard</button>
+      </div>
+    </div>
+    <p class="desk-scope" id="desk-scope"></p>
+
     <!-- The five-level ladder. Every rung is a DEADLINE, not a damage band,
          so the directive is shown beside the colour — a colour alone never
-         carries the meaning. -->
+         carries the meaning. Counts follow the site and customer filters. -->
     <nav class="ladder" id="ladder" aria-label="Alert levels"></nav>
-
-    <!-- The profile is the config, rendered readable: which lanes this desk
-         owns, which 45 variables it watches, where the ladder cutoffs sit and
-         who gets drawn in. The cutoffs are editable, which is the surface Q3
-         asked for — "will also be able to play with the assumptions". -->
-    <button type="button" class="ctl" id="btn-ask" aria-label="Assistant">
-      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-        <path d="M15 9.5a2 2 0 0 1-2 2H7l-3.5 2.6V11.5H3a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
-              fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-      </svg>
-      Ask
-    </button>
-    <!-- The delivery-first surface. Linked rather than replacing this one:
-         the analytical board still answers "why", and this answers "what do I
-         press". A planner in an incident wants the second. -->
-    <a class="ctl" id="link-fast" href="/fast">Act fast</a>
-    <a class="ctl" id="link-profile" href="/profile">Risk profile</a>
-
-    <!-- Four themes. The swatches preview the theme they switch to. -->
-    <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+  </div>
 </header>
 
 <!-- ============================================================
@@ -99,12 +126,6 @@
       <div id="globe" role="application" aria-label="Rotating globe of freight routes"></div>
       <div id="fleetmap" class="fleetmap" role="application"
            aria-label="2D map of every active shipment"></div>
-
-      <!-- The convene strip belongs to the globe's lane view; on the map it
-           was a paragraph of text over the vehicles. -->
-      <div class="globe-overlay globe-overlay--tl only-globe">
-        <div class="posture" id="posture"></div>
-      </div>
 
       <div class="viewswitch" role="group" aria-label="Left pane view">
         <button type="button" data-view="map" class="is-on">Map</button>
@@ -145,13 +166,48 @@
          ---------------------------------------------------------------- -->
     <aside class="panel" id="panel" aria-live="polite">
 
-      <!-- STATE 1 — every affected route, ranked -->
+      <!-- WHERE YOU ARE. The board is used in one order — whose freight,
+           which route, what to do — and the steps say so, so nobody has to
+           guess why the column changed under them. -->
+      <ol class="steps" id="steps" aria-label="Where you are">
+        <li data-step="1" class="is-on"><b>1</b> Your view</li>
+        <li data-step="2"><b>2</b> Pick a route</li>
+        <li data-step="3"><b>3</b> Act on it</li>
+      </ol>
+
+      <!-- The convene posture, one line. It used to float over the map and
+           hide the Rhine it was talking about. -->
+      <button type="button" class="posture" id="posture" hidden></button>
+
+
+
+      <!-- STATE 1 — the routes of your view, ranked -->
       <div class="panel-list" id="panel-list">
+        <div class="howto" id="howto" hidden>
+        <p><b>How this board works.</b></p>
+        <ol>
+          <li><b>Choose your view</b> in the bar above: the site you plan for, and which
+            customers. Everything — this list, the ladder, the map — narrows to it.</li>
+          <li><b>Pick a route.</b> Each one ships from one site. Its colour says how soon
+            somebody must decide, not how bad the news is.</li>
+          <li><b>Act.</b> The route shows its shipments and customers, key accounts first,
+            then the options worth more than they cost. <i>Plan recovery</i> on a shipment
+            opens the ways round on the map.</li>
+        </ol>
+        <p class="muted">On the map each icon is one shipment, in its route's ladder colour.
+          Clicking one opens its route here first.</p>
+        <button type="button" class="ctl ctl--mini" id="howto-close">Got it</button>
+      </div>
         <div class="panel-list-head">
           <div>
             <nav class="ptabs" id="ptabs" role="tablist">
               <button type="button" class="ptab is-on" data-ptab="routes" role="tab">
-                Affected routes
+                Routes
+              </button>
+              <!-- The cross-functional meeting and what each function in it
+                   can pull (engine/desk.py). -->
+              <button type="button" class="ptab" data-ptab="allhands" role="tab">
+                All-hands
               </button>
               <!-- The filter layer, which was one line of small print under a
                    table. Its argument — arithmetic does the bulk, a model
@@ -161,7 +217,7 @@
                 Signals
               </button>
             </nav>
-            <p class="muted" id="panel-list-count"></p>
+            <p class="muted" id="panel-list-count">Loading the board…</p>
           </div>
           <div class="plh-ctl">
             <button type="button" class="ctl ctl--mini" id="f-focus" aria-pressed="false" hidden
@@ -169,12 +225,18 @@
             <button type="button" class="ctl ctl--mini" id="f-all">All levels</button>
           </div>
         </div>
-        <div class="rlist" id="rlist" role="list"></div>
+        <!-- Key accounts at risk: shown whatever site is picked, because those
+             contracts are kept whatever the crisis. -->
+        <div class="keyacc" id="keyacc" hidden></div>
+        <div class="rlist" id="rlist" role="list">
+          <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+        <div class="rlist" id="allhands" hidden></div>
         <div class="rlist" id="siglist" hidden></div>
         <p class="panel-list-foot" id="ranked-foot"></p>
       </div>
 
-      <!-- STATE 2 — one route: what it is, what to do, who to call -->
+      <!-- STATE 2 — one route: who it serves, then what to do -->
       <div class="panel-body" id="panel-body" hidden>
 
         <div class="panel-head">
@@ -188,6 +250,16 @@
         </div>
 
         <div class="stat-row" id="d-stats"></div>
+
+        <!-- WHO THIS ROUTE IS FOR. The allocation the review found
+             confusing, said in one line and one table: the site it ships
+             from, the port it leaves by, and every customer on it, key
+             accounts first. -->
+        <div class="alloc" id="d-alloc"></div>
+
+        <!-- The shipments on this route. Recovery on the map opens from
+             here — after the route, never before it. -->
+        <div class="dship" id="d-ships"></div>
 
         <!-- Onward to the route's own page, which is where the risk matrix,
              the radar and the per-consignment grid live at a size somebody
@@ -215,7 +287,7 @@
 
           <!-- ACT & ESCALATE -->
           <div class="rpanel is-on" data-panel="actions">
-            <p class="rpanel-note">Only options worth more than they cost.</p>
+            <p class="rpanel-note">Only options worth more than they cost. Key accounts first.</p>
             <div id="r-actions"></div>
 
             <div class="rsplit">

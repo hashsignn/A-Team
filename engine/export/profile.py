@@ -11,7 +11,7 @@ so the profile has to describe the lanes, the clock and the people:
 
     Desk        who this planner is, which corridors and modes they own
     Network     the nodes and lanes in scope
-    Risk ledger the 45 variables, by family, and which modes each can touch
+    Risk ledger the 46 variables, by family, and which modes each can touch
     Appetite    the five-level cutoffs and the convene rule  (EDITABLE)
     Response    route owners, standing teams, seniors, escalation, spend limit
     Sources     every feed as connected / example stand-in / absent
@@ -149,7 +149,7 @@ def _network(context) -> dict:
 
 
 def _ledger(config: Config) -> dict:
-    """The 45 variables, grouped by family.
+    """The 46 variables, grouped by family.
 
     Sika confirmed no risk ledger for outgoing shipments exists today (Q1), so
     this file IS the proposal — which is why it belongs in the profile rather

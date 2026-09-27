@@ -1,4 +1,4 @@
-# THE RISK LEDGER — 45 variables across 10 families.
+# THE RISK LEDGER — 46 variables across 10 families.
 #
 # Sika confirmed (Q1) that no risk ledger for outgoing shipments exists today.
 # This file IS the proposed ledger. It is meant to be read, argued with and
@@ -576,7 +576,7 @@ variables:
     probability_sourceable: false
 
   # =================================================================
-  # 9. CAPACITY / MARKET (3)
+  # 9. CAPACITY / MARKET (4)
   # =================================================================
   - id: CAP_BLANK_SAILING
     family: capacity
@@ -615,6 +615,22 @@ variables:
     typical_duration_days: 21
     onset: sudden
     exposure: {any: true}
+    probability_sourceable: false
+
+  - id: CAP_CARRIER_PUSHOUT
+    family: capacity
+    name: Carrier pushing out orders
+    description: >
+      One carrier moving several bookings later at the same place within a
+      few days — rolled containers, cancelled train paths, postponed barge
+      departures — with no announced cause. How disruptions usually reach
+      the desk before anyone declares one (Sika). A sign, not a stoppage:
+      raised from the carrier's own booking changes (engine/ingest/pushouts.py).
+    modes_affected: [sea, barge, rail, road]
+    typical_lead_time_hours: 72
+    typical_duration_days: 7
+    onset: precursor
+    exposure: {kind_in: [seaport, inland_port, distribution]}
     probability_sourceable: false
 
   # =================================================================

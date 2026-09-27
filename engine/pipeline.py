@@ -28,6 +28,7 @@ from engine.clock import Clock
 from engine.config import Config, load_config
 from engine.gate.intersect import gate
 from engine.ingest import flows as flows_mod
+from engine.ingest import pushouts
 from engine.ingest.feeds import load_feed_items, social_promotion_status
 from engine.ingest.observations import FeedReport, FeedStatus, IngestBundle
 from engine.ingest.synthetic import generate_shipments, in_scope
@@ -108,6 +109,8 @@ class RunContext:
     unpromoted: dict[str, str] = field(default_factory=dict)
     # Recorded conditions at every place on a focus route, for the route page.
     conditions: dict = field(default_factory=dict)
+    # Carrier push-outs read this run: patterns raised and singles watched.
+    carrier_signals: dict = field(default_factory=dict)
 
 
 def run(
@@ -178,6 +181,12 @@ def run(
     if weather_report is not None:
         bundle.add(weather_report, weather_obs)
     gauge_obs = [*gauge_obs, *weather_obs]
+
+    # Carriers pushing out orders: the signal Sika said comes before any
+    # announcement. Patterns become warning observations on the same path.
+    pushout_obs, pushout_report, carrier_signals = pushouts.assess(shipments, config, clock)
+    bundle.add(pushout_report, pushout_obs)
+    gauge_obs = [*gauge_obs, *pushout_obs]
 
     feed_items, feed_report = load_feed_items(clock)
     bundle.add(feed_report)
@@ -256,6 +265,7 @@ def run(
         router_notes=router_notes,
         unpromoted=unpromoted,
         conditions=conditions,
+        carrier_signals=carrier_signals,
     )
 
 
@@ -550,7 +560,9 @@ def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:
         event_class=var.family,
         active_variables=[obs["variable_id"]],
         severity=Severity(obs["severity"]),
-        modes_affected=var.modes_affected,
+        # An observation may narrow the modes: a barge operator pulling back
+        # at Basel says nothing about the trains leaving it.
+        modes_affected=[Mode(m) for m in obs["modes"]] if obs.get("modes") else var.modes_affected,
         realized=obs["realized"],
         probability=obs["probability"],
         probability_basis=obs["probability_basis"],

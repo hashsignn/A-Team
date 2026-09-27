@@ -539,7 +539,9 @@ def option_by_id(
     # Keyed, not appended. A consignment hit by two events is assessed twice
     # and yields the same option twice; executing it twice books the same
     # reroute twice and leaves the second execution un-undoable, because the
-    # two share an id.
+    # two share an id. Keyed by CONSIGNMENT: a playbook action's id carries
+    # the event it answers, so the same reroute under two events has two ids
+    # and keying on the option id let the second through.
     found: dict[str, fast.FastOption] = {}
 
     for assessment in context.result.assessments:
@@ -550,7 +552,7 @@ def option_by_id(
             ranking = _rank_shipment(shipment, context, risk, assessment.event)
             for option in ranking.viable:
                 if f"{option.kind}:{option.label}" == option_id:
-                    found.setdefault(option.option_id, option)
+                    found.setdefault(shipment.shipment_id, option)
 
     return list(found.values())
 

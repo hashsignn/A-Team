@@ -537,7 +537,7 @@ layer4_cargo:
 # =====================================================================
 # LAYER 1 — PATHWAYS
 # =====================================================================
-# Which way each event class threatens freight. The 45 variables themselves
+# Which way each event class threatens freight. The 46 variables themselves
 # stay in variables.yaml; this is the one extra fact each needs.
 #
 #   delay   the freight moves late. Applies to every shipment on the corridor

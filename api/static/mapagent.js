@@ -247,8 +247,11 @@
     // ---------------------------------------------------------------
     // View
     // ---------------------------------------------------------------
-    function focusLane(routeId, m) {
-      store.dispatch({ type: T.LANE_FOCUS, routeId, meta: meta(m, `focus lane ${routeId}`, { journal: false }) });
+    function focusLane(routeId, m, opts) {
+      store.dispatch({
+        type: T.LANE_FOCUS, routeId, fit: !!(opts && opts.fit),
+        meta: meta(m, `focus lane ${routeId}`, { journal: false }),
+      });
       return Promise.resolve(s().focusLane);
     }
     function setView(view, m) {
@@ -273,9 +276,9 @@
       ['assignContainers', 'Move containers onto a route, keeping the rest of the allocation.', { containerIds: 'array of container ids', routeId: 'candidate id or ORIGINAL' }],
       ['queryVendors', 'Find partners in the radius and which recovery routes each can cover.', { id: 'shipment id, optional', radiusKm: 'number, optional', teu: 'TEU to move, optional' }],
       ['selectVendor', 'Open a partner card (null closes it).', { vendorId: 'partner id' }],
-      ['focusLane', 'Highlight a lane on the map.', { routeId: 'lane id' }],
+      ['focusLane', 'Highlight a lane on the map; {fit: true} as the third argument also frames it.', { routeId: 'lane id' }],
       ['setView', "Switch the left pane between 'map' and 'globe'.", { view: "'map' | 'globe'" }],
-      ['setFilter', 'Filter assets by status or include booked freight.', { patch: '{showBooked?, statuses?: {green,yellow,red}}' }],
+      ['setFilter', 'Filter assets by status, lane or customer tier, or include booked freight.', { patch: '{showBooked?, statuses?: {green,yellow,red}, lanes?: [lane ids] | null, priorities?: [A|B|C] | null}' }],
     ];
 
     function describe() {

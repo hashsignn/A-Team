@@ -61,8 +61,18 @@
         status: 'idle', seq: 0, items: [], byId: {}, counts: null,
         lanes: [], meta: null, asOfLabel: null, error: null,
       },
-      filters: { showBooked: false, statuses: { green: true, yellow: true, red: true } },
+      // lanes: the routes the board's own filters leave (site, customers,
+      // levels) — null is every lane. priorities: customer tiers to show
+      // (desk.yaml), null is all. One mechanism, so the map and the list
+      // can never disagree about whose freight is on screen.
+      filters: {
+        showBooked: false, statuses: { green: true, yellow: true, red: true },
+        lanes: null, priorities: null,
+      },
       focusLane: null,
+      // A request to frame a lane, made by an explicit pick in the list.
+      // A click ON the map never frames: the planner is already looking.
+      fitLane: { id: null, seq: 0 },
       selection: { id: null, status: 'idle', seq: 0, detail: null, error: null },
       routing: {
         id: null, status: 'idle', seq: 0, data: null, weights: null,
@@ -125,13 +135,19 @@
           filters: {
             ...state.filters,
             ...(a.patch.showBooked != null ? { showBooked: !!a.patch.showBooked } : {}),
+            ...('lanes' in a.patch ? { lanes: a.patch.lanes ? a.patch.lanes.slice().sort() : null } : {}),
+            ...('priorities' in a.patch
+              ? { priorities: a.patch.priorities ? a.patch.priorities.slice().sort() : null } : {}),
             statuses: { ...state.filters.statuses, ...(a.patch.statuses || {}) },
           },
         };
 
-      case T.LANE_FOCUS:
-        if ((a.routeId || null) === state.focusLane) return state;
-        return { ...state, focusLane: a.routeId || null };
+      case T.LANE_FOCUS: {
+        const fit = a.fit && a.routeId
+          ? { id: a.routeId, seq: state.fitLane.seq + 1 } : state.fitLane;
+        if ((a.routeId || null) === state.focusLane && fit === state.fitLane) return state;
+        return { ...state, focusLane: a.routeId || null, fitLane: fit };
+      }
 
       case T.ASSET_SELECT: {
         const base = clearSelection(state);
@@ -288,9 +304,18 @@
 
   const select = {
     visibleAssets(s) {
+      const lanes = s.filters.lanes ? new Set(s.filters.lanes) : null;
+      const tiers = s.filters.priorities ? new Set(s.filters.priorities) : null;
       return s.assets.items.filter((a) =>
         (PHASES_ALWAYS.has(a.phase) || (s.filters.showBooked && a.phase === 'booked'))
-        && s.filters.statuses[a.status] !== false);
+        && s.filters.statuses[a.status] !== false
+        && (!lanes || lanes.has(a.lane_id))
+        && (!tiers || tiers.has(a.customer_priority || 'B')));
+    },
+    visibleLanes(s) {
+      if (!s.filters.lanes) return s.assets.lanes;
+      const lanes = new Set(s.filters.lanes);
+      return s.assets.lanes.filter((l) => lanes.has(l.route_id));
     },
     selectedAsset(s) {
       return s.selection.id ? s.assets.byId[s.selection.id] || null : null;

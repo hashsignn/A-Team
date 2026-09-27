@@ -118,7 +118,9 @@ def main() -> int:
               .length; })()""")
         check(mismatch == 0, f"[icons] {mismatch} vehicle(s) not in their route's ladder colour",
               "vehicles coloured by their route's ladder level")
-        check(page.locator("#posture").is_hidden(),
+        # The convene posture lives at the top of the right column now; what
+        # matters is that nothing of it is drawn over the vehicles.
+        check(page.evaluate("document.querySelector('.globe-wrap #posture') === null"),
               "[chrome] the convene strip is drawn over the map", "no convene strip over the map")
         check(page.locator("#map-legend").count() == 0,
               "[legend] a map legend is back beside the ladder",
@@ -163,6 +165,22 @@ def main() -> int:
         if not check(target is not None, "[click] no red or yellow icon rendered to click"):
             browser.close()
             return _report(errors)
+        # ROUTE FIRST: the first click opens the shipment's route in the right
+        # column and marks the shipment there — no recovery card yet. The
+        # second click on the same shipment opens it.
+        page.mouse.click(target["x"], target["y"])
+        page.wait_for_timeout(900)
+        first = page.evaluate("""(() => ({
+            panel: !document.getElementById('panel-body').hidden,
+            hub: !document.getElementById('hub').hidden,
+            marked: (document.querySelector('.dship-row.is-focus') || {}).dataset?.ship || null,
+            lane: MapAgent.getState().focusLane }))()""")
+        check(first["panel"] and not first["hub"],
+              f"[route-first] first click did not open the route alone: {first}",
+              "first click on a shipment opens its route, not the recovery card")
+        check(first["marked"] == target["id"],
+              f"[route-first] {target['id']} not marked in the route's shipment list ({first['marked']})",
+              f"{target['id']} marked in the route's shipment list")
         page.mouse.click(target["x"], target["y"])
         page.wait_for_function("MapAgent.getState().selection.status === 'ready'", timeout=30_000)
         page.wait_for_function("MapAgent.getState().routing.status === 'ready' "
@@ -308,6 +326,18 @@ def main() -> int:
                   const x = b.left + b.width / 2, y = b.top + b.height / 2;
                   return document.elementFromPoint(x, y) && p.contains(document.elementFromPoint(x, y)); });
                 return i; })()""")
+            if free < 0:
+                # A cluster donut can sit on the partners at this zoom. A
+                # planner zooms in on them; so does the check.
+                page.evaluate("""(() => { const v = MapStore.select.vendors(MapAgent.getState())[0];
+                    if (v) window.__fleetmap.jumpTo({center: [v.lon, v.lat], zoom: 9}); })()""")
+                page.wait_for_function("!window.__fleetmap.isMoving()", timeout=10_000)
+                page.wait_for_timeout(900)
+                free = page.evaluate("""(() => { const pins = [...document.querySelectorAll('.vpin')];
+                    return pins.findIndex(p => { const b = p.getBoundingClientRect();
+                      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+                      const at = document.elementFromPoint(x, y);
+                      return at && p.contains(at); }); })()""")
             check(free >= 0, "[vendors] every partner marker is covered", "")
             page.locator(".vpin").nth(max(free, 0)).click()
             page.wait_for_timeout(600)

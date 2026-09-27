@@ -127,7 +127,9 @@ matrix:
 convene_rule:
   agreed_on: null            # date the team signed off; null = not yet agreed
   agreed_by: null
-  meeting_cadence_days: 7    # weekly, per Sika Q6
+  # The all-hands calendar lives in desk.yaml → all_hands (biweekly, daily in
+  # a crisis — Sika review, Sept 2026). These two are the fallback without it.
+  meeting_cadence_days: 14   # biweekly
   escalated_cadence_days: 1  # daily once convened
 
   thresholds:

@@ -1,0 +1,162 @@
+# How the planning desk works — who owns what, who comes first, how the room meets
+#
+# SYNTHETIC NAMES, STRUCTURE FROM SIKA'S OWN FEEDBACK (Innovathon review,
+# September 2026). Every person and customer below is invented; the shape is
+# what the Sika team described:
+#
+#   - "Planners allocate work by origin site (e.g. Stuttgart, Zurich,
+#     Hamburg) rather than by route."                        → sites
+#   - "Filter by customer importance to ensure high-priority contracts are
+#     serviced regardless of the crisis."                    → customers
+#   - "Once a crisis is looming, cross-functional all-hands meetings
+#     (Procurement, Supply Chain, Manufacturing, Controlling) increase in
+#     frequency from biweekly to daily."                     → all_hands
+#   - "Controlling raises authority limits for approval workflows during
+#     crises."                                               → crisis_authority
+#   - "Disruptions are often identified by carriers pushing out single orders
+#     before an official crisis is announced."               → carrier_pushouts
+#
+# Swapping in Sika's real sites, key accounts and calendar is an edit to
+# config/desk.yaml (gitignored), never a code change.
+
+# -------------------------------------------------------------------
+# SITES — the unit a planner's work is allocated by
+# -------------------------------------------------------------------
+# A route belongs to the site its freight ships FROM: the first place on the
+# lane listed under a site's `ships_from`. A lane can override it with
+# `site:` in lanes.yaml. A lane that starts nowhere listed here falls under
+# its own first node, so no route is ever orphaned from the filter.
+#
+# Hamburg, named in the feedback, is a port on the lanes in this example, not
+# a shipping point; add it here with `ships_from: [DEHAM]` the day a lane
+# starts there.
+sites:
+  - id: DUD
+    name: Düdingen
+    country: CH
+    ships_from: [SIKA_DUD]
+    planner: "C. Roth (synthetic)"
+  - id: ZUR
+    name: Zürich
+    country: CH
+    ships_from: [SIKA_ZUR]
+    planner: "N. Weber (synthetic)"
+  - id: BSL
+    name: Basel (Rhine port)
+    country: CH
+    ships_from: [CHBSL]
+    planner: "C. Roth (synthetic)"
+  - id: STU
+    name: Stuttgart
+    country: DE
+    ships_from: [SIKA_STU]
+    planner: "J. Braun (synthetic)"
+  - id: BAD
+    name: Bad Urach
+    country: DE
+    ships_from: [SIKA_BAD]
+    planner: "J. Braun (synthetic)"
+  - id: CER
+    name: Cerano / Peschiera
+    country: IT
+    ships_from: [SIKA_CER]
+    planner: "G. Bianchi (synthetic)"
+  - id: ALC
+    name: Alcobendas
+    country: ES
+    ships_from: [SIKA_ALC]
+    planner: "M. Ortega (synthetic)"
+
+# -------------------------------------------------------------------
+# CUSTOMERS — importance, not impact
+# -------------------------------------------------------------------
+# Two different questions. The impact tier (scoring.yaml) says what a late
+# delivery COSTS this customer — their line stops, they run out, they are
+# annoyed. Importance says who Sika serves FIRST when there is not enough
+# capacity for everyone: the key accounts whose contracts are kept whatever
+# the crisis. A small customer can have a line-down impact; a key account can
+# be only inconvenienced. Both are needed, and neither is derived from the
+# other.
+customers:
+  default: B
+  tiers:
+    A:
+      label: Key account
+      rule: >-
+        Serviced first, whatever the crisis: shown on every site's view while
+        at risk, first in every list of actions, first onto any scarce
+        recovery capacity.
+    B:
+      label: Standard
+      rule: Served in deadline order.
+    C:
+      label: Flexible
+      rule: Can take a later date when capacity is short; tell them early.
+  # Synthetic customers (engine/ingest/synthetic.py). Real names go in
+  # config/desk.yaml, which is never committed.
+  by_customer:
+    "Bauwerk Construction AG": A
+    "Helvetia Tunnelbau": A
+    "Meridian Infrastructure": A
+    "Gulf Industrial Projects": A
+    "Nordbau Projekt GmbH": B
+    "Aurora Precast": B
+    "Pacific Rim Builders": B
+    "Iberia Obras Civiles": B
+    "Anhui Construction Group": B
+    "Delta Marine Works": C
+    "Continental Roofing": C
+    "Midwest Commercial Build": C
+
+# -------------------------------------------------------------------
+# ALL-HANDS — the cross-functional meeting, and how often it sits
+# -------------------------------------------------------------------
+# Biweekly in calm conditions, daily once a crisis is looming (Sika). The
+# posture comes from the convene rule (scoring.yaml → convene_rule): NORMAL,
+# WATCH (half-way to the rule) or CONVENE (the rule crossed). The tool never
+# declares a crisis; it says which cadence the team's own rule now calls for.
+all_hands:
+  # A Tuesday the biweekly meeting sat on, so the next one can be counted
+  # forward from it. Replace with the real calendar.
+  anchor: "2026-09-15T09:00:00+00:00"
+  cadence_days:
+    normal: 14
+    watch: 7
+    convene: 1
+  # The time the daily meeting sits once it goes daily.
+  daily_at: "08:30"
+  functions: [FN_SUPPLY_CHAIN, FN_PROCUREMENT, FN_MANUFACTURING, FN_CONTROLLING]
+
+# -------------------------------------------------------------------
+# CRISIS AUTHORITY — Controlling's lever
+# -------------------------------------------------------------------
+# In a crisis Controlling raises the limit a planner may approve without
+# escalation, so recovery spend is not held in an approval queue while the
+# options expire. The normal limit is contacts.yaml → approval. The raised
+# limit applies only while the posture is CONVENE, and only once Controlling
+# has confirmed it in the room — the board proposes it, it does not grant it.
+crisis_authority:
+  multiplier: 5
+  # Never above this, however large the normal limit.
+  cap_chf: 100000
+  # What the raised limit is for.
+  applies_to: >-
+    Recovery transport, spot capacity and expediting on shipments the board
+    shows at risk. Not new suppliers or capital spend.
+
+# -------------------------------------------------------------------
+# CARRIER PUSH-OUTS — the signal before the crisis
+# -------------------------------------------------------------------
+# A carrier moving one booking later is noise. The same carrier moving
+# several orders on the same corridor within a few days is how disruptions
+# show up before anyone announces them (Sika). A push-out is a booking the
+# CARRIER moved later — a rolled container, a cancelled train path, a
+# postponed barge departure — not one the planner rescheduled.
+carrier_pushouts:
+  # How far back to look, and how many distinct orders make a pattern.
+  window_days: 7
+  min_orders: 3
+  # A move shorter than this is schedule noise.
+  min_hours: 12
+  # A single push-out is shown, never raised: under min_orders it is listed
+  # as "seen", so the planner can watch it become a pattern.

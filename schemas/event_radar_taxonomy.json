@@ -86,6 +86,7 @@
           "enum": [
             "CAP_BLANK_SAILING",
             "CAP_CARRIER_INSOLVENCY",
+            "CAP_CARRIER_PUSHOUT",
             "CAP_RATE_SPIKE",
             "CLI_EXTREME_HEAT",
             "CLI_FOG",
@@ -131,7 +132,7 @@
             "WAT_WATERWAY_INCIDENT",
             "unmapped"
           ],
-          "description": "One of the 45 ledger variables, or 'unmapped'."
+          "description": "One of the 46 ledger variables, or 'unmapped'."
         },
         "family": {
           "type": "string",

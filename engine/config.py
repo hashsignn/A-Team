@@ -100,6 +100,12 @@ class Config:
         return self.raw("contacts")
 
     @property
+    def desk(self) -> dict:
+        """How the desk is organised (desk.yaml), or {} without the file."""
+        loaded = self.files.get("desk")
+        return (loaded.data or {}) if loaded else {}
+
+    @property
     def fleet(self) -> dict:
         """The map layer's settings, or {} when no fleet.yaml is present."""
         loaded = self.files.get("fleet")
@@ -165,6 +171,7 @@ _FILES = (
     "fast",
     "fleet",
     "focus",
+    "desk",
 )
 
 # sources.yaml is optional: with no file, the built-in free catalogue is
@@ -175,7 +182,11 @@ _FILES = (
 #
 # focus.yaml is optional too: with no file there are no focus routes, and every
 # route is what it always was — synthetic and labelled so.
-_OPTIONAL = {"company_profile", "sources", "fast", "fleet", "focus"}
+#
+# desk.yaml is optional: with no file every route falls under its own first
+# node, every customer is standard, and the all-hands keeps the convene rule's
+# weekly cadence.
+_OPTIONAL = {"company_profile", "sources", "fast", "fleet", "focus", "desk"}
 
 
 def load_config(

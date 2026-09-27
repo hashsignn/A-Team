@@ -107,6 +107,14 @@ overrides:
     moderate: {optimistic: 7.0, likely: 9.0, pessimistic: 14.0}
     severe:   {optimistic: 9.0, likely: 16.0, pessimistic: 28.0}
 
+  # A carrier pushing out orders moves each by a day to four (desk.yaml). If
+  # it becomes a disruption, the delay is the push itself or the next
+  # service after it — shorter than a blank sailing's full week.
+  CAP_CARRIER_PUSHOUT:
+    minor:    {optimistic: 0.5, likely: 1.5, pessimistic: 4.0}
+    moderate: {optimistic: 1.0, likely: 3.0, pessimistic: 7.0}
+    severe:   {optimistic: 2.0, likely: 5.0, pessimistic: 14.0}
+
   # Rail engineering works are planned, published, and bounded.
   INF_RAIL_WORKS:
     minor:    {optimistic: 0.0, likely: 0.2, pessimistic: 0.5}

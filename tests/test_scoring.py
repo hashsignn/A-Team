@@ -344,8 +344,8 @@ def test_temporal_gate_rejects_a_window_that_closed_before_arrival():
 # =====================================================================
 
 
-def test_ledger_has_45_fully_specified_variables(config):
-    assert len(config.variables) == 45
+def test_ledger_has_46_fully_specified_variables(config):
+    assert len(config.variables) == 46
     for var in config.variables.values():
         assert var.description.strip(), f"{var.id} has no router-readable description"
         assert var.modes_affected, f"{var.id} affects no modes"

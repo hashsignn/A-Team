@@ -93,6 +93,8 @@ PATTERNS: dict[str, list[str]] = {
     "MEC_CARGO_FIRE": [r"cargo fire", r"dangerous goods incident", r"container fire"],
     "CAP_BLANK_SAILING": [r"blank sailing", r"blanked", r"omit(ted)? (the )?call", r"void sailing"],
     "CAP_RATE_SPIKE": [r"rate (spike|surge|increase)", r"freight rates"],
+    "CAP_CARRIER_PUSHOUT": [r"push(ed|es|ing)? out (the |our )?(order|booking)s?", r"rolled (the |our )?(booking|container)s?",
+                            r"booking(s)? (moved|postponed|pushed back)"],
     "CAP_CARRIER_INSOLVENCY": [r"insolvenc", r"ceased trading", r"administration", r"bankrupt"],
     "CYB_PORT_IT_OUTAGE": [r"cyber", r"ransomware", r"it outage", r"systems down"],
     "CYB_CARRIER_SYSTEMS": [r"booking system", r"platform outage", r"portal down"],

@@ -136,6 +136,7 @@ def main() -> int:
 
             _board(page, check)
             _route_page(page, check)
+            _desk(page, check)
             _profile(page, check, expecting_refusal)
             _themes_and_unsourced(page, check)
             _assistant(page, check)
@@ -272,6 +273,68 @@ def _board(page, check) -> None:
     check("RECOVERABLE" not in page.inner_text("body").upper(),
           "[recoverable] still shown somewhere on the page", "no 'recoverable' figure anywhere")
     page.screenshot(path=str(OUT / "full.png"), full_page=True)
+
+
+# =====================================================================
+# THE DESK — the client review: sites, customers, all-hands, push-outs
+# =====================================================================
+def _desk(page, check) -> None:
+    """Planners work by SITE and serve key accounts first (Sika review), so
+    the board must narrow to both, everywhere at once, and remember it."""
+    _open_board(page)
+    sites = page.evaluate("state.board.sites.map(s => s.id)")
+    check(len(sites) >= 3, f"[desk] only {len(sites)} site(s) offered", f"desk: {len(sites)} sites to pick from")
+    busiest = page.evaluate("state.board.sites.slice().sort((a, b) => b.routes - a.routes)[0].id")
+    page.select_option("#f-site", busiest)
+    page.wait_for_timeout(700)
+    got = page.evaluate("""(() => {
+        const ids = [...document.querySelectorAll('#rlist .rli')].map(e => e.dataset.route);
+        const of = (id) => state.board.routes.find(r => r.route_id === id).site.id;
+        const rungs = [...document.querySelectorAll('#ladder .rung-count')].map(e => Number(e.textContent) || 0);
+        return { n: ids.length, all: ids.every(id => of(id) === state.site),
+                 ladder: rungs.reduce((a, b) => a + b, 0), mine: deskRoutes().length,
+                 lanes: (MapAgent.getState().filters.lanes || []).length,
+                 url: location.search };
+    })()""")
+    check(got["n"] > 0 and got["all"], f"[desk] site filter leaked other sites' routes: {got}",
+          f"site {busiest}: {got['n']} routes, every one ships from it")
+    check(got["ladder"] == got["mine"], f"[desk] ladder counts {got['ladder']} routes, the desk has {got['mine']}",
+          "ladder counts only this site's routes")
+    check(got["lanes"] == got["n"], f"[desk] map shows {got['lanes']} lanes for {got['n']} routes",
+          "the map narrows to the same routes")
+    check(f"site={busiest}" in got["url"], f"[desk] the site is not in the URL: {got['url']}",
+          "the site is in the URL, so a planner's view is a link")
+
+    page.click("#f-cust button[data-cust='A']")
+    page.wait_for_timeout(600)
+    key = page.evaluate("""(() => {
+        const ids = [...document.querySelectorAll('#rlist .rli')].map(e => e.dataset.route);
+        const r = (id) => state.board.routes.find(x => x.route_id === id);
+        const assets = MapStore.select.visibleAssets(MapAgent.getState());
+        return { ok: ids.every(id => r(id).customers.some(c => c.priority === 'A')),
+                 assets: assets.every(a => a.customer_priority === 'A'), n: ids.length };
+    })()""")
+    check(key["ok"] and key["assets"], f"[desk] key-account filter let others through: {key}",
+          f"key accounts only: {key['n']} route(s), and only key-account icons on the map")
+    page.select_option("#f-site", "")
+    page.click("#f-cust button[data-cust='']")
+    page.wait_for_timeout(600)
+    if page.evaluate("state.board.key_accounts.length"):
+        check(page.locator("#keyacc .ka-row").count() > 0, "[desk] key accounts at risk not listed",
+              f"{page.locator('#keyacc .ka-row').count()} key-account order(s) at risk listed on every site")
+
+    page.click(".ptab[data-ptab='allhands']")
+    page.wait_for_timeout(400)
+    cards = page.locator("#allhands .ah-card").count()
+    text = page.locator("#allhands").inner_text()
+    check(cards == 4 and all(f in text for f in ("Supply Chain", "Procurement", "Manufacturing", "Controlling")),
+          f"[all-hands] {cards} function card(s)", "all-hands: cadence, the room, and 4 function levers")
+    page.click(".ptab[data-ptab='signals']")
+    _settle(page, "document.querySelector('#siglist .cs') !== null", 20_000)
+    check(page.locator("#siglist .cs").count() == 1, "[signals] no carrier push-out section",
+          "signals: carriers pushing out orders, raised and watched")
+    page.click(".ptab[data-ptab='routes']")
+    page.wait_for_timeout(300)
 
 
 def _open_card(page, check, index: int, what: str) -> None:
@@ -426,7 +489,7 @@ def _profile(page, check, expecting_refusal) -> None:
     page.evaluate("document.querySelectorAll('.fam').forEach(d => d.open = true)")
     page.wait_for_timeout(400)
     listed = page.locator("#tab-ledger .rtable tbody tr").count()
-    check(listed == 45, f"[profile] ledger lists {listed} variables, expected 45",
+    check(listed == 46, f"[profile] ledger lists {listed} variables, expected 46",
           f"ledger: {listed} variables across {page.locator('#tab-ledger .fam').count()} families")
     page.screenshot(path=str(OUT / "profile-ledger.png"), full_page=True)
 

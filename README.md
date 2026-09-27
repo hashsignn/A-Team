@@ -237,6 +237,28 @@ else moves.**
 
 ---
 
+## What the client review changed (September 2026)
+
+Sika's verdict: the workflow and the automated proposals are promising, but
+the board was not self-explanatory, and it had no filters that match how the
+work is actually split. Each point, and where it is answered:
+
+| Feedback | What changed | Where |
+|---|---|---|
+| Planners allocate work by **origin site**, not by route | *My site* in the header narrows everything: the list, the ladder counts, the map and the globe. Every route belongs to the site it ships from. Your choice is saved and kept in the URL (`?site=STU`). | `config.example/desk.yaml → sites`, `engine/desk.py` |
+| Filter by **customer importance**, so priority contracts are served whatever the crisis | *Customers*: all, key accounts, or key + standard. Key-account orders at risk are listed on every site's view. They come first in every list of actions, and get first claim on scarce recovery capacity. The optimiser never defers them. | `desk.yaml → customers`, `engine/fast/capacity.py` |
+| The board felt **"jumpy"** and it was unclear who things belong to | The header is built at its final size before any data arrives, so nothing moves when the counts land. The map moves only when you pick a route from the list. Each route says outright which site it ships from, which port it leaves by, and which customers it serves. | `api/static/index.html`, `app.js`, `mapview.js` |
+| **Click the route first**, then see the proposals | A click on a shipment on the map opens its route and marks the shipment. Recovery options open only after that: a second click, or *Plan recovery* on the shipment. The column shows *1 Your view → 2 Pick a route → 3 Act on it*. | `app.js → onAssetClick`, `mapview.js` |
+| Carriers **push out single orders** before any crisis is announced | Carrier booking changes are read. One carrier moving 3 or more orders at one place within 7 days is raised as a warning (`CAP_CARRIER_PUSHOUT`): no probability is invented, so its figures are "if it happens". Fewer moves are listed under *Signals* as watched. | `engine/ingest/pushouts.py`, `desk.yaml → carrier_pushouts` |
+| All-hands goes **from biweekly to daily** as a crisis looms | The *All-hands* tab shows the cadence the convene rule now calls for: every two weeks normally, weekly on Watch, daily on working days once the rule is crossed. It also shows the next sitting and who is in the room. | `engine/desk.py → meeting` |
+| **Procurement** finds other suppliers, **Manufacturing** runs faster, **Controlling** raises authority limits | One card per function, computed from the board and proposed, never pulled. **Procurement:** another site that serves the same destination on a calm route and still makes the promised date. **Manufacturing:** which product runs to bring forward, and by how many days. **Controlling:** the crisis approval limit (5× the delegated limit, capped at CHF 100k) and which actions it frees. | `engine/desk.py → levers` |
+
+The carrier changes are read from `config/carrier_notices.csv` when it exists
+(gitignored; columns in `engine/ingest/pushouts.py`). Without it, they are
+generated from the synthetic book and labelled synthetic. The customer tiers,
+sites and planners in `config.example/desk.yaml` are invented. Sika's real
+ones go in `config/desk.yaml`.
+
 ## What Sika's answers changed
 
 Six questions went to Sika. Four of the answers changed the build.
@@ -557,7 +579,7 @@ a glance.
 |---|---|
 | **Desk** | corridors owned, modes carried, which config files are in force |
 | **Network** | every node and lane, their alternatives, how much freight touches each |
-| **Risk ledger** | all 45 variables by family, with their delay triples and which have no sourceable probability |
+| **Risk ledger** | all 46 variables by family, with their delay triples and which have no sourceable probability |
 | **Appetite** | the ladder cutoffs and the convene rule — **editable** |
 | **Response** | route owners, who is drawn in at each level, seniors, escalation, spend authority |
 | **Sources** | every feed as connected / example stand-in / absent |
@@ -1316,7 +1338,7 @@ encounter, and live in `config.example/taxonomy.yaml`:
 
 | Layer | What it is | What it contributes |
 |---|---|---|
-| **1 · Event** | the 45 variables | *pathway* — damage, delay, or both |
+| **1 · Event** | the 46 variables | *pathway* — damage, delay, or both |
 | **2 · Asset** | 15 equipment types, 8 node kinds | a **gate**: can this event physically reach this equipment? |
 | **3 · Channel** | 5 delivery channels | a **consequence**: what lateness costs, and how much is free |
 | **4 · Cargo** | 11 vulnerability classes | a **gate**: does the damage pathway open? |

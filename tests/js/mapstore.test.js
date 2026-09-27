@@ -21,12 +21,12 @@ function fakeServer(overrides = {}) {
   const assets = {
     as_of: '2026-09-18T06:00:00+00:00',
     counts: { green: 1, yellow: 1, red: 1 },
-    lanes: [],
+    lanes: [{ route_id: 'L1', path: [[50, 7]] }, { route_id: 'L2', path: [[51, 4]] }],
     meta: { basemap: { tiles: [] } },
     assets: [
-      { id: 'A', status: 'red', phase: 'in_transit', lat: 50, lon: 7, mode: 'barge' },
-      { id: 'B', status: 'yellow', phase: 'staging', lat: 51, lon: 4, mode: 'road' },
-      { id: 'C', status: 'green', phase: 'booked', lat: 1, lon: 103, mode: 'sea' },
+      { id: 'A', status: 'red', phase: 'in_transit', lat: 50, lon: 7, mode: 'barge', lane_id: 'L1', customer_priority: 'A' },
+      { id: 'B', status: 'yellow', phase: 'staging', lat: 51, lon: 4, mode: 'road', lane_id: 'L2', customer_priority: 'B' },
+      { id: 'C', status: 'green', phase: 'booked', lat: 1, lon: 103, mode: 'sea', lane_id: 'L1', customer_priority: 'C' },
     ],
   };
   const routes = (id) => ({
@@ -192,4 +192,29 @@ test('the reducer is pure: dispatching never mutates the previous state', () => 
   store.dispatch({ type: T.VIEW_SET, view: 'globe' });
   assert.equal(JSON.stringify(before), frozen);
   assert.notEqual(store.getState(), before);
+});
+
+test('the map follows the board: a site narrows the lanes, a tier the icons', async () => {
+  const { agent } = setup();
+  await agent.loadAssets();
+  await agent.setFilter({ lanes: ['L1'] });
+  assert.deepEqual(select.visibleAssets(agent.getState()).map((a) => a.id), ['A']);
+  assert.deepEqual(select.visibleLanes(agent.getState()).map((l) => l.route_id), ['L1']);
+  await agent.setFilter({ lanes: null, priorities: ['A', 'B'] });
+  assert.deepEqual(select.visibleAssets(agent.getState()).map((a) => a.id), ['A', 'B']);
+  await agent.setFilter({ priorities: ['A'] });
+  assert.deepEqual(select.visibleAssets(agent.getState()).map((a) => a.id), ['A']);
+  await agent.setFilter({ priorities: null });
+  assert.equal(select.visibleLanes(agent.getState()).length, 2);
+});
+
+test('a lane is framed only when asked, and each ask is a new request', async () => {
+  const { agent } = setup();
+  await agent.focusLane('L1');
+  assert.equal(agent.getState().fitLane.id, null);
+  await agent.focusLane('L1', undefined, { fit: true });
+  const first = agent.getState().fitLane;
+  assert.equal(first.id, 'L1');
+  await agent.focusLane('L1', undefined, { fit: true });
+  assert.ok(agent.getState().fitLane.seq > first.seq);
 });
