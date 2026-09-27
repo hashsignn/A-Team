@@ -59,6 +59,12 @@ LABEL = "Weather and sea state on the focus routes (Open-Meteo)"
 WEATHER_FIXTURE = "focus_weather.json"
 MARINE_FIXTURE = "focus_marine.json"
 
+# These two exist only as recordings. There is no scripted sample on purpose:
+# an invented storm at a real Rotterdam, on a route labelled "real data", is
+# the one thing the focus routes must never show. So putting the scripted
+# scenario back means deleting them, not copying a sample over them.
+RECORDING_ONLY = (WEATHER_FIXTURE, MARINE_FIXTURE)
+
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 

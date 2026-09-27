@@ -134,6 +134,18 @@ def left_out(key: str) -> str | None:
     return None
 
 
+def has_recording() -> bool:
+    """Whether the fixture folder holds a recording rather than the samples.
+
+    Read from the manifest a --all recording writes. A damaged manifest is no
+    manifest, as in ``left_out``: the samples are what is on disk then.
+    """
+    try:
+        return isinstance(load_fixture(RECORDING), dict)
+    except ValueError:
+        return False
+
+
 def recorded_as_of() -> str | None:
     """The instant the recording in the fixture folder ends at, or None.
 

@@ -391,3 +391,25 @@ def test_quakes_and_disasters_can_be_asked_about_the_last_two_months():
     gdacs = by_key("gdacs")
     add, _ = gdacs.window.params_for(AS_OF, 60)
     assert add == {"fromDate": "2026-07-20", "toDate": "2026-09-18"}
+
+
+def test_a_recorded_board_shows_no_scripted_news(tmp_path, monkeypatch):
+    """The corpus is written for the scripted scenario and positioned relative
+    to the as-of: on a recording it would land on the real day, at real
+    ports, and read as real. With the samples (no manifest) it is there."""
+    from engine.ingest import feeds
+
+    monkeypatch.setattr(observations, "FIXTURE_DIR", tmp_path)
+    items, report = feeds.load_feed_items(Clock.at(AS_OF))
+    assert items and report.status is FeedStatus.FIXTURE
+    (tmp_path / observations.RECORDING).write_text(json.dumps(
+        {"as_of": AS_OF.isoformat(), "sources": {}}), encoding="utf-8")
+    items, report = feeds.load_feed_items(Clock.at(AS_OF))
+    assert items == [] and report.status is FeedStatus.ABSENT
+    assert "recording" in report.detail
+
+
+def test_the_valueless_marine_item_no_longer_raises_a_wave_event():
+    from engine.ingest.sources.catalog import by_key
+
+    assert not by_key("open_meteo_marine").runnable

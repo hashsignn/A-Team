@@ -41,11 +41,13 @@ builtin:
       timespan: "3d"      # 15min | 1h | 24h | 3d | 1w — how far back to sweep
       maxrecords: "250"   # GDELT caps at 250 per call
 
-  # PREDICTIVE, not a shock feed. Wave height five days out is the class of
-  # risk an API already forecasts — it is cheap and worth having, but it is
-  # not what the reasoning layer exists for. Turn it off if it is noise.
+  # OFF: superseded by the focus-route weather (scripts/record_fixture.py
+  # weather_focus), which reads wave height at ten sea points — this one's
+  # Rotterdam approach among them — against thresholds.yaml → weather_rules.
+  # This feed's item carries no value, so the keyword router raised a wave
+  # event from its headline whatever the sea was doing.
   open_meteo_marine:
-    enabled: true
+    enabled: false
 
   # A watchlist, not an outage feed. Says a vendor's software is being
   # exploited, never that your terminal is down.
@@ -58,6 +60,8 @@ builtin:
     enabled: false        # needs ENTSOE_TOKEN      — transparency.entsoe.eu
   opensanctions:
     enabled: false        # needs OPENSANCTIONS_KEY — opensanctions.org
+  reliefweb:
+    enabled: false        # needs RELIEFWEB_APPNAME — an appname ReliefWeb approved (reliefweb.int/contact)
 
 # ---------------------------------------------------------------------
 # CUSTOM — anything else, including Sika's own systems.

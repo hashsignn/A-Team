@@ -379,7 +379,10 @@ towards its bands — so they read their own copy of the samples in
 answers. Recording the real sources over `data/fixtures` is the point of
 recording; it cannot fail the suite. To put the scripted scenario back on the
 board, copy `tests/fixtures/*.json` over `data/fixtures/` and delete
-`data/fixtures/_recording.json`.
+`data/fixtures/_recording.json`, `focus_weather.json` and `focus_marine.json`.
+The two weather files are recordings only: an invented storm at a real port on
+a route labelled "real data" is the one thing the focus routes must never show,
+so they have no scripted sample to copy back.
 
 Egress is opt-in:
 

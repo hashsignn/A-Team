@@ -410,6 +410,12 @@ CATALOG: tuple[SourceSpec, ...] = (
         source_tier=1,
         url="https://marine-api.open-meteo.com/v1/marine",
         items_path="",
+        # OFF: superseded by weather_focus (engine/ingest/weather.py), which
+        # reads the wave height at ten sea points — this Rotterdam approach
+        # among them — against a threshold. This item carried no value at
+        # all, so the keyword router read "wave height" in its constant
+        # headline and raised a wave event at Rotterdam whatever the sea did.
+        enabled=False,
         date_format="iso",
         families=("climate",),
         modes=("sea", "barge"),

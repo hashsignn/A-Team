@@ -200,9 +200,11 @@ def test_network_off_beats_a_perfectly_good_endpoint(tmp_path, customer_endpoint
 def test_every_free_source_actually_yields_items(config):
     """A spec that parses but maps nothing is a spec that is quietly wrong."""
     specs = [s for s in load_sources(EXAMPLE / "sources.yaml") if s.runnable]
-    # Nine: ReliefWeb needs an approved appname since November 2025 and ships
-    # off with the other sources that need a registration.
-    assert len(specs) == 9, f"expected 9 free runnable sources, got {len(specs)}"
+    # Eight: ReliefWeb needs an approved appname since November 2025 and ships
+    # off with the other sources that need a registration; the one-point
+    # marine forecast is superseded by the focus-route weather, which reads
+    # its values against thresholds.
+    assert len(specs) == 8, f"expected 8 free runnable sources, got {len(specs)}"
     for spec in specs:
         items, report = collect(spec, AS_OF.as_of)
         assert report.status is FeedStatus.FIXTURE, f"{spec.key}: {report.detail}"

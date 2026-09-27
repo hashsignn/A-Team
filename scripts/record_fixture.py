@@ -605,7 +605,8 @@ def write_manifest(keys: list[str], as_of, *, whole: bool) -> Path | None:
             "tried, and whether it was recorded. A source marked recorded=false "
             "is left off the board instead of showing its scripted sample beside "
             "real data. To put the scripted scenario back, delete this file and "
-            "copy tests/fixtures/*.json over data/fixtures/."
+            "focus_weather.json and focus_marine.json (recordings only — they "
+            "have no sample), then copy tests/fixtures/*.json over data/fixtures/."
         ),
         "as_of": (as_of.isoformat() if as_of is not None and whole
                   else (existing or {}).get("as_of")),

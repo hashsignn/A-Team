@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from engine.clock import Clock
-from engine.ingest.observations import FeedReport, FeedStatus
+from engine.ingest.observations import FeedReport, FeedStatus, has_recording
 
 
 @dataclass(frozen=True)
@@ -279,7 +279,32 @@ CORPUS: tuple[FeedItem, ...] = (
 
 
 def load_feed_items(clock: Clock) -> tuple[list[dict], FeedReport]:
-    """Materialise the corpus against the as-of instant."""
+    """Materialise the corpus against the as-of instant.
+
+    Not on a recorded board. The corpus is written for the scripted scenario
+    — a strike at Antwerp, a gale in the North Sea, Suez cutting slots — and
+    positioned relative to the as-of, so on a recording it lands on the real
+    day, at real ports, beside real news, and reads as real. A recording
+    leaves out every sample for exactly that reason; the corpus is one more.
+    """
+    if has_recording():
+        return [], FeedReport(
+            key="news_feed",
+            label="News / trade press (RSS)",
+            status=FeedStatus.ABSENT,
+            detail=(
+                f"left out: this board is a recording, and the {len(CORPUS)} "
+                "written items belong to the scripted scenario — shown beside "
+                "real news they would read as real"
+            ),
+            unlocks_if_connected=(
+                "Real RSS over trade press and authority notices. The gate, the "
+                "router and the scoring are unchanged — only the corpus differs."
+            ),
+            records=0,
+            retrieved_at=clock.as_of,
+            source_tier=2,
+        )
     items: list[dict] = []
     for item in CORPUS:
         published = clock.as_of + timedelta(hours=item.published_offset_hours)
