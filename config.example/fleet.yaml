@@ -557,3 +557,33 @@ vendors:
       phone: "+1 000 000 5024"
       email: "dray@sanpedro-synthetic.invalid"
       portal: null
+
+# -------------------------------------------------------------------
+# CO2e — the journey after the factory gate
+# -------------------------------------------------------------------
+# Sika's Carbon Compass (Oct 2025, TÜV Rheinland verified, ISO 14067) gives
+# the product footprint up to the factory gate, inbound transport included.
+# It stops there. This covers the leg after it — to the customer — for the
+# planned route AND every recovery alternative, so a faster fix never hides a
+# higher footprint.
+#
+# Method: GLEC Framework, formalised as ISO 14083. Well-to-wheel.
+#     CO2e = tonnes x km x factor (g CO2e per tonne-km)
+#
+# !! INDICATIVE !! These are typical default factors from a secondary source,
+# NOT the official GLEC tables. Fine for a prototype; cite them as "GLEC
+# default values (indicative)". The next step is carrier-reported data
+# (e.g. per-shipment ocean figures) or the EcoTransIT API.
+#
+# CO2e is a SEPARATE KPI. It never enters the risk score or the weighted
+# ranking — mixing them would hide the trade-off. Among the options that
+# still meet the committed date it breaks ties, and the lowest is highlighted.
+emissions:
+  method: "GLEC Framework / ISO 14083, well-to-wheel"
+  source: "GLEC default values (indicative)"
+  g_co2e_per_tkm:
+    road: 83        # long-haul truck
+    rail: 20        # electric rail, EU (15-25); diesel rail is ~28
+    barge: 39       # Rhine barge
+    sea: 13         # deep-sea container — assumed by us, not in the source table
+    air: 545

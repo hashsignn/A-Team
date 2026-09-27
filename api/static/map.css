@@ -465,3 +465,16 @@
 .lg-more summary::before { content: "▸ "; }
 .lg-more[open] summary::before { content: "▾ "; }
 .lg-more .lg-note { margin-top: 5px; }
+
+/* ---- the option table: CO2e beside cost and date ------------------ */
+.opt-table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 2px 0 6px; }
+.opt-table th { font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  text-align: left; font-weight: 600; padding: 3px 4px; border-bottom: 1px solid var(--glass-edge); }
+.opt-table td { padding: 4px; border-bottom: 1px solid var(--glass-edge); vertical-align: middle; }
+.opt-table td.num { font-family: var(--mono); white-space: nowrap; }
+.opt-table .rbadge { min-width: 22px; height: 17px; font-size: 9.5px; border-width: 1.5px; box-shadow: none; margin-right: 3px; }
+.opt-table tr.is-plan td { color: var(--text-secondary); }
+.opt-table tr.is-green td { background: color-mix(in srgb, var(--status-green) 12%, transparent); }
+.opt-table tr.is-green td:first-child { box-shadow: inset 3px 0 0 var(--status-green); }
+.opt-table .ok { color: var(--status-green); font-weight: 700; }
+.opt-table .late { color: var(--status-red); font-weight: 700; }

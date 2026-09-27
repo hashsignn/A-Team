@@ -45,7 +45,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from engine.fleet import manifest, osrm
+from engine.fleet import emissions, manifest, osrm
 from engine.fleet.assets import index, locate, remaining_legs, status_of
 from engine.fleet.paths import as_latlon, length_km
 from engine.fleet.sealanes import SeaGraph
@@ -122,7 +122,9 @@ def recovery(board: dict, context: RunContext, shipment_id: str,
     w = _weights(weights or cfg["ranking"]["weights"])
     status = status_of(context, shipment)
     rem = remaining_legs(context, shipment, where)
-    teu = manifest.teu_of(manifest.containers(shipment))
+    boxes = manifest.containers(shipment)
+    teu = manifest.teu_of(boxes)
+    tonnes = round(sum(b["gross_t"] for b in boxes), 1)
     nodes = context.config.nodes
 
     hits = idx.hits.get(shipment_id, [])
@@ -132,7 +134,7 @@ def recovery(board: dict, context: RunContext, shipment_id: str,
         leg["from"]["id"] for leg in rem if leg["from"]["id"]}
     disrupted_nodes = _disrupted_nodes(context, ahead, chain)
 
-    ctx = _Ctx(context, shipment, where, cfg, teu, status)
+    ctx = _Ctx(context, shipment, where, cfg, teu, status, tonnes)
     original = ctx.evaluate(
         "ORIGINAL", "Original route", "original",
         [_planned(ctx, leg) for leg in rem], replaced=None,
@@ -144,6 +146,9 @@ def recovery(board: dict, context: RunContext, shipment_id: str,
         "status": status,
         "weights": w,
         "teu": teu,
+        "tonnes": tonnes,
+        "committed": shipment.otif_committed_date.isoformat(),
+        "carbon": emissions.provenance(cfg),
         "origin": {"name": "Live location" if where["phase"] == "in_transit"
                    else nodes[shipment.legs[where["leg_index"]].from_node].name,
                    "lat": round(where["point"].lat, 5), "lon": round(where["point"].lon, 5)},
@@ -173,6 +178,7 @@ def recovery(board: dict, context: RunContext, shipment_id: str,
     candidates, no_route = _generate(ctx, rem, disrupted_legs, disrupted_nodes)
     payload["no_route"] = no_route
     payload["candidates"] = _rank(original, candidates, w, cfg)
+    payload["greenest_on_time"] = _mark_greenest(original, payload["candidates"])
     ahead_chain = {leg["to"]["id"] for leg in rem}
     if rem and rem[0]["from"]["id"]:
         ahead_chain.add(rem[0]["from"]["id"])
@@ -239,8 +245,9 @@ def _weights(raw: dict) -> dict:
 
 class _Ctx:
     def __init__(self, context: RunContext, shipment, where: dict, cfg: dict,
-                 teu: int, status: dict) -> None:
+                 teu: int, status: dict, tonnes: float = 0.0) -> None:
         self.context = context
+        self.tonnes = tonnes
         self.shipment = shipment
         self.where = where
         self.cfg = cfg
@@ -348,9 +355,11 @@ class _Ctx:
     # ---------------------------------------------------------------
     def evaluate(self, option_id: str, label: str, kind: str, legs: list[_Leg],
                  replaced: tuple[int, int] | None, teu: int | None = None,
-                 notes: list[str] | None = None, lever: str | None = None) -> dict:
-        """Time, cost and risk for a full leg sequence from the live location."""
+                 notes: list[str] | None = None, lever: str | None = None,
+                 tonnes: float | None = None) -> dict:
+        """Time, cost, risk and CO2e for a full leg sequence from the live location."""
         teu = self.teu if teu is None else teu
+        tonnes = self.tonnes if tonnes is None else tonnes
         shipment = self.shipment
         eta_planned = shipment.eta
         tr = self.cfg["transfer"]
@@ -431,6 +440,10 @@ class _Ctx:
             path.extend(leg.path if not path else leg.path[1:])
         new_legs = [leg for leg in legs if leg.new]
 
+        # --- CO2e: a separate KPI, never part of the score ----------------
+        co2 = emissions.co2e_kg(self.cfg, [(leg.mode, leg.km) for leg in legs], tonnes)
+        committed = shipment.otif_committed_date
+
         return {
             "id": option_id,
             "label": label,
@@ -461,7 +474,30 @@ class _Ctx:
             "avoids": [],
             "notes": list(notes or []),
             "teu": teu,
+            "tonnes": round(tonnes, 1),
+            "tonne_km": round(tonnes * sum(leg.km for leg in legs), 0),
+            "co2e_kg": round(co2, 1),
+            # Does it still meet the date promised to the customer? The CO2e
+            # highlight only ever chooses among the options that do.
+            "meets_commitment": eta <= committed,
         }
+
+
+def _mark_greenest(original: dict, candidates: list[dict]) -> str | None:
+    """Among the options that still meet the committed date, the lowest CO2e.
+
+    Cost and date decide; CO2e breaks the tie and is always visible. So the
+    highlight is not a recommendation to trade days for grams — an option that
+    misses the customer's date is never the one highlighted, however clean.
+    """
+    pool = [o for o in (original, *candidates) if o["meets_commitment"]]
+    for o in (original, *candidates):
+        o["lowest_co2_on_time"] = False
+    if not pool:
+        return None
+    best = min(pool, key=lambda o: (o["co2e_kg"], o["hours"]))
+    best["lowest_co2_on_time"] = True
+    return best["id"]
 
 
 def price(cfg: dict, legs: list[tuple[str, float]], teu: int, transfers: int) -> float:
@@ -861,14 +897,20 @@ def _rank(original: dict, candidates: list[dict], w: dict, cfg: dict) -> list[di
         c["beats_original"] = c["score"] < original["score"]
         dh = c["hours"] - original["hours"]
         dc = c["cost_chf"] - original["cost_chf"]
+        base = original["co2e_kg"]
+        co2_pct = (100.0 * (c["co2e_kg"] - base) / base) if base > 0 else None
         c["delta"] = {
             "hours": round(dh, 2),
             "cost_chf": round(dc, 2),
             "risk": round(c["risk"] - original["risk"], 4),
+            "co2e_kg": round(c["co2e_kg"] - base, 1),
+            "co2e_pct": None if co2_pct is None else round(co2_pct, 1),
             "text": f"{_signed_chf(dc)}, {_signed_hours(dh)}, Risk: {c['risk_label']}",
         }
 
-    ranked = sorted(candidates, key=lambda c: (c["score"], c["hours"], c["id"]))
+    # CO2e only breaks ties: two options that score the same on time, cost
+    # and risk are ordered cleaner first. It never outweighs any of the three.
+    ranked = sorted(candidates, key=lambda c: (c["score"], c["co2e_kg"], c["hours"], c["id"]))
     badges = int(cfg["ranking"]["badges"])
     for i, c in enumerate(ranked, start=1):
         c["rank"] = i
