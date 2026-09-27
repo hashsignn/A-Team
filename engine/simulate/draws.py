@@ -168,6 +168,7 @@ def propagate(
     hits: list[GateHit],
     draws: DrawMatrix,
     residual_by_event: dict[str, float] | None = None,
+    cap_by_event: dict[str, float] | None = None,
 ) -> ShipmentDraws:
     """Walk the legs, accumulating delay and letting buffer absorb it.
 
@@ -185,8 +186,14 @@ def propagate(
     ``residual_by_event`` scales an event's contribution — that is how an
     action is modelled. 0.0 means the action removes the exposure entirely,
     1.0 means it does nothing. Absent means no action.
+
+    ``cap_by_event`` bounds an event's delay for THIS shipment: a scheduled
+    closure delays it at most until the closure's stated end (see
+    score/survive.py::window_cap). The draw stays shared across shipments;
+    only how much of it this one can feel is cut.
     """
     residual = residual_by_event or {}
+    caps = cap_by_event or {}
     n = draws.n_draws
 
     by_leg: dict[int, list[str]] = {}
@@ -205,7 +212,10 @@ def propagate(
             for event_id in leg_events:
                 if event_id not in draws.index:
                     continue
-                contribution = draws.column(event_id) * residual.get(event_id, 1.0)
+                contribution = draws.column(event_id)
+                if event_id in caps:
+                    contribution = np.minimum(contribution, caps[event_id])
+                contribution = contribution * residual.get(event_id, 1.0)
                 stacked.append(contribution)
                 if event_id not in driving:
                     driving.append(event_id)

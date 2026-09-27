@@ -342,6 +342,29 @@ posture is not a matrix.
 
 ---
 
+## How risk is judged
+
+Every event is sorted by **what is uncertain about it**, and each question
+is answered by a method practitioners already use. The full method is in
+[`docs/RISK_METHOD.md`](docs/RISK_METHOD.md):
+
+- **Sudden impact, scheduled, building up or warning sign.** The kinds
+  follow the UN's sudden-onset / slow-onset hazard terms, and each risk type
+  in `variables.yaml` states its `onset`.
+- **Has it happened, might it, or is it over?** The report's own words are
+  read with ConText, the rule-based method clinical text processing uses for
+  exactly this. A threat to close a strait is a warning sign, not a closure.
+  A strike that was "called off" is not an event.
+- **Will the shipment still be on time?** Time-to-Recover against
+  Time-to-Survive (Simchi-Levi, MIT, with Ford). Each shipment shows how much
+  delay it survives, and whether it is late in the best, likely or worst
+  case. A scheduled closure is capped at its stated end.
+- **Is a warning worth acting on?** The cost–loss ratio weather services use
+  for warnings. The board shows the break-even probability in ICD 203 words
+  ("very unlikely"), never an invented one.
+- **The book:** three-point estimates and Monte Carlo (PMI, AACE) for the
+  total, with the warnings' share shown apart.
+
 ## Four corrections to the brief's maths
 
 Each would have quietly hollowed out a headline number. Each has a test.

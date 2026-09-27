@@ -153,6 +153,13 @@ convene_rule:
   # Posture thresholds for the state strip, as a fraction of the trip level.
   watch_fraction: 0.5
 
+  # Does a WARNING SIGN count toward the rule — a strike ballot, a threat to
+  # close a strait — priced as if it happens? ASSUMED yes: convening early is
+  # the whole point of the rule (Sika Q6: "we declare a crisis too late"),
+  # and the headline says how much of the exposure is warnings either way.
+  # The team may decide a warning should only put them on Watch; then false.
+  count_warnings: true
+
 # -------------------------------------------------------------------
 # PORTFOLIO DECAY CURVE
 # -------------------------------------------------------------------

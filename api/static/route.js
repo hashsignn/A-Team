@@ -310,6 +310,72 @@ function renderReal(v) {
     <p class="muted">Still assumed on every route: ${esc((d.assumed || []).join(', '))}.</p>`;
 }
 
+/* How each event is judged (engine/export/board.py::_judgement).
+ *
+ * The kind says what is uncertain about it. The three points are the delay
+ * it adds if it hits, judged in delay_model.yaml. The survival counts are
+ * Time-to-Recover against Time-to-Survive: how many shipments break their
+ * promise in the best, likely and worst case. A warning nobody can price
+ * the odds of carries the cost-loss break-even instead of a probability. */
+const SURVIVAL_ORDER = ['late_already', 'late_best', 'late_likely', 'late_worst', 'on_time'];
+
+function days(d) {
+  if (d === null || d === undefined) return '—';
+  if (d < 1) return `${Math.round(d * 24)} h`;
+  return `${Math.round(d * 10) / 10} d`;
+}
+
+function renderJudgement(v) {
+  const events = (v.events || []).filter((e) => e.kind);
+  if (!events.length) return;
+  $('rt-judge-block').hidden = false;
+  $('rt-judge').innerHTML = events.map((e) => {
+    const counts = e.survival || {};
+    const labels = e.survival_labels || {};
+    const verdicts = SURVIVAL_ORDER.filter((k) => counts[k]).map((k) =>
+      `<span class="sv sv-${k}"><b>${counts[k]}</b> ${esc(labels[k] || k)}</span>`).join('');
+    const d = e.delay_days;
+    const ends = e.capped_at ? new Date(e.capped_at) : null;
+    const cap = ends && !Number.isNaN(ends.getTime())
+      ? ` Never beyond its stated end, ${ends.toUTCString().slice(0, 22)} UTC: a closure is
+           waited out or gone round.`
+      : '';
+    const delay = d
+      ? `<p>If it hits, it adds <b>${days(d.best)}</b> in the best case, <b>${days(d.likely)}</b>
+           likely, <b>${days(d.worst)}</b> in the worst <span class="muted">(judged:
+           delay_model.yaml)</span>.${cap}</p>`
+      : '<p class="muted">No delay model for this kind of event.</p>';
+    const surviving = ((e.matrix && e.matrix.points) || [])
+      .map((p) => p.time_to_survive_days)
+      .filter((t) => t !== null && t !== undefined);
+    const tightest = surviving.length
+      ? `<p class="muted">The tightest shipment survives ${days(Math.min(...surviving))} of delay
+           before it misses the date promised to its customer.</p>`
+      : '';
+    let odds = '';
+    if (e.break_even_probability !== null && e.break_even_probability !== undefined) {
+      odds = `<p class="rt-judge-odds">Worth acting if you judge it more than
+        <b>${Math.max(1, Math.round(e.break_even_probability * 100))}%</b> likely to happen —
+        <b>${esc(e.break_even_words || '')}</b> on the ICD 203 scale. Nobody publishes odds
+        for this, so the tool gives the threshold, not a guess.</p>`;
+    } else if (e.kind === 'warning') {
+      odds = '<p class="muted">No available action pays for itself here, even if it happens.</p>';
+    }
+    return `
+      <article class="rt-judge kind-${esc(e.kind)}">
+        <header>
+          <span class="kind-chip kind-${esc(e.kind)}">${esc(e.kind_label || e.kind)}</span>
+          <b>${esc(e.title)}</b>
+        </header>
+        <p class="muted">${esc(e.kind_basis || '')}</p>
+        ${delay}
+        ${verdicts ? `<div class="sv-row">${verdicts}</div>` : ''}
+        ${tightest}
+        ${odds}
+      </article>`;
+  }).join('');
+}
+
 async function boot() {
   const params = new URLSearchParams(location.search);
   const q = new URLSearchParams();
@@ -333,6 +399,7 @@ async function boot() {
   statRow(v);
   renderConvoy(v);
   renderReal(v);
+  renderJudgement(v);
 
   const onward = new URLSearchParams({ route: ROUTE_ID });
   if (params.get('as_of')) onward.set('as_of', params.get('as_of'));

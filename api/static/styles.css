@@ -2283,3 +2283,25 @@ button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -
 .rt-cond td, .rt-cond th { vertical-align: top; }
 .rt-note { display: grid; gap: 3px; font-size: 12.5px; line-height: 1.5; padding: 10px 12px; margin: 6px 0 12px;
   border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; }
+
+/* How each event is judged (route page). The kind chip is neutral on
+   purpose: the ladder colours mean urgency, and a kind is not an urgency.
+   The survival verdicts do use them — red is late even in the best case. */
+#rt-judge { display: grid; gap: 10px; }
+.rt-judge { border: 1px solid var(--border); border-left: 3px solid var(--border-strong);
+  border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; font-size: 12.5px; line-height: 1.5; }
+.rt-judge p { margin: 0; }
+.rt-judge header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rt-judge.kind-sudden    { border-left-color: var(--lvl-red); }
+.rt-judge.kind-scheduled { border-left-color: var(--lvl-blue); }
+.rt-judge.kind-building  { border-left-color: var(--lvl-yellow); }
+.rt-judge.kind-warning   { border-left-color: var(--accent); }
+.kind-chip { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em;
+  border: 1px solid var(--border-strong); border-radius: 999px; padding: 1px 8px; color: var(--text-secondary); }
+.sv-row { display: flex; gap: 6px 14px; flex-wrap: wrap; }
+.sv b { font-variant-numeric: tabular-nums; }
+.sv-late_already, .sv-late_best { color: var(--lvl-red); }
+.sv-late_likely { color: var(--lvl-yellow); }
+.sv-late_worst  { color: var(--lvl-white); }
+.sv-on_time     { color: var(--lvl-green); }
+.rt-judge-odds { color: var(--text-primary); }

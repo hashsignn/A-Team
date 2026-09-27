@@ -65,6 +65,17 @@
     <div id="rt-real"></div>
   </section>
 
+  <!-- How each event on this route is judged: what KIND of event it is, the
+       delay it adds if it hits, and how long each shipment survives it
+       before breaking its promise. The method is docs/RISK_METHOD.md. -->
+  <section class="rt-block" id="rt-judge-block" hidden>
+    <div class="rt-block-head">
+      <h2>How each event is judged</h2>
+      <span class="block-note">time each shipment survives vs the delay if it hits</span>
+    </div>
+    <div id="rt-judge"></div>
+  </section>
+
   <div class="rt-two">
     <section class="rt-block">
       <div class="rt-block-head">

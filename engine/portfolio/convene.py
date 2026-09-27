@@ -89,6 +89,12 @@ def evaluate(
     agreed = rule.get("agreed_on") is not None
 
     exposure = sum(a.total_value_at_risk_chf for a in assessments)
+    # Warning signs are priced as if they happen (their odds are unknown, so
+    # every figure is conditional). Kept apart so the room can see it, and
+    # left out of the rule if the team decided a warning only means Watch.
+    from_warnings = sum(
+        a.total_value_at_risk_chf for a in assessments if a.event.kind == "warning")
+    counted = exposure if rule.get("count_warnings", True) else exposure - from_warnings
 
     contracts: set[str] = set()
     pressing: set[str] = set()
@@ -105,10 +111,12 @@ def evaluate(
     meeting = next_meeting(config, clock)
 
     fired: list[str] = []
-    if exposure >= thresholds["exposure_chf"]:
+    if counted >= thresholds["exposure_chf"]:
         fired.append(
-            f"CHF {exposure:,.0f} of expected loss across the book "
+            f"CHF {counted:,.0f} of expected loss across the book "
             f"≥ CHF {thresholds['exposure_chf']:,.0f}"
+            + (f" (CHF {from_warnings:,.0f} of it only if warnings come true)"
+               if from_warnings >= 1 and counted == exposure else "")
         )
     if len(contracts) >= thresholds["contracts_exposed"]:
         fired.append(
@@ -146,6 +154,7 @@ def evaluate(
         shipments_needing_decision=len(pressing),
         next_meeting_at=meeting,
         headline=_headline(posture, fired, exposure, len(pressing), meeting, agreed),
+        exposure_from_warnings_chf=round(from_warnings, 2),
     )
 
 

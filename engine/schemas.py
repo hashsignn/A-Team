@@ -198,6 +198,9 @@ class RiskVariable(BaseModel):
     typical_duration_days: float
     exposure: dict
     probability_sourceable: bool
+    # How it arrives: see config.example/variables.yaml and docs/RISK_METHOD.md.
+    # Defaulted so a customer ledger written before the field still loads.
+    onset: Literal["sudden", "slow", "scheduled", "precursor"] = "sudden"
 
 
 class DelayTriple(BaseModel):
@@ -275,6 +278,17 @@ class Event(BaseModel):
     probability: float | None
     probability_basis: str
 
+    # What KIND of event this is, which decides what is uncertain about it:
+    #   sudden     it happened without warning; open question: how long
+    #   scheduled  the source states when; open question: overrun
+    #   building   measured or slow-onset (a falling river, a forecast storm,
+    #              a growing queue); open question: whether and when it bites
+    #   warning    a sign that makes a stoppage likelier — a ballot, a threat
+    #              — and not a stoppage; open questions: whether, when, how long
+    # See engine/variables/onset.py and docs/RISK_METHOD.md.
+    kind: Literal["sudden", "scheduled", "building", "warning"] = "sudden"
+    kind_basis: str = ""
+
     provenance: Provenance
     second_order_nodes: list[str] = Field(default_factory=list)
     payload_fraction: float | None = None  # capacity derate, e.g. Rhine low water
@@ -293,7 +307,12 @@ class Event(BaseModel):
 
     @property
     def probability_known(self) -> bool:
-        return self.probability is not None
+        """Is P(it happens) known? It is for anything that already has: a
+        closure the motorway operator lists, an earthquake USGS measured.
+        Those feeds state no probability because there is none left to state,
+        and reading that absence as "odds unknown" put every real event on the
+        board in the no-odds column of the matrix."""
+        return self.realized or self.probability is not None
 
     def window(self, fallback_days: float) -> tuple[datetime, datetime]:
         """Event window, using a stated end where there is one.
@@ -389,6 +408,18 @@ class ShipmentRisk(BaseModel):
     customer: str
     contract_type: ContractType
 
+    # Time-to-Survive (Simchi-Levi et al., HBR 2014): the most delay this
+    # event can add before the shipment misses its committed date. None when
+    # nothing within a year of delay would make it late. See score/survive.py.
+    time_to_survive_days: float | None = None
+    # Against the event's three judged points: "late_best", "late_likely",
+    # "late_worst", "on_time" — or "late_already", late without this event.
+    survival: str = ""
+    # The cost-loss ratio (Thompson 1952): act if P(it happens) is above this.
+    # Only for events whose probability is not known, where the planner has to
+    # judge it; None when acting would not pay even if it were certain.
+    break_even_probability: float | None = None
+
     @field_validator("decision_deadline")
     @classmethod
     def _utc(cls, v: datetime | None) -> datetime | None:
@@ -432,6 +463,10 @@ class ConveneVerdict(BaseModel):
     shipments_needing_decision: int
     next_meeting_at: datetime | None
     headline: str
+    # The part of exposure_chf that comes only from warning signs, counted as
+    # if they happen. Kept apart so the room sees it; whether it counts toward
+    # the rule is the team's call (convene_rule.count_warnings).
+    exposure_from_warnings_chf: float = 0.0
 
     @field_validator("next_meeting_at")
     @classmethod

@@ -18,6 +18,12 @@
 #   modes_affected          which legs this can touch: road | rail | sea | barge
 #   typical_lead_time_hours how far ahead this is normally knowable (0 = no warning)
 #   typical_duration_days   default duration when the source does not state one
+#   onset                   how it arrives (UN hazard terminology, plus two
+#                           logistics cases): sudden = no warning beyond a
+#                           forecast; slow = builds over days or weeks;
+#                           scheduled = announced with its dates; precursor =
+#                           a sign of a stoppage, never a stoppage itself.
+#                           See docs/RISK_METHOD.md.
 #   exposure                node attributes that must hold for a node to be exposed
 #                           (BRIEF §4: derive exposure from attributes, never
 #                            from a per-node vulnerability vector)
@@ -36,6 +42,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 72
     typical_duration_days: 1
+    onset: sudden
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: true
 
@@ -48,6 +55,7 @@ variables:
     modes_affected: [sea, barge, road, rail]
     typical_lead_time_hours: 96
     typical_duration_days: 2
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: true
 
@@ -60,6 +68,7 @@ variables:
     modes_affected: [sea]
     typical_lead_time_hours: 72
     typical_duration_days: 2
+    onset: sudden
     exposure: {kind_in: [seaport, chokepoint]}
     probability_sourceable: true
 
@@ -72,6 +81,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 24
     typical_duration_days: 1
+    onset: sudden
     exposure: {kind_in: [seaport, inland_port, chokepoint, gauge]}
     probability_sourceable: true
 
@@ -84,6 +94,7 @@ variables:
     modes_affected: [barge, road, rail]
     typical_lead_time_hours: 96
     typical_duration_days: 4
+    onset: slow
     exposure: {on_river: true}
     probability_sourceable: true
 
@@ -96,6 +107,7 @@ variables:
     modes_affected: [road, rail, sea]
     typical_lead_time_hours: 96
     typical_duration_days: 3
+    onset: slow
     exposure: {any: true}
     probability_sourceable: true
 
@@ -113,6 +125,7 @@ variables:
     modes_affected: [barge]
     typical_lead_time_hours: 240
     typical_duration_days: 14
+    onset: slow
     exposure: {on_river: true}
     probability_sourceable: true
 
@@ -125,6 +138,7 @@ variables:
     modes_affected: [barge]
     typical_lead_time_hours: 96
     typical_duration_days: 4
+    onset: slow
     exposure: {on_river: true}
     probability_sourceable: true
 
@@ -137,6 +151,7 @@ variables:
     modes_affected: [barge]
     typical_lead_time_hours: 336
     typical_duration_days: 3
+    onset: scheduled
     exposure: {on_river: true}
     probability_sourceable: false
 
@@ -149,6 +164,7 @@ variables:
     modes_affected: [sea]
     typical_lead_time_hours: 336
     typical_duration_days: 30
+    onset: slow
     exposure: {chokepoint: true}
     probability_sourceable: true
 
@@ -161,6 +177,7 @@ variables:
     modes_affected: [barge, sea]
     typical_lead_time_hours: 0
     typical_duration_days: 4
+    onset: sudden
     exposure: {any_water: true}
     probability_sourceable: false
 
@@ -176,6 +193,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 168
     typical_duration_days: 7
+    onset: slow
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: true
 
@@ -188,6 +206,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 48
     typical_duration_days: 2
+    onset: sudden
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: false
 
@@ -200,6 +219,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 2
+    onset: sudden
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: false
 
@@ -212,6 +232,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 72
     typical_duration_days: 4
+    onset: slow
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: false
 
@@ -224,6 +245,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 720
     typical_duration_days: 2
+    onset: scheduled
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: true
 
@@ -236,6 +258,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 336
     typical_duration_days: 21
+    onset: slow
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: false
 
@@ -251,6 +274,7 @@ variables:
     modes_affected: [sea]
     typical_lead_time_hours: 168
     typical_duration_days: 60
+    onset: sudden
     exposure: {kind_in: [chokepoint, seaport]}
     probability_sourceable: false
 
@@ -263,6 +287,7 @@ variables:
     modes_affected: [sea, road, rail]
     typical_lead_time_hours: 168
     typical_duration_days: 90
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -275,6 +300,7 @@ variables:
     modes_affected: [road, rail]
     typical_lead_time_hours: 72
     typical_duration_days: 5
+    onset: sudden
     exposure: {inland: true}
     probability_sourceable: false
 
@@ -287,6 +313,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 2160
     typical_duration_days: 999
+    onset: scheduled
     exposure: {any: true}
     probability_sourceable: true
 
@@ -299,6 +326,7 @@ variables:
     modes_affected: [sea, road, rail]
     typical_lead_time_hours: 720
     typical_duration_days: 999
+    onset: scheduled
     exposure: {any: true}
     probability_sourceable: true
 
@@ -315,6 +343,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 168
     typical_duration_days: 3
+    onset: sudden
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: false
 
@@ -326,6 +355,7 @@ variables:
     modes_affected: [road]
     typical_lead_time_hours: 96
     typical_duration_days: 2
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -338,6 +368,7 @@ variables:
     modes_affected: [rail]
     typical_lead_time_hours: 120
     typical_duration_days: 2
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -351,6 +382,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 336
     typical_duration_days: 0
+    onset: precursor
     exposure: {any: true}
     probability_sourceable: false
 
@@ -363,6 +395,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 168
     typical_duration_days: 10
+    onset: slow
     exposure: {any: true}
     probability_sourceable: false
 
@@ -378,6 +411,7 @@ variables:
     modes_affected: [road, rail, barge]
     typical_lead_time_hours: 336
     typical_duration_days: 14
+    onset: sudden
     exposure: {inland: true}
     probability_sourceable: false
 
@@ -390,6 +424,7 @@ variables:
     modes_affected: [road, rail]
     typical_lead_time_hours: 168
     typical_duration_days: 5
+    onset: sudden
     exposure: {inland: true}
     probability_sourceable: false
 
@@ -402,6 +437,7 @@ variables:
     modes_affected: [rail]
     typical_lead_time_hours: 1440
     typical_duration_days: 7
+    onset: scheduled
     exposure: {any: true}
     probability_sourceable: true
 
@@ -413,6 +449,7 @@ variables:
     modes_affected: [road]
     typical_lead_time_hours: 0
     typical_duration_days: 1
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -425,6 +462,7 @@ variables:
     modes_affected: [rail]
     typical_lead_time_hours: 0
     typical_duration_days: 6
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -440,6 +478,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 14
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -452,6 +491,7 @@ variables:
     modes_affected: [road, rail, sea, barge]
     typical_lead_time_hours: 72
     typical_duration_days: 10
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: true
 
@@ -463,6 +503,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 7
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -475,6 +516,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 336
     typical_duration_days: 60
+    onset: slow
     exposure: {any: true}
     probability_sourceable: false
 
@@ -490,6 +532,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 5
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -502,6 +545,7 @@ variables:
     modes_affected: [sea, barge, road, rail]
     typical_lead_time_hours: 0
     typical_duration_days: 4
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -514,6 +558,7 @@ variables:
     modes_affected: [sea, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 5
+    onset: sudden
     exposure: {any_water: true}
     probability_sourceable: false
 
@@ -526,6 +571,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 10
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -541,6 +587,7 @@ variables:
     modes_affected: [sea]
     typical_lead_time_hours: 168
     typical_duration_days: 7
+    onset: scheduled
     exposure: {kind_in: [seaport]}
     probability_sourceable: false
 
@@ -553,6 +600,7 @@ variables:
     modes_affected: [sea, road, rail]
     typical_lead_time_hours: 168
     typical_duration_days: 30
+    onset: slow
     exposure: {any: true}
     probability_sourceable: true
 
@@ -565,6 +613,7 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 336
     typical_duration_days: 21
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false
 
@@ -580,6 +629,7 @@ variables:
     modes_affected: [sea, barge, road, rail]
     typical_lead_time_hours: 0
     typical_duration_days: 4
+    onset: sudden
     exposure: {kind_in: [seaport, inland_port]}
     probability_sourceable: false
 
@@ -592,5 +642,6 @@ variables:
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 0
     typical_duration_days: 3
+    onset: sudden
     exposure: {any: true}
     probability_sourceable: false

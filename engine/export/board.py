@@ -20,6 +20,7 @@ from engine.ingest import flows as flows_mod
 from engine.ingest.observations import FeedStatus
 from engine.pipeline import RunContext
 from engine.schemas import ShipmentRisk
+from engine.score import survive
 from engine.score.matrix import (
     UNSOURCED_BAND_ID,
     band_grid,
@@ -32,6 +33,7 @@ from engine.score.severity import (
     classify,
     severity_score,
 )
+from engine.variables import onset
 
 # Altitude the route lines float above the globe surface. Flat on the sphere
 # they are occluded by the horizon and unreadable; too high and they read as
@@ -197,7 +199,7 @@ def _build_route(
         "value_chf": round(sum(s.value_chf for s in shipments), 2),
         "contracts": sorted({r.customer for r in risks}),
         "legs": _legs(lane, context),
-        "events": _events(assessments, risks),
+        "events": _events(assessments, risks, context.config),
         "radar": _radar(assessments, lane, context),
         # The same data cut the way a planner reasons about it. A measured
         # variable has an instrument behind it — a gauge, a forecast, a
@@ -352,7 +354,7 @@ def _legs(lane: dict, context: RunContext) -> list[dict]:
     return out
 
 
-def _events(assessments: list, risks: list[ShipmentRisk]) -> list[dict]:
+def _events(assessments: list, risks: list[ShipmentRisk], config=None) -> list[dict]:
     by_event = defaultdict(list)
     for risk in risks:
         by_event[risk.event_id].append(risk)
@@ -386,10 +388,47 @@ def _events(assessments: list, risks: list[ShipmentRisk]) -> list[dict]:
                     sum(r.do_nothing.expected_loss_chf for r in local), 2
                 ),
                 "matrix": _event_matrix(local),
+                **_judgement(event, local, config),
             }
         )
     out.sort(key=lambda e: e["exposure_chf"], reverse=True)
     return out
+
+
+def _judgement(event, risks: list[ShipmentRisk], config) -> dict:
+    """How this event is judged: its kind, what it costs if it hits, and what
+    that means for each shipment. See docs/RISK_METHOD.md.
+
+    The survival counts are the planner's sentence — "3 late even in the
+    best case, 2 only in the worst" — and the break-even is the cost-loss
+    ratio for a warning whose odds nobody can price: the lowest across its
+    shipments, because that is the shipment it first pays to act on.
+    """
+    points = survive.delay_points(event, config) if config is not None else None
+    counts = {key: 0 for key in survive.LABELS}
+    for risk in risks:
+        if risk.survival in counts:
+            counts[risk.survival] += 1
+    evens = [r.break_even_probability for r in risks if r.break_even_probability is not None]
+    lowest = min(evens) if evens else None
+    return {
+        "kind": event.kind,
+        "kind_label": onset.LABELS.get(event.kind, event.kind),
+        "kind_basis": event.kind_basis,
+        "delay_days": (
+            {"best": points[0], "likely": points[1], "worst": points[2]}
+            if points is not None else None
+        ),
+        "survival": counts,
+        "survival_labels": dict(survive.LABELS),
+        # Set when the delay is capped at the closure's stated end for every
+        # shipment it reaches (score/survive.py::window_cap).
+        "capped_at": (
+            event.ends_at.isoformat() if config is not None and survive.waits_out(event) else None
+        ),
+        "break_even_probability": lowest,
+        "break_even_words": survive.likelihood_words(lowest) if lowest is not None else None,
+    }
 
 
 def _event_matrix(risks: list[ShipmentRisk]) -> dict:
@@ -428,6 +467,11 @@ def _event_matrix(risks: list[ShipmentRisk]) -> dict:
             "actionability": risk.actionability,
             "lead_time_hours": risk.lead_time_hours,
             "value_chf": risk.value_chf,
+            # Time-to-Survive: the delay this shipment absorbs before it is
+            # late, and the verdict against the event's three points.
+            "time_to_survive_days": risk.time_to_survive_days,
+            "survival": risk.survival,
+            "break_even_probability": risk.break_even_probability,
         }
         for risk in risks
     ]

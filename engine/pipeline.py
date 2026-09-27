@@ -52,8 +52,9 @@ from engine.schemas import (
     ShipmentRisk,
 )
 from engine.score import impact as impact_mod
-from engine.score import leadtime, matrix
+from engine.score import leadtime, matrix, survive
 from engine.simulate.draws import build_draw_matrix, propagate, variable_contributions
+from engine.variables import modality, onset
 from engine.variables import rules as rules_router
 
 
@@ -429,6 +430,17 @@ def _to_events(
             continue
         counts["after_type"] += 1
 
+        # Has it happened, might it, or is it over? The router names WHAT a
+        # report is about; the words around the name say whether it is so —
+        # "threatens to close" is not a closure, and "called off" is no
+        # strike at all. Read before the temporal layer, because a warning's
+        # window starts where the stoppage it warns of would.
+        reading = _read(item, routed)
+        if reading.ended:
+            router_notes[item["item_id"]] = f"the report says it is over: ‘{reading.cue}’"
+            continue
+        _judge_kind(item, routed, reading, config)
+
         # Layer 3: temporal. Could it touch anything in flight or planned?
         closed = _closed_before(item, clock)
         if closed:
@@ -506,6 +518,10 @@ def _closed_before(item: dict, clock: Clock) -> str | None:
     fallback = item.get("default_ends_at")
     if fallback is not None and fallback < clock.as_of:
         reported = item.get("starts_at") or item.get("published_at")
+        if item.get("kind") == "warning":
+            # A warning's start was moved to where the stoppage would begin,
+            # which is not the day anybody reported it.
+            reported = item.get("published_at") or reported
         when = f" {reported:%Y-%m-%d}" if reported is not None else ""
         return (
             f"reported{when} with no end stated, and past its default window "
@@ -518,6 +534,10 @@ def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:
     var = config.variables[obs["variable_id"]]
     node_id = obs["node_ids"][0]
     node = config.nodes[node_id]
+    kind, why = onset.classify(
+        [var], measured=True, realized=obs["realized"],
+        probability=obs["probability"], stated_window=False,
+    )
     return Event(
         event_id=obs["observation_id"],
         title=obs["title"],
@@ -534,6 +554,8 @@ def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:
         realized=obs["realized"],
         probability=obs["probability"],
         probability_basis=obs["probability_basis"],
+        kind=kind,
+        kind_basis=why,
         provenance=Provenance(
             source=obs["source"],
             source_tier=obs["source_tier"],
@@ -544,6 +566,68 @@ def _event_from_observation(obs: dict, config: Config, clock: Clock) -> Event:
         payload_fraction=obs.get("payload_fraction"),
         cost_multiplier=obs.get("cost_multiplier", 1.0),
     )
+
+
+def _read(item: dict, routed: rules_router.RouterResult) -> modality.Reading:
+    """What the words say about the event: asserted, hypothetical or over.
+
+    Only for reports. A measurement is what it is, and a feed that declares
+    what its items are (a closure list, a seismometer) is not phrased — its
+    items are closures and earthquakes by construction.
+    """
+    if routed.router == "source" or item.get("source_nature") == "instrument":
+        return modality.ASSERTED
+    return modality.read(item.get("text") or item.get("headline", ""), routed.active_variables)
+
+
+def _judge_kind(item: dict, routed: rules_router.RouterResult,
+                reading: modality.Reading, config: Config) -> None:
+    """Decide the item's kind (engine/variables/onset.py), and make a warning
+    behave like one: not happened, no odds invented, and — when the report
+    gives no date — starting where the stoppage it warns of usually would,
+    which the ledger states as the variable's typical lead time. Without
+    that, a ballot reported today put every shipment through that port on a
+    six-hour clock."""
+    variables = [config.variables[v] for v in routed.active_variables if v in config.variables]
+    published = item.get("published_at")
+    starts, ends = item.get("starts_at"), item.get("ends_at")
+    stated_window = ends is not None and (
+        (bool(item.get("declared_variables")) and item.get("source_nature") != "instrument")
+        or (starts is not None and published is not None and starts > published)
+    )
+    kind, why = onset.classify(
+        variables,
+        measured=item.get("source_nature") == "instrument",
+        realized=bool(item.get("realized", True)),
+        probability=item.get("probability"),
+        stated_window=stated_window,
+        reading=reading,
+    )
+    item["kind"], item["kind_basis"] = kind, why
+    if kind != "warning":
+        return
+
+    item["realized"] = False
+    if item.get("probability") is None:
+        item["probability_basis"] = (
+            "a warning sign: whether it happens is not stated, so every figure "
+            "here is IF it happens"
+        )
+    lead_hours = variables[0].typical_lead_time_hours if variables else 0.0
+    dated = starts is not None and published is not None and starts > published
+    if lead_hours > 0 and published is not None and not dated:
+        shift = timedelta(hours=lead_hours)
+        item["starts_at"] = published + shift
+        if item.get("default_ends_at") is not None:
+            item["default_ends_at"] = item["default_ends_at"] + shift
+        if ends is not None and ends < item["starts_at"]:
+            item["ends_at"] = None
+        days = lead_hours / 24.0
+        item["kind_basis"] = (
+            f"{why}; if it happens, typically about {days:.0f} day"
+            f"{'' if round(days) == 1 else 's'} after a sign like this "
+            "(ledger: typical lead time)"
+        )
 
 
 def _declared_route(item: dict, config: Config) -> rules_router.RouterResult | None:
@@ -708,6 +792,15 @@ def _rescue_event(
         return None
     anchor_node = config.nodes[nodes[0]]
     primary = config.variables[known[0]]
+    published = item.get("published_at")
+    kind, why = onset.classify(
+        [config.variables[v] for v in known],
+        measured=False,
+        realized=reading.realized,
+        probability=reading.probability,
+        stated_window=(reading.ends_at is not None and published is not None
+                       and reading.starts_at > published),
+    )
 
     return Event(
         event_id=item["item_id"],
@@ -725,6 +818,8 @@ def _rescue_event(
         realized=reading.realized,
         probability=reading.probability,
         probability_basis=reading.probability_basis,
+        kind=kind,
+        kind_basis=f"read by a model: {why}",
         provenance=Provenance(
             source=item.get("source", "unknown"),
             source_tier=int(item.get("source_tier", 3)),
@@ -766,6 +861,8 @@ def _event_from_item(
         realized=item["realized"],
         probability=item["probability"],
         probability_basis=item["probability_basis"],
+        kind=item.get("kind", "sudden"),
+        kind_basis=item.get("kind_basis", ""),
         provenance=Provenance(
             source=item["source"],
             source_tier=item["source_tier"],
@@ -810,6 +907,13 @@ def _cluster(events: list[Event]) -> list[Event]:
             match.severity = event.severity
         if event.provenance.source_tier < match.provenance.source_tier:
             match.provenance = event.provenance
+        # A report that it HAS happened outweighs a warning that it might:
+        # the merged event is as certain as its most certain report.
+        if event.realized and not match.realized:
+            match.realized = True
+            match.probability = event.probability
+            match.probability_basis = event.probability_basis
+            match.kind, match.kind_basis = event.kind, event.kind_basis
 
     return merged
 
@@ -890,16 +994,19 @@ def _assess_one(
     network: Network,
     clock: Clock,
 ) -> tuple[ShipmentRisk | None, np.ndarray]:
-    # --- do nothing: the PLANNED route, unswitched --------------------
-    base_draws = propagate(shipment, event_hits, draws)
-    base = impact_mod.summarise(
-        shipment, base_draws, config, cost_multiplier=event.cost_multiplier
-    )
-
     impact_at = leadtime.impact_time(
         event.starts_at, event_hits, shipment.shipment_id, event.event_id
     )
     hours_left = leadtime.hours_until_impact(clock, impact_at)
+    # A scheduled closure cannot hold this shipment past its stated end.
+    cap = survive.window_cap(event, impact_at)
+    caps = {event.event_id: cap} if cap is not None else None
+
+    # --- do nothing: the PLANNED route, unswitched --------------------
+    base_draws = propagate(shipment, event_hits, draws, cap_by_event=caps)
+    base = impact_mod.summarise(
+        shipment, base_draws, config, cost_multiplier=event.cost_multiplier
+    )
 
     options = options_for(
         shipment, event, event_hits, config, network, hours_left
@@ -918,6 +1025,7 @@ def _assess_one(
             event_hits,
             draws,
             residual_by_event={event.event_id: chosen.residual_delay_days},
+            cap_by_event=caps,
         )
         act = impact_mod.summarise(shipment, act_draws, config)
         value = impact_mod.value_of_acting(
@@ -954,6 +1062,17 @@ def _assess_one(
     impact_id, _, _ = matrix.impact_band(base["conditional_loss_chf"], config)
     prob_id, _ = matrix.probability_band(p_for_axis, config)
 
+    # Time-to-Recover against Time-to-Survive (score/survive.py): how much
+    # delay this shipment absorbs before it breaks its promise, against the
+    # event's best, likely and worst case.
+    tts = survive.time_to_survive(shipment, event_hits, event.event_id)
+    verdict = survive.survival(tts, survive.capped(survive.delay_points(event, config), cap))
+    # Odds nobody can price: the cost-loss break-even instead of a number.
+    break_even = None
+    if not event.probability_known and chosen is not None and act_outcome is not None:
+        break_even = survive.break_even_probability(
+            base["expected_loss_chf"], act_outcome.expected_loss_chf, chosen.cost_chf)
+
     risk = ShipmentRisk(
         shipment_id=shipment.shipment_id,
         event_id=event.event_id,
@@ -980,6 +1099,9 @@ def _assess_one(
         value_chf=shipment.value_chf,
         customer=shipment.customer,
         contract_type=shipment.contract_type,
+        time_to_survive_days=tts,
+        survival=verdict,
+        break_even_probability=break_even,
     )
     return risk, base["losses"]
 
