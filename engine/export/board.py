@@ -21,6 +21,7 @@ from engine.ingest import flows as flows_mod
 from engine.ingest.observations import FeedStatus
 from engine.pipeline import RunContext
 from engine.schemas import ShipmentRisk
+from engine.score import penalty as penalty_mod
 from engine.score import survive
 from engine.score.matrix import (
     UNSOURCED_BAND_ID,
@@ -83,6 +84,9 @@ def build_board(context: RunContext) -> dict:
         "shipments_total": result.shipments_total,
         "variables_total": len(config.variables),
         "posture": _posture(context),
+        # Whether delay penalties are in the exposure right now. Flipped by
+        # the board's toggle (POST /api/penalties), default from scoring.yaml.
+        "penalties": {"enabled": penalty_mod.enabled(config)},
         "levels": [
             {
                 "level": lvl.value,
@@ -233,6 +237,10 @@ def _build_route(
         "shipments_at_risk": len({r.shipment_id for r in risks}),
         "value_chf": round(sum(s.value_chf for s in shipments), 2),
         "contracts": sorted({r.customer for r in risks}),
+        # Each customer's delay clause on this route, for the Contract
+        # button: the terms in one line, and whether the board is counting
+        # them right now (the penalties switch).
+        "clauses": _clauses(shipments, risks, context.config),
         "legs": _legs(lane, context),
         "events": _events(assessments, risks, context.config),
         "radar": _radar(assessments, lane, context),
@@ -866,6 +874,26 @@ def _urgency_band(hours: float | None, config) -> int:
         return 3
     level = _level_for_hours(hours, config)
     return {Level.RED: 0, Level.YELLOW: 1}.get(level, 2)
+
+
+def _clauses(shipments: list, risks: list, config) -> list[dict]:
+    """The delay clause of every customer on a route, at-risk ones first."""
+    at_risk = {r.customer for r in risks if r.do_nothing.expected_loss_chf > 0}
+    out = []
+    for customer in sorted({s.customer for s in shipments},
+                           key=lambda c: (c not in at_risk, c)):
+        terms = penalty_mod.clause(customer, config)
+        out.append({
+            "customer": customer,
+            "at_risk": customer in at_risk,
+            "type": terms["type"] if terms else None,
+            "label": terms.get("label", terms["type"]) if terms else "No contract type",
+            "clause": terms.get("clause", "") if terms else "Terms not on file.",
+            "summary": penalty_mod.summary(terms) if terms else "not on file",
+            "counted": penalty_mod.enabled(config),
+            "sources": list(terms.get("sources") or []) if terms else [],
+        })
+    return out
 
 
 def _clock_hours(risks: list, context: RunContext) -> float | None:

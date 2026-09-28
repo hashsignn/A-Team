@@ -39,6 +39,11 @@ CUSTOMERS = [
     ("Gulf Industrial Projects", CustomerImpactTier.LINE_DOWN),
     ("Anhui Construction Group", CustomerImpactTier.STOCK_OUT),
     ("Midwest Commercial Build", CustomerImpactTier.INCONVENIENCE),
+    # Not only construction: Sika also supplies car makers (Sika Automotive)
+    # and DIY retail, the two customer types whose contracts fine lateness
+    # hardest (scoring.yaml -> contractual_penalty.by_type).
+    ("Kestrel Auto Assembly", CustomerImpactTier.LINE_DOWN),
+    ("Oakfield DIY Stores", CustomerImpactTier.STOCK_OUT),
 ]
 
 PRODUCT_FAMILIES = [

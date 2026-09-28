@@ -60,6 +60,14 @@
            next sits. A click opens its tab. -->
       <button type="button" class="meet-chip" id="meet-chip" hidden></button>
 
+      <!-- Delay penalties: counted in the exposure, or not. The customers'
+           contract terms are per route, behind each route's Contract button. -->
+      <button type="button" class="pen-chip" id="pen-chip" aria-pressed="false"
+              title="Count the customers' contract delay penalties in the exposure">
+        <span class="pen-switch" aria-hidden="true"></span>
+        <span class="pen-long">Delay</span> penalties <b id="pen-state">off</b>
+      </button>
+
       <!-- The as-of instant. Nothing in engine/ reads the wall clock, so this
            is the only "now" there is: pin it and the whole board is
            reproducible. Folded into one button: it is for replaying a
@@ -260,6 +268,15 @@
             <!-- The level; its rule ("act within 8 h") is the tooltip, so the
                  panel says one deadline, the real one, below. -->
             <span class="level-chip" id="d-chip"></span>
+            <!-- What the customers' contracts charge for lateness: a button,
+                 the terms one line each inside. -->
+            <details class="contract-pop" id="contract-pop">
+              <summary class="ctl ctl--ghost ctl--mini" id="contract-btn" title="Delay clauses in this route's customer contracts">
+                <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 2.5h7l3 3v12H5z M12 2.5v3h3 M7.5 9.5h5 M7.5 12.5h5 M7.5 15h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                Contract <span class="contract-n" id="contract-n" hidden></span>
+              </summary>
+              <div class="contract-card" id="contract-card"></div>
+            </details>
             <!-- The route's own page (matrix, charts, every consignment). -->
             <a class="icon-btn d-page" id="link-route" href="#" title="Route page: matrix and charts" aria-label="Route page">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M6 13V8M10 13V4M14 13v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>

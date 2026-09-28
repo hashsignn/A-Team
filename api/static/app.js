@@ -342,11 +342,88 @@ async function boot() {
     if (pop && pop.open && !pop.contains(e.target)) pop.open = false;
   });
   $('meet-chip').addEventListener('click', openAllHands);
+  $('pen-chip').addEventListener('click', togglePenalties);
+  // The Contract card folds away on a click anywhere else, like any menu.
+  document.addEventListener('click', (e) => {
+    const pop = $('contract-pop');
+    if (pop && pop.open && !pop.contains(e.target)) pop.open = false;
+  });
 
   // ?route=<id> opens that route: the way back from Act fast, the checklist
   // and the route page lands on the route you left, not on the list.
   const wanted = new URLSearchParams(location.search).get('route');
   if (wanted && board.routes.some((r) => r.route_id === wanted)) select(wanted, { fly: true, fit: true });
+}
+
+/* Delay penalties on or off, for the whole server: every CHF figure moves,
+ * so the board is fetched again and the open route, if any, reopened. */
+function renderPenChip(board) {
+  const on = !!(board.penalties && board.penalties.enabled);
+  const chip = $('pen-chip');
+  chip.setAttribute('aria-pressed', String(on));
+  $('pen-state').textContent = on ? 'on' : 'off';
+  chip.title = on
+    ? "Counting each customer's contract delay penalty in the exposure. Click to leave them out."
+    : "Leaving contract delay penalties out of the exposure. Click to count them.";
+}
+async function togglePenalties() {
+  const chip = $('pen-chip');
+  const on = !(state.board.penalties && state.board.penalties.enabled);
+  const keep = !$('panel-body').hidden ? state.selected : null;
+  chip.disabled = true;
+  try {
+    const res = await fetch('/api/penalties', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: on }),
+    });
+    if (!res.ok) throw new Error(`penalties ${res.status}`);
+    await reload(state.params.as_of);
+    if (keep && state.board.routes.some((r) => r.route_id === keep)) select(keep, {});
+  } catch (err) {
+    console.error(err);
+  } finally {
+    chip.disabled = false;
+  }
+}
+
+/* The route's delay clauses, one line per customer, behind its Contract
+ * button. At-risk customers first and marked; the full clause is the
+ * tooltip, so the card stays short. */
+function renderContract(r) {
+  const pop = $('contract-pop');
+  if (!pop) return;
+  pop.open = false;
+  const clauses = r.clauses || [];
+  const counted = !!(state.board.penalties && state.board.penalties.enabled);
+  const priority = Object.fromEntries((r.customers || []).map((c) => [c.name, c.priority]));
+  const charged = clauses.filter((c) => c.at_risk && c.summary !== 'no delay penalty' && c.summary !== 'not on file');
+  $('contract-n').hidden = !charged.length;
+  $('contract-n').textContent = charged.length;
+  $('contract-btn').title = charged.length
+    ? `${charged.length} customer(s) at risk here have a delay penalty in their contract`
+    : 'Delay clauses in this route\'s customer contracts';
+  const line = (c) => `
+      <li class="${c.at_risk ? 'is-risk' : ''}" title="${esc(c.clause)}">
+        <div class="cc-who"><b>${esc(c.customer)}</b> ${priority[c.customer] === 'A' ? priBadge('A') : ''}<span class="cc-type">${esc(c.label)}</span></div>
+        <div class="cc-terms">${esc(c.summary)}</div>
+      </li>`;
+  // At-risk customers are the answer; the rest of the route's customers are
+  // one click away.
+  const risky = clauses.filter((c) => c.at_risk);
+  const rest = clauses.filter((c) => !c.at_risk);
+  $('contract-card').innerHTML = `
+    <div class="cc-head"><b>Delay clauses</b>
+      <span class="cc-state${counted ? ' is-on' : ''}">${counted ? 'counted in the exposure' : 'not counted (penalties off)'}</span></div>
+    ${risky.length ? `<ul>${risky.map(line).join('')}</ul>` : '<div class="cc-terms">No customer on this route is at risk.</div>'}
+    ${rest.length ? `<button type="button" class="cc-more" id="cc-more">Show the other ${rest.length} customer(s) on this route</button>
+      <ul class="cc-rest" id="cc-rest" hidden>${rest.map(line).join('')}</ul>` : ''}
+    <div class="cc-foot">Red edge: at risk now. Hover a line for the clause. Example terms until Sika's contracts replace them.</div>`;
+  const more = $('cc-more');
+  if (more) more.addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('cc-rest').hidden = false;
+    more.remove();
+  });
 }
 
 /* The all-hands tab, from anywhere: the header chip, the globe strip. */
@@ -396,6 +473,7 @@ function applyBoard(board) {
 
   renderPosture(board.posture);
   renderMeetChip();
+  renderPenChip(board);
   initDesk();
   initPanelTabs();
   renderAllHands();
@@ -1084,6 +1162,7 @@ function renderDetail(r) {
   chip.title = `${r.level_label}: ${r.directive.toLowerCase()}${r.reason ? `\n${r.reason}` : ''}`;
 
   $('d-name').textContent = r.name;
+  renderContract(r);
 
   // Critical with money at stake and no option left is not "no deadline":
   // the one thing left is telling the customer, and that is due now.

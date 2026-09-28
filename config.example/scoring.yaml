@@ -32,13 +32,103 @@ simulation:
 cost:
   components:
     contractual_penalty:
-      # OFF: Sika's contracts carry no per-day delay penalty (team answer,
-      # 2026-09-27, README open question 1). The cost of lateness is then
-      # expediting plus customer impact below — the case this model was built
-      # to survive. Set true if a contract turns out to have one.
+      # THE SWITCH. Sika confirmed (28 Sep 2026) that delay penalties exist
+      # and differ by customer. Off by default so the board opens on the
+      # cost of lateness that needs no contract (expediting + customer
+      # impact below); the board's "Delay penalties" toggle turns it on for
+      # the running server without editing this file (POST /api/penalties).
       enabled: false
-      # CHF per day late, taken from the shipment record where present.
-      source: shipment.sla_penalty_per_day
+      # A customer with no type below falls back to the shipment record's
+      # own sla_penalty_per_day, which is where a real contract export
+      # would put it.
+      source: by_customer -> by_type, else shipment.sla_penalty_per_day
+      default_type: null
+      #
+      # The clause by customer type. Every number is optional:
+      #   once_chf     once, if late at all      per_day_chf  per day late
+      #   once_pct     share of the order value, once if late
+      #   per_day_pct  share of the order value per day late (per_week_pct: a week)
+      #   cap_chf / cap_pct  the most it can charge    grace_days  free lateness
+      # The SHAPES are from the sources; the AMOUNTS are ASSUMED, sized from
+      # them, and are Sika's to replace with the real contract terms.
+      by_type:
+        automotive_oem:
+          label: Car maker (line feed)
+          clause: >-
+            Late parts: Sika pays the premium freight to recover, and a share
+            of the car maker's cost if its line stops, up to a cap per
+            incident.
+          once_chf: 5000
+          per_day_chf: 25000
+          cap_chf: 250000
+          basis: >-
+            Next-flight-out air for a small component adds EUR 1,000-5,000
+            (the once charge). A stopped automotive line costs up to
+            USD 2.3 M an hour (Siemens, True Cost of Downtime 2024); a late
+            container does not stop a line with safety stock, so the day
+            rate is a share of that, capped. Sika supplies car makers
+            (Sika Automotive: bonding, sealing, acoustics, reinforcement).
+          sources:
+            - https://automotive.sika.com/en/about-us.html
+            - https://www.theaemt.com/resource/the-true-cost-of-downtime-2024-a-comprehensive-analysis.html
+            - https://www.flashbyredspher.com/en/en-automotive-tier1-express-freight-production-shutdown/
+        retail_diy:
+          label: DIY retail chain
+          clause: >-
+            Missed delivery window: a fine of 3% of the value of the late
+            order (an on-time-in-full chargeback).
+          once_pct: 0.03
+          basis: Walmart's OTIF fine is 3% of the cost of goods on every case that misses the window.
+          sources:
+            - https://www.8thandwalton.com/blog/walmart-otif
+        construction_project:
+          label: Construction project
+          clause: >-
+            Delay damages passed down from the main contract: 0.5% of the
+            order value per week late, capped at 5%.
+          per_week_pct: 0.005
+          cap_pct: 0.05
+          basis: >-
+            0.5% per week of delay on undelivered materials, to a maximum of
+            5% of the order value, is a common supply clause; project
+            contracts (FIDIC 8.7) state a rate per day with a cap.
+          sources:
+            - https://www.lawinsider.com/clause/liquidated-damages-for-delay
+            - https://fidic.org/node/911
+        distributor:
+          label: Distributor
+          clause: >-
+            No delay penalty: a distributor holds stock. A late delivery costs
+            a lost sale, which customer impact already counts.
+        industrial:
+          label: Industrial manufacturer
+          clause: >-
+            Usually no fixed penalty; the premium freight to recover is
+            recharged when the delay is Sika's.
+          once_chf: 2000
+          basis: The once charge is one premium road or air leg (EUR 500-5,000).
+          sources:
+            - https://www.flashbyredspher.com/en/cost-missed-production-window-framework-oems/
+        intercompany:
+          label: Sika company
+          clause: No penalty between Sika companies.
+      # Which type each customer is. Synthetic names here; real ones go in
+      # config/scoring.yaml, which is never committed.
+      by_customer:
+        "Bauwerk Construction AG": construction_project
+        "Nordbau Projekt GmbH": construction_project
+        "Meridian Infrastructure": construction_project
+        "Aurora Precast": industrial
+        "Helvetia Tunnelbau": construction_project
+        "Pacific Rim Builders": construction_project
+        "Delta Marine Works": industrial
+        "Continental Roofing": distributor
+        "Iberia Obras Civiles": construction_project
+        "Gulf Industrial Projects": construction_project
+        "Anhui Construction Group": construction_project
+        "Midwest Commercial Build": construction_project
+        "Kestrel Auto Assembly": automotive_oem
+        "Oakfield DIY Stores": retail_diy
 
     expediting:
       enabled: true

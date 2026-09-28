@@ -493,6 +493,20 @@ def _response(page, check) -> None:
               f"pdf: {len(resp.body())} bytes, valid header")
     page.screenshot(path=str(OUT / "response-escalate.png"))
 
+    # The route's delay clauses: one button, one line per customer inside,
+    # and a header switch that says whether they are counted.
+    page.locator("#contract-btn").click()
+    lines = page.locator("#contract-card li:visible").count()
+    check(page.locator("#contract-card").is_visible() and lines >= 1,
+          f"[contract] the Contract card is empty or hidden ({lines} lines)",
+          f"contract: {lines} customer clause(s) behind one button")
+    page.locator("#contract-btn").click()
+    check(page.locator("#contract-card").is_hidden(), "[contract] the card did not fold away")
+    pressed = page.locator("#pen-chip").get_attribute("aria-pressed")
+    check(pressed in ("true", "false") and page.locator("#pen-state").inner_text() in ("on", "off"),
+          f"[penalties] the header switch has no state: {pressed!r}",
+          f"penalties switch: {page.locator('#pen-state').inner_text()}")
+
 
 # =====================================================================
 # THE ROUTE PAGE — radars and matrix, reached the way a planner does

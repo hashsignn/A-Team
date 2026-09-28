@@ -1782,11 +1782,19 @@ Onboarding a new customer is a profile swap — that is true here, not a claim.
 
 ## Open questions for Sika
 
-1. ~~Do your contracts actually carry per-day delay penalties?~~ **Answered
-   (team, 2026-09-27): no.** The per-day penalty component is off
-   (`scoring.yaml → cost.components.contractual_penalty`); the cost of
-   lateness is expediting plus customer impact, the case the three-part model
-   was built to survive.
+1. ~~Do your contracts actually carry delay penalties?~~ **Answered
+   (team, 2026-09-28): yes, and they differ by customer.** Each customer has
+   a type (car maker, DIY retail, construction project, distributor,
+   industrial, Sika company) with its clause in
+   `scoring.yaml → cost.components.contractual_penalty.by_type`: premium
+   freight plus a capped day rate for a car maker's line feed, a 3% OTIF fine
+   for DIY retail, 0.5% a week capped at 5% for a construction project,
+   nothing for a distributor. The shapes come from published terms, the
+   amounts are examples until the real contracts replace them. The header's
+   **Delay penalties** switch counts them in the exposure or leaves them out
+   (`POST /api/penalties`, this server only); each route's **Contract**
+   button lists its customers' clauses, at-risk ones first. **Still open:**
+   the real terms per customer.
 2. Would you pre-agree a convene threshold in calm conditions?
 3. Does the shipment data include actual vs. planned arrival dates, or only
    lanes and volumes? (Decides whether the hindcast produces a *measured*

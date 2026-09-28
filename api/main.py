@@ -9,6 +9,8 @@ server running.
 from __future__ import annotations
 
 import asyncio
+import copy
+import dataclasses
 import hashlib
 import json
 import os
@@ -63,6 +65,27 @@ _RUNS: dict[tuple[str, int], RunContext] = {}
 _BOARDS: dict[tuple[str, int], dict] = {}
 
 
+# The delay-penalty switch, for this server process. None means "as the
+# config says" (scoring.yaml -> cost.components.contractual_penalty.enabled).
+# Flipped from the board's header, so a planner can see the exposure with and
+# without the contracts' penalties without editing a file; a restart returns
+# it to the config's default.
+_PENALTIES: dict[str, bool | None] = {"enabled": None}
+
+
+def _config():
+    """The config every run uses: the files, plus the penalty switch."""
+    config = load_config()
+    override = _PENALTIES["enabled"]
+    if override is None:
+        return config
+    scoring = copy.deepcopy(config.scoring)
+    scoring.setdefault("cost", {}).setdefault("components", {}).setdefault(
+        "contractual_penalty", {})["enabled"] = bool(override)
+    config.files["scoring"] = dataclasses.replace(config.files["scoring"], data=scoring)
+    return config
+
+
 def _context(as_of: str, shipments: int) -> RunContext:
     key = (as_of, shipments)
     if key not in _RUNS:
@@ -72,7 +95,7 @@ def _context(as_of: str, shipments: int) -> RunContext:
             raise HTTPException(400, f"bad as_of: {exc}") from exc
         _RUNS[key] = run(
             clock=clock,
-            config=load_config(),
+            config=_config(),
             options=RunOptions(shipment_count=shipments),
         )
     return _RUNS[key]
@@ -192,6 +215,29 @@ def profile_save(edits: Annotated[dict, Body()]) -> JSONResponse:
     if outcome["applied"]:
         _invalidate()
     return JSONResponse(outcome)
+
+
+@app.get("/api/penalties")
+def penalties_state() -> JSONResponse:
+    """Whether delay penalties are counted in the exposure right now."""
+    from engine.score import penalty as penalty_mod  # noqa: PLC0415
+
+    return JSONResponse({"enabled": penalty_mod.enabled(_config()),
+                         "switched": _PENALTIES["enabled"] is not None})
+
+
+@app.post("/api/penalties")
+def penalties_switch(body: Annotated[dict, Body()]) -> JSONResponse:
+    """Count the customers' delay penalties in the exposure, or not.
+
+    For this server process only, so nothing in config/ is rewritten; every
+    cached board is dropped, because every CHF figure moves with it.
+    """
+    if not isinstance(body.get("enabled"), bool):
+        raise HTTPException(422, "send {\"enabled\": true} or {\"enabled\": false}")
+    _PENALTIES["enabled"] = body["enabled"]
+    _invalidate()
+    return penalties_state()
 
 
 @app.delete("/api/profile")

@@ -44,6 +44,7 @@ import numpy as np
 
 from engine.config import Config
 from engine.schemas import Shipment
+from engine.score import penalty
 from engine.simulate.draws import ShipmentDraws
 
 
@@ -74,8 +75,8 @@ def loss_per_draw(
 
     total = np.zeros_like(lateness)
 
-    if cost["contractual_penalty"]["enabled"]:
-        total += shipment.sla_penalty_per_day * lateness
+    # The customer's delay clause (score/penalty.py): zeros while switched off.
+    total += penalty.per_draw(shipment, lateness, config)
 
     if cost["expediting"]["enabled"]:
         band = value_band(shipment, config)

@@ -35,6 +35,7 @@ from dataclasses import dataclass
 
 from engine.config import Config
 from engine.schemas import Shipment
+from engine.score import penalty as penalty_mod
 
 # Used when fast.yaml is absent entirely. Deliberately pessimistic: a low
 # assumed margin vetoes MORE options, so a missing config file makes the tool
@@ -111,7 +112,8 @@ def residual_penalty_chf(
     if days_late_after <= 0:
         return 0.0
 
-    penalty = days_late_after * float(shipment.sla_penalty_per_day)
+    # The customer's delay clause, and only while penalties are switched on.
+    penalty = penalty_mod.for_days(shipment, days_late_after, config)
 
     cost_cfg = config.scoring.get("cost", {}).get("components", {})
     impact = cost_cfg.get("customer_impact", {})

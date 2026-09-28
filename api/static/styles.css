@@ -2866,3 +2866,64 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
   .rtabs { overflow-x: auto; }
   .rtab { flex: 1 0 auto; font-size: 13px; }
 }
+
+/* ---- delay penalties: the header switch and each route's Contract button ---- */
+.pen-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px;
+  font: inherit; font-size: 13.5px; color: var(--text-secondary);
+  padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1);
+}
+.pen-chip b { color: var(--text-primary); font-weight: 650; }
+.pen-chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.pen-chip:disabled { opacity: .6; cursor: progress; }
+.pen-switch {
+  position: relative; width: 26px; height: 15px; border-radius: 999px; flex: none;
+  background: var(--border-strong); transition: background .15s;
+}
+.pen-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px;
+  border-radius: 50%; background: var(--surface-1); transition: transform .15s;
+}
+.pen-chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.pen-chip[aria-pressed="true"] .pen-switch { background: var(--accent); }
+.pen-chip[aria-pressed="true"] .pen-switch::after { transform: translateX(11px); }
+
+/* The card spans the panel, not the button: the button sits near the
+   panel's right edge, and a card hung off it would run off the screen. */
+.panel-head { position: relative; }
+.contract-pop { position: static; }
+.contract-pop > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.contract-pop > summary::-webkit-details-marker { display: none; }
+.contract-pop[open] > summary { border-color: var(--accent); color: var(--text-primary); }
+.contract-n {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--lvl-red) 14%, var(--surface-1)); color: var(--text-primary);
+}
+.contract-n[hidden] { display: none; }
+.contract-card {
+  position: absolute; left: 16px; right: 16px; top: 52px; z-index: 95; max-height: 62vh; overflow: auto;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-2);
+}
+.contract-card .cc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.contract-card .cc-head b { color: var(--text-primary); font-size: 14px; }
+.contract-card .cc-state { font-size: 12.5px; }
+.contract-card .cc-state.is-on { color: var(--accent); font-weight: 600; }
+.contract-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.contract-card li { padding: 7px 9px; border-radius: 9px; background: var(--surface-2); font-size: 13px; line-height: 1.35; }
+.contract-card li.is-risk { box-shadow: inset 3px 0 0 var(--lvl-red); }
+.contract-card .cc-who { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.contract-card .cc-who b { font-weight: 650; color: var(--text-primary); }
+.contract-card .cc-type { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.contract-card .cc-terms { color: var(--text-secondary); margin-top: 2px; }
+.contract-card .cc-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.contract-card .cc-more { margin-top: 7px; font: inherit; font-size: 12.5px; color: var(--accent); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+.contract-card .cc-rest[hidden] { display: none; }
+/* On a laptop screen the switch itself says on or off, so the words go and
+   the header stays two rows. */
+@media (max-width: 1440px) {
+  .pen-chip { gap: 6px; padding: 6px 11px; }
+  .pen-chip .pen-long, .pen-chip b { display: none; }
+}
