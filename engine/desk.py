@@ -242,7 +242,8 @@ def rule_checks(verdict: ConveneVerdict, config: Config) -> list[dict]:
     rows = [
         ("Expected loss", verdict.exposure_chf, limits.get("exposure_chf"), "chf"),
         ("Customers exposed", verdict.contracts_exposed, limits.get("contracts_exposed"), "n"),
-        ("Decisions due in 48 h", verdict.shipments_needing_decision,
+        (f"Decisions in {float((config.scoring.get('alert_levels') or {}).get('yellow_hours', 36)):g} h",
+         verdict.shipments_needing_decision,
          limits.get("shipments_needing_decision"), "n"),
     ]
     return [{"label": label, "value": value, "limit": limit, "unit": unit,
@@ -309,7 +310,8 @@ def _supply_chain(routes: list[dict], config: Config) -> dict:
         "function": "Supply Chain", "id": "FN_SUPPLY_CHAIN",
         "lever": "Move the freight",
         "summary": ((f"{len(actions)} actions open"
-                     + (f" · first closes in {first:.0f} h" if first is not None else ""))
+                     + ((" · first closes now" if first < 0.5 else f" · first closes in {first:.0f} h")
+                        if first is not None else ""))
                     if actions else "No action worth its cost"),
         "items": items,
         "basis": "The route actions: key accounts first, then the nearest deadline.",

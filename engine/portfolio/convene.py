@@ -132,7 +132,7 @@ def evaluate(
         )
     if len(pressing) >= thresholds["shipments_needing_decision"]:
         fired.append(
-            f"{len(pressing)} shipments need a decision within 48 hours "
+            f"{len(pressing)} shipments need a decision within {pressing_hours:g} working hours "
             f"≥ {thresholds['shipments_needing_decision']}"
         )
 
@@ -161,7 +161,7 @@ def evaluate(
         shipments_needing_decision=len(pressing),
         next_meeting_at=meeting,
         headline=_headline(posture, fired, exposure, len(pressing), meeting, agreed,
-                           _sooner(posture, config, clock)),
+                           _sooner(posture, config, clock), pressing_hours),
         exposure_from_warnings_chf=round(from_warnings, 2),
     )
 
@@ -190,6 +190,7 @@ def _headline(
     meeting: datetime | None,
     agreed: bool,
     sooner: tuple[datetime, str] | None = None,
+    pressing_hours: float = PRESSING_HOURS,
 ) -> str:
     when = f"{meeting:%A %d %b}" if meeting else "the next meeting"
 
@@ -201,13 +202,13 @@ def _headline(
                  f"The regular meeting is not until {when}.")
         return (
             f"{rule_state(agreed)}: {fired[0]}. "
-            f"{pressing} shipment(s) need a decision within 48 hours. {meets}"
+            f"{pressing} shipment(s) need a decision within {pressing_hours:g} working hours. {meets}"
         )
 
     if posture is Posture.WATCH:
         return (
             f"Watch. CHF {exposure:,.0f} of expected loss across the book; "
-            f"{pressing} shipment(s) need a decision within 48 hours. "
+            f"{pressing} shipment(s) need a decision within {pressing_hours:g} working hours. "
             "Below the convene threshold."
         )
 

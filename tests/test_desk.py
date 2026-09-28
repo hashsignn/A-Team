@@ -94,7 +94,7 @@ def test_the_meeting_goes_from_biweekly_to_daily(config):
         "Supply Chain", "Procurement", "Manufacturing", "Controlling"}
     # The rule's tests come as rows, so the room reads a table.
     assert [c["label"] for c in crisis["checks"]] == [
-        "Expected loss", "Customers exposed", "Decisions due in 48 h"]
+        "Expected loss", "Customers exposed", "Decisions in 36 h"]
 
 
 def test_watch_meets_sooner_but_not_daily(config):

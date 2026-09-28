@@ -370,16 +370,20 @@ def _desk(page, check) -> None:
 
     page.click(".ptab[data-ptab='allhands']")
     page.wait_for_timeout(400)
-    cards = page.locator("#allhands .ah-card").count()
+    rows = page.locator("#allhands .ah2-fn").count()
     text = page.locator("#allhands").inner_text()
     keys = page.evaluate("state.board.key_accounts.length")
-    check(cards == 4 + (1 if keys else 0)
+    days = page.locator("#allhands .ah2-day").count()
+    check(rows == 4 + (1 if keys else 0) and days == 14
+          and page.locator("#allhands .ah2-bar").count() == 3
           and all(f in text for f in ("Supply Chain", "Procurement", "Manufacturing", "Controlling")),
-          f"[all-hands] {cards} card(s)", "all-hands: cadence, the room, and 4 function levers")
+          f"[all-hands] {rows} row(s), {days} day(s)",
+          "all-hands: when (two-week strip), why (3 limit bars), the room (4 functions)")
     if keys:
-        check(page.locator("#allhands .ah-keys-card li").count() == keys,
+        page.locator("#allhands .ah-keys-card > summary").click()
+        check(page.locator("#allhands .ah-keys-card li:visible").count() == keys,
               "[all-hands] key-account orders at risk not listed",
-              f"all-hands lists the {keys} key-account order(s) at risk, first")
+              f"all-hands lists the {keys} key-account order(s) at risk, first, behind one click")
     page.click(".ptab[data-ptab='signals']")
     _settle(page, "document.querySelector('#siglist .cs') !== null", 20_000)
     check(page.locator("#siglist .cs").count() == 1, "[signals] no carrier push-out section",

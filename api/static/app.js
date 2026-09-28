@@ -1560,43 +1560,75 @@ function renderAllHands() {
   const c = LEVEL_COLOR[tone];
   const fmt = (x) => (x.unit === 'chf' ? chf(x.value) : x.value);
   const lim = (x) => (x.limit == null ? '—' : x.unit === 'chf' ? chf(x.limit) : x.limit);
-  const checks = (h.checks || []).map((x) => `
-    <tr class="${x.crossed ? 'is-crossed' : ''}">
-      <td>${esc(x.label)}</td><td class="num">${fmt(x)}</td>
-      <td class="num muted">limit ${lim(x)}</td>
-      <td class="ah-mark">${x.crossed ? '✓ crossed' : ''}</td>
-    </tr>`).join('');
-  const people = (h.attendees || []).map((a) =>
-    `<span class="ah-person" title="${esc(a.role)}">${esc(a.function)}</span>`).join('');
-  const cards = (h.levers || []).map((l) => `
-    <section class="ah-card">
-      <div class="ah-card-head"><b>${esc(l.function)}</b>
-        <span title="${esc(l.basis || '')}">${esc(l.lever)}${l.basis ? ' ⓘ' : ''}</span></div>
-      <p class="ah-sum">${esc(l.summary)}</p>
+
+  // Two weeks at a glance: which days the team sits. Daily means working
+  // days; the weekend is not a meeting day.
+  const asOf = new Date(state.board.as_of);
+  const next = h.next_at ? new Date(h.next_at) : null;
+  const dayMs = 86400000;
+  const day0 = Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate());
+  const nextDay = next ? Date.UTC(next.getUTCFullYear(), next.getUTCMonth(), next.getUTCDate()) : null;
+  const cells = Array.from({ length: 14 }, (_, i) => {
+    const t = day0 + i * dayMs;
+    const d = new Date(t);
+    const wd = d.getUTCDay();
+    const k = nextDay == null ? -1 : Math.round((t - nextDay) / dayMs);
+    const meets = k >= 0 && (h.cadence_days <= 1 ? wd !== 0 && wd !== 6 : k % h.cadence_days === 0);
+    const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return `<span class="ah2-day${meets ? ' is-meet' : ''}${k === 0 ? ' is-next' : ''}${wd === 0 || wd === 6 ? ' is-wkend' : ''}"
+      title="${esc(label)}${meets ? ': all-hands' : ''}"><i>${'SMTWTFS'[wd]}</i></span>`;
+  }).join('');
+
+  // Each limit as a bar: the tick is the limit, past it is crossed.
+  const checks = (h.checks || []);
+  const crossed = checks.filter((x) => x.crossed).length;
+  const bars = checks.map((x) => {
+    const ratio = x.limit ? Math.min(x.value / x.limit, 2) : 0;
+    return `<div class="ah2-bar${x.crossed ? ' is-crossed' : ''}" title="${esc(x.label)}: ${fmt(x)} against a limit of ${lim(x)}">
+      <span class="ah2-bl">${esc(x.label)}</span>
+      <span class="ah2-track"><span class="ah2-fill" style="width:${(ratio / 2) * 100}%"></span><span class="ah2-tick"></span></span>
+      <span class="ah2-bv"><b>${fmt(x)}</b> <span class="muted">/ ${lim(x)}</span></span>
+    </div>`;
+  }).join('');
+
+  // One row per function in the room: who, their lever, the one-line state.
+  // The detail opens on a click.
+  const levers = Object.fromEntries((h.levers || []).map((l) => [l.id, l]));
+  const initials = (name) => name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const rows = (h.attendees || []).map((a) => {
+    const l = levers[a.id] || {};
+    const items = (l.items || []).map((i) => `
+      <li${i.route_id ? ` data-route="${esc(i.route_id)}" tabindex="0"` : ''} title="${esc(i.hint || '')}">
+        <span class="ah-text">${i.priority === 'A' ? '★ ' : ''}${esc(i.text)}</span>
+        ${i.detail ? `<span class="ah-detail">${esc(i.detail)}</span>` : ''}
+      </li>`).join('');
+    const more = items || l.note || l.basis;
+    return `<details class="ah2-fn">
+      <summary title="${esc(a.role)}">
+        <span class="ah2-ini">${esc(initials(a.function))}</span>
+        <span class="ah2-who"><b>${esc(a.function)}</b><span class="muted">${esc(l.lever || a.role)}</span></span>
+        <span class="ah2-sum">${esc(l.summary || '')}</span>
+        ${more ? '<span class="ah2-open" aria-hidden="true">▸</span>' : ''}
+      </summary>
       ${l.note ? `<p class="ah-note">${esc(l.note)}</p>` : ''}
-      ${(l.items || []).length ? `<ul class="ah-items">${l.items.map((i) => `
-        <li${i.route_id ? ` data-route="${esc(i.route_id)}" tabindex="0"` : ''} title="${esc(i.hint || '')}">
-          <span class="ah-text">${i.priority === 'A' ? '★ ' : ''}${esc(i.text)}</span>
-          ${i.detail ? `<span class="ah-detail">${esc(i.detail)}</span>` : ''}
-        </li>`).join('')}</ul>` : ''}
-    </section>`).join('');
+      ${items ? `<ul class="ah-items">${items}</ul>` : ''}
+      ${l.basis ? `<p class="ah2-basis">${esc(l.basis)}</p>` : ''}
+    </details>`;
+  }).join('');
+
   host.innerHTML = `
-    <div class="ah-head" style="border-left-color:${c}">
-      <div class="ah-cadence">
-        <span class="ah-k">Meets</span>
-        <span class="ah-v" style="color:${c}">${esc(h.cadence_label)}</span>
-        ${h.changed ? `<span class="ah-was">normally ${esc(h.normal_label)}</span>` : ''}
+    <div class="ah2-hero" style="--tone:${c}">
+      <div class="ah2-when">
+        <div><span class="ah2-k">Meets</span><b class="ah2-big">${esc(h.cadence_label)}</b>
+          ${h.changed ? `<span class="ah2-was">normally ${esc(h.normal_label)}</span>` : ''}</div>
+        <div><span class="ah2-k">Next</span><b class="ah2-big ah2-next">${esc(h.next_label.replace(/ UTC$/, ''))}</b>
+          <span class="ah2-was">UTC</span></div>
       </div>
-      <div class="ah-cadence">
-        <span class="ah-k">Next</span>
-        <span class="ah-v">${esc(h.next_label)}</span>
-        <span class="ah-was">${esc(h.change)}</span>
-      </div>
-      ${checks ? `<table class="ah-checks">${checks}</table>` : ''}
-      <div class="ah-people"><span class="ah-k">In the room</span>${people}</div>
+      <div class="ah2-cal" aria-label="The next two weeks">${cells}</div>
+      <div class="ah2-rule"><i></i>${esc(h.change)}</div>
     </div>
-    ${keyAccountsHTML()}
-    ${cards}
+    ${bars ? `<section class="ah2-sec"><div class="ah2-title">Why: ${crossed} of ${checks.length} limits crossed</div>${bars}</section>` : ''}
+    <section class="ah2-sec"><div class="ah2-title">In the room <span class="muted">· click a row for its list</span></div>${keyAccountsHTML()}${rows}</section>
     <p class="ah-foot">Proposals only. Nothing is booked or approved.</p>`;
   host.querySelectorAll('li[data-route]').forEach((li) => {
     const go = () => {
@@ -1630,14 +1662,22 @@ async function loadSignals() {
 function keyAccountsHTML() {
   const rows = (state.board && state.board.key_accounts) || [];
   if (!rows.length) return '';
-  return `<section class="ah-card ah-keys-card">
-    <div class="ah-card-head"><b>★ Key accounts at risk</b><span>served first</span></div>
+  // Read out first in the room, so the first one is on the button; the list
+  // opens on a click.
+  const first = rows[0];
+  return `<details class="ah2-fn ah-keys-card">
+    <summary>
+      <span class="ah2-ini ah2-ini--key">★</span>
+      <span class="ah2-who"><b>Key accounts at risk: ${rows.length}</b><span class="muted">served first</span></span>
+      <span class="ah2-sum">${esc(first.customer)} · ${first.lead_time_hours == null ? 'no deadline' : `decide ${inHours(first.lead_time_hours)}`}</span>
+      <span class="ah2-open" aria-hidden="true">▸</span>
+    </summary>
     <ul class="ah-items">${rows.map((k) => `
       <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0" title="${esc(k.route)}">
         <span class="ah-text"><b>${esc(k.customer)}</b> · ${k.lead_time_hours == null ? 'no deadline' : `decide ${inHours(k.lead_time_hours)}`}</span>
         <span class="ah-detail">${esc(k.action || 'no option worth its cost')} · order ${esc(k.shipment_id)} · ${esc(siteName(k.site))}</span>
       </li>`).join('')}</ul>
-  </section>`;
+  </details>`;
 }
 
 /* Carriers pushing out orders — the signal Sika said arrives before any
