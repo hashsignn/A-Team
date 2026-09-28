@@ -150,6 +150,18 @@
 
       <!-- No legend: the ladder in the top bar is the board's one key. This
            line appears only when the basemap had to fall back or go offline. -->
+      <!-- Unusual volume: routes whose flow had a burst of small orders — the
+           sign Sika sees about a week before a crisis. Blue, the ladder's
+           "watch" colour; the list and the route say the same. -->
+      <button type="button" class="volume-btn only-map" id="btn-volume"
+              aria-expanded="false" aria-controls="volume-panel" hidden>
+        <span class="volume-dot" aria-hidden="true"></span>
+        <span class="volume-label">Unusual volume</span>
+        <span class="volume-count" id="volume-count">0</span>
+      </button>
+      <div class="volume-panel only-map" id="volume-panel" role="dialog"
+           aria-label="Unusual order volume" hidden></div>
+
       <div class="map-note only-map" id="map-note" hidden></div>
       <div class="map-tip only-map" id="map-tip" hidden></div>
       <div class="map-busy only-map" id="map-busy" hidden>Loading assets…</div>

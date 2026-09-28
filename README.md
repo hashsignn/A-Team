@@ -1832,6 +1832,22 @@ weeks, on the machine that has the export; nothing it prints is committed.
 Bursts also follow year-end ordering and campaigns, so a burst is a reason
 to look, not a verdict.
 
+**On the map it is blue**, the ladder's *Watch* colour, so it reads as "look
+here" and not as the route's own level:
+
+- Every route whose flow had a burst gets a blue glow along its path and an
+  **↑ 7.2× orders** chip at its origin. Clicking the chip frames the route.
+- The **Unusual volume** button (top left of the map) counts those routes
+  under the current site and customer filter. It opens a panel with one card
+  per route:
+  - the burst day's orders against a usual day, as two bars;
+  - how far above normal it is, and what share of the orders were smaller
+    than usual;
+  - the sentence the route itself carries, and *Show route*.
+- *Show on map* in the panel hides the layer.
+- Agents use `MapAgent.volumeSignals()` and
+  `MapAgent.showVolumeSignals({show, open})`.
+
 ## Open questions for Sika
 
 1. ~~Do your contracts actually carry delay penalties?~~ **Answered

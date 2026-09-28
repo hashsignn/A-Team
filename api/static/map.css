@@ -493,3 +493,108 @@
 .jm--quiet .jm-label { display: none; }
 .jm--flip .jm-label { position: absolute; right: calc(100% + 6px); }
 .jm:hover .jm-label { display: block; position: relative; z-index: 2; }
+
+/* ------------------------------------------------------- unusual volume
+ * Blue is the ladder's "watch": look at this route, ask the site. The button
+ * sits top-left, clear of the view switch and the zoom controls. */
+.volume-btn {
+  position: absolute; z-index: 4; top: 18px; left: 18px;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 11px; border-radius: 9px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-1) 90%, transparent);
+  backdrop-filter: blur(6px);
+  font: inherit; font-size: 11.5px; color: var(--text-secondary); cursor: pointer;
+}
+.volume-btn[hidden] { display: none; }
+.volume-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted); flex: 0 0 auto;
+}
+.volume-count {
+  min-width: 18px; padding: 0 5px; border-radius: 9px; text-align: center;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  background: var(--surface-2); color: var(--muted);
+}
+.volume-btn.has-raised { border-color: var(--lvl-blue); color: var(--text-primary); }
+.volume-btn.has-raised .volume-dot {
+  background: var(--lvl-blue);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--lvl-blue) 55%, transparent);
+  animation: volume-pulse 2.2s ease-out infinite;
+}
+.volume-btn.has-raised .volume-count { background: var(--lvl-blue); color: #fff; }
+.volume-btn.is-open { background: var(--surface-1); }
+@keyframes volume-pulse {
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .volume-btn .volume-dot { animation: none; } }
+
+.volume-panel {
+  position: absolute; z-index: 5; top: 56px; left: 18px;
+  width: min(340px, calc(100% - 36px));
+  max-height: calc(100% - 110px); overflow: auto;
+  padding: 12px 13px; border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-1) 94%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  font-size: 12px;
+}
+.volume-panel[hidden] { display: none; }
+.vp-head { display: flex; align-items: center; justify-content: space-between; }
+.vp-head h3 { margin: 0; font-size: 14px; }
+.vp-close {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px;
+}
+.vp-lede { margin: 4px 0 8px; color: var(--text-secondary); line-height: 1.45; }
+.vp-toggle { display: inline-flex; gap: 6px; align-items: center; margin-bottom: 8px; color: var(--text-secondary); }
+.vp-list { display: grid; gap: 8px; }
+.vp-empty { color: var(--muted); margin: 6px 0; }
+.vp-rule { margin: 10px 0 0; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
+
+.surge-card {
+  padding: 9px 10px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.surge-card.is-focus { box-shadow: 0 0 0 1.5px var(--lvl-blue) inset; }
+.surge-card header { display: flex; justify-content: space-between; align-items: baseline; }
+.surge-kind {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.surge-ratio { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+.surge-card h4 { margin: 2px 0 6px; font-size: 12.5px; line-height: 1.35; }
+.surge-traits { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
+.surge-traits li { color: var(--muted); line-height: 1.4; }
+.surge-traits li span { display: inline-block; width: 12px; }
+.surge-traits li.is-met { color: var(--text-primary); }
+.surge-traits li.is-met span { color: var(--lvl-blue); font-weight: 700; }
+.surge-reading { margin: 0 0 6px; color: var(--text-secondary); line-height: 1.45; }
+.surge-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.surge-show {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  padding: 4px 10px; border-radius: 7px;
+  border: 1px solid var(--lvl-blue); color: var(--lvl-blue); background: transparent;
+}
+.surge-syn { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
+
+.surge-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 8px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--lvl-blue); color: #fff;
+  font: inherit; font-size: 11px; font-weight: 700; white-space: nowrap;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--lvl-blue) 45%, transparent);
+  z-index: 3;   /* above the vehicle clusters at the same origin */
+}
+.surge-card { border-color: color-mix(in srgb, var(--lvl-blue) 60%, var(--border)); }
+.surge-card .surge-kind, .surge-card .surge-ratio { color: var(--lvl-blue); }
+.vb { display: grid; gap: 4px; margin: 2px 0 8px; }
+.vb-row { display: grid; grid-template-columns: 78px 1fr 28px; gap: 8px; align-items: center; }
+.vb-k { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vb-track { height: 8px; border-radius: 4px; background: var(--surface-1); overflow: hidden; }
+.vb-fill { display: block; height: 100%; border-radius: 4px; }
+.vb-usual { background: var(--border-strong); }
+.vb-now { background: var(--lvl-blue); }
+.vb-n { font-family: var(--mono); font-size: 11px; text-align: right; }

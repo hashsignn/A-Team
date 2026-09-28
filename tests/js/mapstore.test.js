@@ -21,7 +21,11 @@ function fakeServer(overrides = {}) {
   const assets = {
     as_of: '2026-09-18T06:00:00+00:00',
     counts: { green: 1, yellow: 1, red: 1 },
-    lanes: [{ route_id: 'L1', path: [[50, 7]] }, { route_id: 'L2', path: [[51, 4]] }],
+    lanes: [
+      { route_id: 'L1', path: [[50, 7]], early_warning: { flow: 'CH_CN', day: '2026-09-11', orders: 9, usual: 1.2, times: 7.2, small_share: 0.8 } },
+      { route_id: 'L2', path: [[51, 4]] },
+    ],
+    order_signals: { rule: '4+ orders in one day', synthetic: true },
     meta: { basemap: { tiles: [] } },
     assets: [
       { id: 'A', status: 'red', phase: 'in_transit', lat: 50, lon: 7, mode: 'barge', lane_id: 'L1', customer_priority: 'A' },
@@ -238,4 +242,20 @@ test('an opened route stands alone until it is closed', async () => {
   st = agent.getState();
   assert.equal(select.visibleLanes(st).length, 2);
   assert.equal(select.visibleAssets(st).length, all);
+});
+
+test('unusual volume: the warned routes arrive with the assets, the layer and panel toggle', async () => {
+  const { agent } = setup();
+  await agent.loadAssets({ as_of: '2026-09-18T06:00:00Z' });
+  const warned = await agent.volumeSignals();
+  assert.deepEqual(warned.map((w) => [w.route_id, w.times]), [['L1', 7.2]]);
+  assert.equal(agent.getState().assets.orders.synthetic, true);
+  assert.deepEqual(agent.getState().volume, { show: true, open: false });
+  await agent.showVolumeSignals({ open: true }, { actor: 'LAYA' });
+  await agent.showVolumeSignals({ show: false });
+  assert.deepEqual(agent.getState().volume, { show: false, open: true });
+  const before = agent.getState();
+  await agent.showVolumeSignals({ show: false });   // no change, same state object
+  assert.equal(agent.getState(), before);
+  assert.ok(agent.journal().some((j) => j.actor === 'LAYA' && j.summary === 'unusual volume'));
 });

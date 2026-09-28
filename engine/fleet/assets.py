@@ -314,9 +314,13 @@ def fleet_assets(board: dict, context: RunContext) -> dict:
                 "name": r["name"],
                 "level": r["level"],
                 "path": [[p[0], p[1]] for leg in r["legs"] for p in leg["path"]],
+                # A burst of small orders on this route's flow (engine/ingest/
+                # bursts.py): the map's blue "unusual volume" layer.
+                "early_warning": r.get("early_warning"),
             }
             for r in board["routes"]
         ],
+        "order_signals": _order_signals(board),
         "meta": {
             "status_colours": cfg["status"]["colours"],
             "status_labels": STATUS_LABEL,
@@ -701,3 +705,16 @@ def remaining_legs(context: RunContext, shipment: Shipment, where: dict) -> list
 
 def point_of(entry: dict) -> Point:
     return Point(entry["lat"], entry["lon"])
+
+
+def _order_signals(board: dict) -> dict | None:
+    """What the map's unusual-volume panel needs besides the routes: the rule
+    and whether the order book is Sika's or the sample."""
+    signals = board.get("order_signals")
+    if not signals:
+        return None
+    return {
+        "rule": signals.get("rule"),
+        "synthetic": bool(signals.get("synthetic")),
+        "as_of": signals.get("as_of"),
+    }

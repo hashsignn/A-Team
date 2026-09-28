@@ -174,6 +174,7 @@
     const view = {
       map: null, ready: false, prev: null,
       clusters: new Map(), routeMarkers: [], vendorMarkers: new Map(), branchMarkers: [],
+      surgeMarkers: [],
       hazard: null, fittedFor: null,
       // Which basemap provider is drawing, and how it is going. `refused`
       // names the ones given up on, for the legend.
@@ -409,6 +410,7 @@
       map.addSource('original', { type: 'geojson', data: empty });
       map.addSource('alts', { type: 'geojson', data: empty });
       map.addSource('split', { type: 'geojson', data: empty });
+      map.addSource('surges', { type: 'geojson', data: empty });
       map.addSource('assets', {
         type: 'geojson', data: empty, cluster: true,
         clusterRadius: 46, clusterMaxZoom: CLUSTER_MAX_ZOOM,
@@ -424,6 +426,14 @@
       map.addLayer({ id: 'lanes', type: 'line', source: 'lanes',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': tokenOf('--map-lane'), 'line-width': 1.1, 'line-opacity': 0.35 } });
+      // Unusual volume, in the ladder's blue ("watch"): a soft glow and a
+      // line along every route whose flow had a burst of small orders.
+      map.addLayer({ id: 'surge-glow', type: 'line', source: 'surges',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': tokenOf('--lvl-blue'), 'line-width': 10, 'line-opacity': 0.16, 'line-blur': 3 } });
+      map.addLayer({ id: 'surge-line', type: 'line', source: 'surges',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': tokenOf('--lvl-blue'), 'line-width': 2.6, 'line-opacity': 0.9 } });
       map.addLayer({ id: 'radius-fill', type: 'fill', source: 'radius',
         paint: { 'fill-color': tokenOf('--accent'), 'fill-opacity': 0.05 } });
       map.addLayer({ id: 'radius-line', type: 'line', source: 'radius',
@@ -606,8 +616,14 @@
       const force = opts && opts.force;
       if (!prev || force || state.view !== prev.view) applyView(state.view);
       renderLegend(state);
+      const volumeChanged = force || !prev || state.assets.lanes !== prev.assets.lanes
+        || state.assets.orders !== prev.assets.orders || state.volume !== prev.volume
+        || state.focusLane !== prev.focusLane || state.isolated !== prev.isolated
+        || state.filters.lanes !== prev.filters.lanes;
+      if (volumeChanged) renderVolumePanel(state);
       if (!view.ready) return;
       const map = view.map;
+      if (volumeChanged) renderVolumeLayer(state);
 
       if (force || !prev || state.assets.meta !== prev.assets.meta) ensureBasemap(state.assets.meta);
 
@@ -668,8 +684,11 @@
       const shown = map.getBounds();
       if (shown.contains(b.getSouthWest()) && shown.contains(b.getNorthEast())) return;
       const legend = $('map-legend');
+      // An open volume panel covers the left of the map; frame beside it.
+      const panel = $('volume-panel');
+      const left = panel && !panel.hidden ? panel.offsetWidth + 40 : 50;
       map.fitBounds(b, {
-        padding: { top: 70, left: 50, right: 80, bottom: legend ? legend.offsetHeight + 40 : 60 },
+        padding: { top: 70, left, right: 80, bottom: legend ? legend.offsetHeight + 40 : 60 },
         maxZoom: 6, duration: 600,
       });
     }
@@ -847,6 +866,120 @@
      * status. What remains is a one-line note, shown only when the basemap
      * fell back to another provider or to the offline outlines — something
      * a planner cannot see for themselves. */
+    // ---------------------------------------------------------------
+    // Unusual volume — a burst of small orders on a route's flow
+    // (engine/ingest/bursts.py): the sign Sika sees a week before a crisis
+    // ---------------------------------------------------------------
+    /* The routes with a warning, under the board's own filters (site,
+     * customers) but not the isolation of one open route: the count on the
+     * button should not change because a route was opened. */
+    function warnedLanes(state) {
+      const keep = state.filters.lanes ? new Set(state.filters.lanes) : null;
+      return state.assets.lanes.filter((l) => l.early_warning && (!keep || keep.has(l.route_id)));
+    }
+
+    function renderVolumeLayer(state) {
+      const map = view.map;
+      clearMarkers(view.surgeMarkers);
+      const shown = state.volume.show ? select.visibleLanes(state).filter((l) => l.early_warning) : [];
+      map.getSource('surges').setData(fc(shown.map((l) => line(l.path, { id: l.route_id }))));
+      shown.filter((l) => l.path.length).forEach((l) => {
+        const w = l.early_warning;
+        const node = document.createElement('button');
+        node.type = 'button';
+        node.className = 'surge-chip';
+        node.dataset.lane = l.route_id;
+        node.title = w.sentence;
+        node.innerHTML = `<span aria-hidden="true">↑</span> ${esc(w.times != null ? `${w.times}×` : `${w.orders}`)} orders`;
+        node.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          agent.showVolumeSignals({ open: true });
+          agent.focusLane(l.route_id, undefined, { fit: true });
+        });
+        const [lat, lon] = l.path[0];
+        const m = new root.maplibregl.Marker({ element: node, anchor: 'bottom', offset: [0, -24] })
+          .setLngLat([lon, lat]).addTo(map);
+        view.surgeMarkers.push(m);
+      });
+    }
+
+    /* Two bars, the usual day and the burst day, so "5.2×" is something the
+     * eye can check rather than a number to take on trust. */
+    function compareBars(w) {
+      const top = Math.max(w.orders, w.usual || 0, 1);
+      const bar = (n, cls, label) => `
+        <div class="vb-row"><span class="vb-k">${esc(label)}</span>
+          <span class="vb-track"><span class="vb-fill ${cls}" style="width:${Math.max(2, (n / top) * 100).toFixed(0)}%"></span></span>
+          <span class="vb-n">${esc(n)}</span></div>`;
+      return `<div class="vb">${bar(w.usual, 'vb-usual', 'Usual day')}${bar(w.orders, 'vb-now', w.day)}</div>`;
+    }
+
+    function renderVolumePanel(state) {
+      const btn = $('btn-volume');
+      const panel = $('volume-panel');
+      if (!btn || !panel) return;
+      const orders = state.assets.orders;
+      const lanes = warnedLanes(state);
+      btn.hidden = !orders;
+      if (!orders) { panel.hidden = true; return; }
+      $('volume-count').textContent = String(lanes.length);
+      btn.classList.toggle('has-raised', lanes.length > 0);
+      btn.classList.toggle('is-open', state.volume.open);
+      btn.setAttribute('aria-expanded', String(state.volume.open));
+      btn.title = lanes.length
+        ? `${lanes.length} route(s) whose flow had a burst of small orders`
+        : 'No burst of small orders in the last days';
+      panel.hidden = !state.volume.open;
+      if (!state.volume.open) return;
+
+      const card = (l) => {
+        const w = l.early_warning;
+        const ago = w.days_ago === 0 ? 'today' : w.days_ago === 1 ? 'yesterday' : `${w.days_ago} days ago`;
+        return `
+          <article class="surge-card${l.route_id === state.focusLane ? ' is-focus' : ''}" data-lane="${esc(l.route_id)}">
+            <header>
+              <span class="surge-kind">Unusual volume · ${esc(ago)}</span>
+              <span class="surge-ratio">${w.times != null ? `${esc(w.times)}×` : ''}</span>
+            </header>
+            <h4>${esc(l.name)}</h4>
+            ${compareBars(w)}
+            <ul class="surge-traits">
+              <li class="is-met"><span aria-hidden="true">✓</span><b>Many</b>
+                ${esc(w.orders)} orders in one day against a usual ${esc(w.usual)} (${esc(w.z)} spreads above)</li>
+              <li class="is-met"><span aria-hidden="true">✓</span><b>Small</b>
+                ${esc(Math.round(w.small_share * 100))}% smaller than usual${w.size_ratio != null
+                  ? `, median ${esc(Math.round(w.size_ratio * 100))}% of the usual size` : ''}</li>
+            </ul>
+            <p class="surge-reading">${esc(w.sentence)}</p>
+            <div class="surge-foot">
+              <button type="button" class="surge-show" data-lane="${esc(l.route_id)}">Show route</button>
+              <span class="surge-syn">${esc(String(w.flow || '').replace('_', ' → '))}${w.synthetic ? ' · sample orders' : ''}</span>
+            </div>
+          </article>`;
+      };
+      panel.innerHTML = `
+        <header class="vp-head">
+          <h3>Unusual volume</h3>
+          <button type="button" class="vp-close" aria-label="Close">×</button>
+        </header>
+        <p class="vp-lede">A burst of small orders on a flow — sites and customers who have
+          heard something sending early, in whatever size is ready. Sika sees it about a
+          week before a crisis. The route is held at least at Bias while it lasts.</p>
+        <label class="vp-toggle"><input type="checkbox" id="vp-show" ${state.volume.show ? 'checked' : ''}>
+          Show on map</label>
+        <div class="vp-list">
+          ${lanes.length ? lanes.map(card).join('')
+            : '<p class="vp-empty">No flow has had a burst of small orders in the last days.</p>'}
+        </div>
+        <p class="vp-rule">Rule: ${esc(orders.rule || '')}.${orders.synthetic
+          ? ' Sample order history — run scripts/import_sika_flows.py to read Sika’s own.' : ''}</p>`;
+      panel.querySelector('.vp-close').addEventListener('click', () => agent.showVolumeSignals({ open: false }));
+      panel.querySelector('#vp-show').addEventListener('change', (e) =>
+        agent.showVolumeSignals({ show: e.target.checked }));
+      panel.querySelectorAll('.surge-show').forEach((b) => b.addEventListener('click', () =>
+        agent.focusLane(b.dataset.lane, undefined, { fit: true })));
+    }
+
     function renderLegend(state) {
       const busy = $('map-busy');
       if (busy) {
@@ -893,6 +1026,8 @@
         for (const [k, v] of Object.entries(rasterPaint())) map.setPaintProperty('basemap', k, v);
       }
       map.setPaintProperty('lanes', 'line-color', tokenOf('--map-lane'));
+      map.setPaintProperty('surge-glow', 'line-color', tokenOf('--lvl-blue'));
+      map.setPaintProperty('surge-line', 'line-color', tokenOf('--lvl-blue'));
       map.setPaintProperty('route-original', 'line-color', tokenOf('--map-original'));
       map.setPaintProperty('alt-casing', 'line-color', tokenOf('--map-casing'));
       map.setPaintProperty('split-casing', 'line-color', tokenOf('--map-casing'));
@@ -908,6 +1043,9 @@
     // ---------------------------------------------------------------
     document.querySelectorAll('.viewswitch button').forEach((b) =>
       b.addEventListener('click', () => agent.setView(b.dataset.view)));
+    const volumeBtn = $('btn-volume');
+    if (volumeBtn) volumeBtn.addEventListener('click', () =>
+      agent.showVolumeSignals({ open: !store.getState().volume.open }));
 
     const topbar = document.querySelector('.topbar');
     const measure = () => {

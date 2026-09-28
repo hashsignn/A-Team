@@ -263,6 +263,18 @@
       return Promise.resolve(s().filters);
     }
 
+    /* Unusual volume: routes whose flow had a burst of small orders — the
+     * sign Sika sees about a week before a crisis. Drawn in blue. */
+    function showVolumeSignals(patch, m) {
+      store.dispatch({ type: T.VOLUME_SET, patch: patch || {}, meta: meta(m, 'unusual volume') });
+      return Promise.resolve(s().volume);
+    }
+    function volumeSignals() {
+      return Promise.resolve(s().assets.lanes
+        .filter((l) => l.early_warning)
+        .map((l) => ({ route_id: l.route_id, name: l.name, ...l.early_warning })));
+    }
+
     const HOOKS = [
       ['loadAssets', 'Load every asset for a board instant.', { as_of: 'ISO-8601 instant, optional', shipments: 'book size, optional' }],
       ['selectAsset', 'Open the Action Hub for an asset; for yellow/red also calculates recovery routes and queries partners.', { id: 'shipment id, e.g. SYN-0001' }],
@@ -278,6 +290,8 @@
       ['selectVendor', 'Open a partner card (null closes it).', { vendorId: 'partner id' }],
       ['focusLane', 'Highlight a lane on the map; {fit: true} as the third argument also frames it, {isolate: true} hides every other lane.', { routeId: 'lane id' }],
       ['setView', "Switch the left pane between 'map' and 'globe'.", { view: "'map' | 'globe'" }],
+      ['showVolumeSignals', 'Show or hide the blue unusual-volume layer, and open or close its panel.', { patch: '{show?: boolean, open?: boolean}' }],
+      ['volumeSignals', 'List the routes whose flow had a burst of small orders: day, orders against the usual, share smaller than usual.', {}],
       ['setFilter', 'Filter assets by status, lane or customer tier, or include booked freight.', { patch: '{showBooked?, statuses?: {green,yellow,red}, lanes?: [lane ids] | null, priorities?: [A|B|C] | null}' }],
     ];
 
@@ -297,6 +311,7 @@
       toggleSplit, splitShipment, assignContainers,
       queryVendors, selectVendor,
       focusLane, setView, setFilter,
+      showVolumeSignals, volumeSignals,
       getState: () => store.getState(),
       subscribe: (fn) => store.subscribe(fn),
       journal: () => store.getState().journal.slice(),

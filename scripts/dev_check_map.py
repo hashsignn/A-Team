@@ -126,6 +126,33 @@ def main() -> int:
         check(page.locator(".maplibregl-ctrl-compass").count() == 1,
               "[controls] no reset-bearing compass", "zoom + compass (reset bearing) controls")
 
+        # ---- unusual volume: a burst of small orders on a route's flow ----
+        volume = page.evaluate("""(() => { const s = MapAgent.getState();
+            return s.assets.orders ? s.assets.lanes.filter(l => l.early_warning).length : null; })()""")
+        check(volume is not None, "[volume] the map payload carries no order signals",
+              f"unusual volume: {volume} route(s) with a burst of small orders")
+        if volume:
+            count = page.inner_text("#volume-count").strip()
+            check(count == str(volume), f"[volume] button says {count}, payload says {volume}",
+                  "the Unusual volume button counts the warned routes")
+            lines = page.evaluate("""new Set(window.__fleetmap.querySourceFeatures('surges')
+                .map(f => f.properties.id)).size""")
+            check(lines == volume, f"[volume] {lines} blue lines for {volume} routes",
+                  f"{lines} route(s) drawn in blue, with a chip at the origin")
+            check(page.locator(".surge-chip").count() == volume,
+                  "[volume] chip count does not match", "one ↑× orders chip per warned route")
+            page.click("#btn-volume")
+            page.wait_for_selector(".surge-card", timeout=5_000)
+            check(page.locator(".surge-card").count() == volume,
+                  "[volume] panel does not list every warned route", "the panel lists every warned route")
+            page.uncheck("#vp-show")
+            page.wait_for_timeout(300)
+            gone = page.evaluate("window.__fleetmap.querySourceFeatures('surges').length") == 0
+            check(gone and page.locator(".surge-chip").count() == 0,
+                  "[volume] 'Show on map' off left the layer drawn", "the blue layer hides on request")
+            page.check("#vp-show")
+            page.click(".vp-close")
+
         # ---- reset bearing and view --------------------------------------
         page.evaluate("window.__fleetmap.jumpTo({bearing: 40})")
         page.locator(".maplibregl-ctrl-compass").click()

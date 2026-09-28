@@ -49,6 +49,7 @@
     VENDORS_SUCCESS: 'map/vendors/success',
     VENDORS_FAILURE: 'map/vendors/failure',
     VENDOR_SELECT: 'map/vendor/select',
+    VOLUME_SET: 'map/volume/set',
   };
 
   const JOURNAL_MAX = 200;
@@ -59,8 +60,11 @@
       params: { as_of: null, shipments: '150' },
       assets: {
         status: 'idle', seq: 0, items: [], byId: {}, counts: null,
-        lanes: [], meta: null, asOfLabel: null, error: null,
+        lanes: [], meta: null, asOfLabel: null, error: null, orders: null,
       },
+      // The blue "unusual volume" layer: routes whose flow had a burst of
+      // small orders. show: drawn on the map; open: the panel listing them.
+      volume: { show: true, open: false },
       // lanes: the routes the board's own filters leave (site, customers,
       // levels) — null is every lane. priorities: customer tiers to show
       // (desk.yaml), null is all. One mechanism, so the map and the list
@@ -123,6 +127,7 @@
             ...state.assets, status: 'ready', items, byId,
             counts: a.payload.counts || null, lanes: a.payload.lanes || [],
             meta: a.payload.meta || null, asOfLabel: a.payload.as_of_label || null,
+            orders: a.payload.order_signals || null,
             error: null,
           },
         };
@@ -144,6 +149,13 @@
             statuses: { ...state.filters.statuses, ...(a.patch.statuses || {}) },
           },
         };
+
+      case T.VOLUME_SET: {
+        const show = a.patch.show != null ? !!a.patch.show : state.volume.show;
+        const open = a.patch.open != null ? !!a.patch.open : state.volume.open;
+        if (show === state.volume.show && open === state.volume.open) return state;
+        return { ...state, volume: { show, open } };
+      }
 
       case T.LANE_FOCUS: {
         const fit = a.fit && a.routeId
