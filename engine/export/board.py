@@ -344,6 +344,8 @@ def _real_data(lane: dict, context: RunContext) -> dict:
         "origin": dict(route.origin),
         "port": dict(route.port),
         "destination": dict(route.destination),
+        "trade_records": list(route.trade_records),
+        "trade_sources": list(route.trade_sources),
         "precarriage": _precarriage(lane, context),
         "flow": route.sika_flow,
         # Read from the gitignored flow file on this machine, or None.

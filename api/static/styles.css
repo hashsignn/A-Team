@@ -2927,3 +2927,8 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
   .pen-chip { gap: 6px; padding: 6px 11px; }
   .pen-chip .pen-long, .pen-chip b { display: none; }
 }
+
+/* What public customs records show for a focus flow. */
+.rt-trade { margin: 4px 0 12px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; }
+.rt-trade ul { margin: 4px 0 6px; padding-left: 18px; display: grid; gap: 2px; }
+.rt-trade .muted a { color: inherit; }

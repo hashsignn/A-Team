@@ -291,7 +291,16 @@ function renderReal(v) {
     ? `<li><span class="muted">Sika export</span> <b>${Number(d.flow_documents).toLocaleString('en-US')} documents</b>
         ${esc((d.flow || '').replace('_', ' → '))} <span class="muted">(this machine only)</span></li>`
     : '';
-  const chosen = `<ul class="rt-facts">${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${volume}</ul>
+  // What public customs records show for this flow, one line each, with the
+  // pages they were read from.
+  const trade = (d.trade_records || []).length ? `
+    <div class="rt-trade"><b>Customs records</b>
+      <ul>${d.trade_records.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+      <span class="muted">${(d.trade_sources || []).map((u) => safeUrl(u))
+        .filter(Boolean).map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(new URL(u).hostname.replace(/^www\./, ''))}</a>`).join(' · ')}</span>
+    </div>` : '';
+  const chosen = `<ul class="rt-facts">${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${evidence('Received by', d.destination)}${volume}</ul>
+    ${trade}
     ${precarriageHTML(d.precarriage)}`;
   const sources = (d.sources || []).map((s) => `
     <li class="${s.real ? 'is-real' : 'is-not'}" title="${esc(s.detail || s.status)}">

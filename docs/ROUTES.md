@@ -12,7 +12,7 @@ came from; none is confirmed by Sika.
 | LANE_US_01 | Switzerland → US | Düdingen | Antwerp | truck to Basel, **rail** (Schweizerzug) |
 | LANE_MX_01 | Switzerland → Mexico | Düdingen | Antwerp | truck to Basel, **rail** (Schweizerzug) |
 | LANE_IN_01 | Switzerland → India | Düdingen | Genoa | truck to Basel, **rail** (Frenkendorf–Genoa) |
-| LANE_US_04 | Germany → US | Stuttgart | Rotterdam | **rail** from Kornwestheim |
+| LANE_US_04 | Germany → US | Stuttgart | Hamburg | **rail** from Kornwestheim (Metrans) |
 
 ## Where they start
 
@@ -67,7 +67,7 @@ to 15% of payload (barge freight ×2.2):
 | Düdingen → Rotterdam | CHF 2,165 | **CHF 1,098** | CHF 1,174 | barge | **rail**: barge now CHF 1,455 |
 | Düdingen → Antwerp | CHF 1,900 | CHF 1,108 | **CHF 1,123** | rail: a tie, and 54 h faster | rail |
 | Düdingen → Genoa | CHF 1,116 | — | **CHF 1,051** | rail | rail |
-| Stuttgart → Rotterdam | CHF 1,696 | CHF 965 | **CHF 788** | rail | rail |
+| Stuttgart → Hamburg | CHF 1,852 | — (no waterway) | **CHF 807** | rail | rail |
 
 The first row is the point of the prototype. The cheapest way from
 Switzerland to the North Sea is the Rhine, and the Rhine is what low water
@@ -78,9 +78,29 @@ The rail services each route depends on, from their operators' own pages:
 - **Schweizerzug** (Swissterminal): Antwerp to Frenkendorf and Niederglatt.
 - **Frenkendorf–Genoa-Pra'** (PSA Italy, Swissterminal): three a week,
   arriving the next day.
-- **Kornwestheim–Rotterdam shuttle** (Hupac).
+- **Kornwestheim–Hamburg** (Metrans, daily); the Hupac Kornwestheim–Rotterdam
+  shuttle is the fallback gateway.
 
 See `config.example/focus.yaml → operators` for the full list and sources.
+
+## Ports seen in US customs records
+
+US bills of lading are public, so the trade-data sites show where Sika's
+shipments to the US actually load. What their free pages show:
+- **Sika Deutschland → Sika Corporation:** loaded at **Hamburg** and
+  Bremerhaven, arriving at Norfolk, Philadelphia and New York/Newark
+  ([Panjiva](https://panjiva.com/Sika-Deutschland-GmbH/26111548)). Sika
+  Deutschland is Sika Corporation's top supplier, 8,708 shipments since 2012
+  ([ImportYeti](https://www.importyeti.com/company/sika)). So LANE_US_04 now
+  leaves by Hamburg, not Rotterdam.
+- **Sika Supply Center AG** (Sarnen, Switzerland: Sika's central supply
+  company) → Sika Corporation: Hamburg to Norfolk
+  ([Panjiva](https://panjiva.com/Sika-Supply-Center-AG/1267548)). Antwerp,
+  Rotterdam and Genoa also appear among Sika Corporation's ports of loading,
+  so LANE_US_01 keeps Antwerp; Hamburg is the alternative to confirm.
+- **India:** Sika Supply Center AG appears among Sika India's suppliers and
+  arrivals are at Nhava Sheva, matching LANE_IN_01.
+- **Mexico and China:** nothing public; the routes stay the likely ones.
 
 ## Not modelled
 

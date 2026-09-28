@@ -13,7 +13,7 @@
 # Mexico, Suez and the Red Sea, the Arabian Sea and Malacca.
 #
 #   flow    route here
-#   DE→US   LANE_US_04   Stuttgart → Rotterdam → Norfolk
+#   DE→US   LANE_US_04   Stuttgart → Hamburg → Norfolk
 #   CH→CN   LANE_ASIA_08 Düdingen → Basel → Rhine → Rotterdam → Suez → Shanghai
 #   CH→US   LANE_US_01   Düdingen → Antwerp → New York
 #   CH→MX   LANE_MX_01   Düdingen → Antwerp → Veracruz
@@ -44,8 +44,9 @@ focus_routes:
     sika_flow: DE_US
     why: >
       Rail from the Kornwestheim terminal next to Sika's Stuttgart site to
-      Rotterdam (the cheapest way to the port by far), then the North
-      Atlantic to Norfolk.
+      Hamburg (the cheapest way to the port by far), then the North
+      Atlantic to Norfolk: the port pair US customs records show for Sika
+      Deutschland's shipments to Sika Corporation.
     origin:
       site: "Sika Deutschland, Stuttgart: head office, research centre and production"
       source: https://deu.sika.com/de/ueber-sika/wie-sie-uns-finden/standorte.html
@@ -54,9 +55,24 @@ focus_routes:
         Stuttgart is Sika Deutschland's main production site; Bad Urach is the
         other.
     port:
-      name: Rotterdam
-      basis: "The largest North Sea port, with a rail shuttle from Kornwestheim."
-      source: https://www.railfreight.com/business/2018/01/05/hupac-launches-rotterdam-stuttgart-shuttle/
+      name: Hamburg
+      basis: >-
+        US customs bills of lading for Sika Deutschland's shipments to Sika
+        Corporation name Hamburg and Bremerhaven as the ports of loading and
+        Norfolk, Philadelphia and New York as the ports of arrival. Metrans
+        runs a daily container train from Kornwestheim to Hamburg.
+      source: https://panjiva.com/Sika-Deutschland-GmbH/26111548
+    # What public US customs records show for this flow (bills of lading are
+    # public in the US; the counts are the trade-data sites' own).
+    trade_records:
+      - "Sika Corporation: 11,786 US bills of lading, 2012 to May 2026; top supplier Sika Deutschland (Germany), 8,708 shipments (ImportYeti)"
+      - "Sika Deutschland to US: loaded at Hamburg and Bremerhaven; arrivals at Norfolk, Philadelphia, New York/Newark (Panjiva)"
+      - "Sika Supply Center AG (Sarnen, CH) to Sika Corporation: Hamburg to Norfolk (Panjiva)"
+    trade_sources:
+      - https://www.importyeti.com/company/sika
+      - https://panjiva.com/Sika-Deutschland-GmbH/26111548
+      - https://panjiva.com/Sika-Supply-Center-AG/1267548
+      - https://www.hafen-hamburg.de/en/press1/news/metrans-improves-connection-between-south-west-german-industrial-region-and-hamburg/
     destination:
       site: "Sika Corporation, Lyndhurst NJ: Sika USA head office"
       lat: 40.812
@@ -187,6 +203,7 @@ focus_routes:
 # rough position a planner can check on a chart; the board names it.
 marine_points:
   NLRTM:         {lat: 51.98, lon: 3.95,   name: "Maasmond approach"}
+  DEHAM:         {lat: 53.95, lon: 8.35,   name: "Elbe mouth off Cuxhaven"}
   BEANR:         {lat: 51.42, lon: 3.45,   name: "Scheldt mouth off Vlissingen"}
   USNYC:         {lat: 40.45, lon: -73.83, name: "Ambrose Channel approach"}
   USORF:         {lat: 36.95, lon: -75.95, name: "Chesapeake Bay entrance"}
@@ -267,6 +284,17 @@ operators:
     note: "Export cut-off 17:00 on Mondays, Wednesdays and Fridays in Frenkendorf, in Genoa at 11:00 the next day (Swissterminal; PSA Italy announced it as the first direct rail link between Genoa and Switzerland). Cheaper than trucking over the Simplon."
 
   # ---- rail from Stuttgart ------------------------------------------
+  - name: "Metrans: Kornwestheim–Hamburg"
+    role: intermodal rail operator (HHLA group)
+    legs: Stuttgart (Kornwestheim) → Hamburg, Bremerhaven
+    routes: [LANE_US_04]
+    near: SIKA_STU
+    modes: [rail]
+    website: https://www.metrans.eu/
+    source: https://www.hafen-hamburg.de/en/press1/news/metrans-improves-connection-between-south-west-german-industrial-region-and-hamburg/
+    checked: 2026-09-28
+    note: "A daily container train both ways between Kornwestheim and Hamburg, with onward links to Bremerhaven and Wilhelmshaven (Port of Hamburg). The rail alternative to 660 km of trucking."
+
   - name: "Hupac: Kornwestheim–Rotterdam shuttle"
     role: intermodal rail operator
     legs: Stuttgart (Kornwestheim) → Rotterdam
@@ -276,7 +304,7 @@ operators:
     website: https://www.hupac.com/
     source: https://www.railfreight.com/business/2018/01/05/hupac-launches-rotterdam-stuttgart-shuttle/
     checked: 2026-09-26
-    note: "Launched in 2018 from the DUSS terminal at Kornwestheim on Mondays, Wednesdays and Fridays (RailFreight). Confirm it still runs in Hupac's Shuttle Net timetable before booking."
+    note: "The fallback gateway: from the DUSS terminal at Kornwestheim to Rotterdam, Mondays, Wednesdays and Fridays since 2018 (RailFreight). Confirm it still runs before booking."
 
   # ---- rail out of Antwerp, and across the Alps ---------------------
   - name: "Hupac: Antwerp network"
@@ -304,9 +332,9 @@ operators:
   # ---- North Atlantic ------------------------------------------------
   - name: "Maersk / Hapag-Lloyd: Gemini TA3"
     role: ocean carriers (Gemini Cooperation)
-    legs: Rotterdam → Newark → Norfolk
+    legs: Rotterdam / Hamburg → Newark → Norfolk
     routes: [LANE_US_04]
-    near: NLRTM
+    near: DEHAM
     modes: [sea]
     website: https://www.hapag-lloyd.com/en/services-information/gemini-cooperation.html
     source: https://www.freightwaves.com/news/maersk-hapag-lloyd-drop-east-coast-city-from-trans-atlantic-services

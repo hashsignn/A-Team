@@ -65,6 +65,10 @@ class FocusRoute:
     # The Sika company that receives the goods at the far end, found the
     # same way (the export names it by country code only).
     destination: dict = field(default_factory=dict)
+    # What public customs records show for this flow (US bills of lading are
+    # public), and where each line was read. Empty where nothing is public.
+    trade_records: tuple[str, ...] = field(default_factory=tuple)
+    trade_sources: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _plain(entry: dict) -> dict:
@@ -114,6 +118,8 @@ def focus_routes(config: Config) -> dict[str, FocusRoute]:
             port=_plain(entry["port"]) if isinstance(entry.get("port"), dict) else {},
             destination=(_plain(entry["destination"])
                          if isinstance(entry.get("destination"), dict) else {}),
+            trade_records=tuple(" ".join(str(x).split()) for x in entry.get("trade_records") or []),
+            trade_sources=tuple(str(x).strip() for x in entry.get("trade_sources") or []),
         )
     return out
 

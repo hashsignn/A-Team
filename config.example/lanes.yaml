@@ -338,18 +338,22 @@ lanes:
         buffer_hours: 48
 
   - id: LANE_US_04
-    name: Stuttgart → Rotterdam → Norfolk
+    name: Stuttgart → Hamburg → Norfolk
     focus: eu_us
+    # Hamburg, not Rotterdam: US customs records show Sika Deutschland's
+    # shipments to Sika Corporation leaving by Hamburg or Bremerhaven
+    # (config.example/focus.yaml -> trade_records). Rail from Kornwestheim
+    # on Metrans's daily train.
     legs:
       - from: SIKA_STU
-        to: NLRTM
+        to: DEHAM
         mode: rail
-        transit_hours: 15
+        transit_hours: 20
         buffer_hours: 18
-      - from: NLRTM
+      - from: DEHAM
         to: USORF
         mode: sea
-        transit_hours: 285
+        transit_hours: 300
         buffer_hours: 48
 
   # =================================================================

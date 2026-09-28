@@ -113,7 +113,7 @@ customer's export (its volumes stay in the gitignored `config/`):
 
 | flow | route |
 |---|---|
-| DE→US | Stuttgart → Rotterdam → Norfolk |
+| DE→US | Stuttgart → Hamburg → Norfolk |
 | CH→CN | Düdingen → Basel → Rhine → Rotterdam → Suez → Shanghai |
 | CH→US | Düdingen → Antwerp → New York |
 | CH→MX | Düdingen → Antwerp → Veracruz |

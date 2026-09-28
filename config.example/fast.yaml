@@ -144,17 +144,17 @@ precarriage:
           legs: [{from: SIKA_DUD, to: CHBSL, mode: road, swiss_km: all},
                  {from: CHBSL, to: ITGOA, mode: rail}]
     - origin: SIKA_STU
-      port: NLRTM
+      port: DEHAM
       lanes: [LANE_US_04]
+      # No barge: no inland waterway runs from Stuttgart to Hamburg (the
+      # Neckar and the Rhine lead to Rotterdam).
       chains:
         - id: truck
-          legs: [{from: SIKA_STU, to: NLRTM, mode: road, german_km: 470}]
+          legs: [{from: SIKA_STU, to: DEHAM, mode: road, german_km: 660}]
         - id: truck + rail
+          note: "Metrans, Kornwestheim to Hamburg, daily"
           legs: [{from: SIKA_STU, to: KORNWESTHEIM, mode: road, german_km: 0},
-                 {from: KORNWESTHEIM, to: NLRTM, mode: rail}]
-        - id: truck + barge
-          legs: [{from: SIKA_STU, to: MANNHEIM, mode: road, german_km: all},
-                 {from: MANNHEIM, to: NLRTM, mode: barge, km: 610, via: GAUGE_KAUB}]
+                 {from: KORNWESTHEIM, to: DEHAM, mode: rail}]
 
 # -------------------------------------------------------------------
 # THE CONTINGENCY SEARCH
