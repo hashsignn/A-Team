@@ -53,6 +53,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import yaml  # noqa: E402
+
 from engine.config import load_config  # noqa: E402
 
 # Where a country's freight enters or leaves the modelled network.
@@ -147,6 +149,29 @@ def summarise(records: list[dict]) -> dict:
         "last": max(dates) if dates else None,
         "lines": len(records),
     }
+
+
+def daily_orders(records: list[dict]) -> dict:
+    """flow ("CH_US") -> day -> the weight of each order (document) raised
+    that day. What engine/ingest/bursts.py reads to find a burst of small
+    orders: one entry per purchase document, its line weights summed."""
+    docs: dict[tuple[str, str, object], dict] = {}
+    for row in records:
+        origin = (row.get("Selling Country") or "").strip()
+        destination = (row.get("Purchasing Ctry") or "").strip()
+        when = row.get("Creation Date")
+        doc = row.get("Pur. Doc.")
+        if not origin or not destination or not isinstance(when, datetime) or doc is None:
+            continue
+        entry = docs.setdefault((origin, destination, doc), {"day": when.date(), "kg": 0.0})
+        weight = row.get("Net Weight Value")
+        if isinstance(weight, (int, float)):
+            entry["kg"] += float(weight)
+    flows: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for (origin, destination, _doc), entry in docs.items():
+        flows[f"{origin}_{destination}"][entry["day"].isoformat()].append(round(entry["kg"], 1))
+    return {flow: {day: sorted(sizes) for day, sizes in sorted(days.items())}
+            for flow, days in sorted(flows.items())}
 
 
 def map_lane(origin: str, destination: str, links: tuple) -> dict:
@@ -263,12 +288,20 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text, encoding="utf-8")
+    # The day-by-day order book, beside it, for the burst-of-small-orders
+    # warning. Same folder, same rule: gitignored, never committed.
+    orders_out = args.out.parent / "orders_daily.yaml"
+    orders_out.write_text(
+        "# Written by scripts/import_sika_flows.py from Sika's export. Gitignored:\n"
+        "# one entry per purchase document, its weight in kg, by flow and day.\n"
+        + yaml.safe_dump({"flows": daily_orders(records)}, sort_keys=True, width=200),
+        encoding="utf-8")
 
     print(f"read    : {summary['lines']:,} line items")
     if summary["first"]:
         print(f"covering: {summary['first'].date()} to {summary['last'].date()}")
     print(f"lanes   : {stats['lanes']}")
-    print(f"wrote   : {args.out.relative_to(ROOT)}")
+    print(f"wrote   : {args.out.relative_to(ROOT)} and {orders_out.relative_to(ROOT)}")
     print()
     print("COVERAGE against the modelled network")
     print(f"  mapped   : {stats['mapped']:3} lane(s), "

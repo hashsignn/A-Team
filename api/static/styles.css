@@ -2990,3 +2990,15 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
   .ah2-bar { grid-template-columns: 120px 1fr auto; }
   .ah2-sum { max-width: 170px; }
 }
+
+/* ---- the week-ahead sign: a burst of small orders on a flow ---- */
+.ew-line {
+  margin: 6px 0 0; padding: 6px 10px; border-radius: 9px; font-size: 13.5px; cursor: help;
+  background: color-mix(in srgb, var(--lvl-yellow) 12%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--lvl-yellow) 40%, var(--border));
+}
+.ew-line[hidden] { display: none; }
+.rli-ew {
+  font-size: 12px; font-weight: 650; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--lvl-yellow) 16%, var(--surface-1)); color: var(--text-primary);
+}

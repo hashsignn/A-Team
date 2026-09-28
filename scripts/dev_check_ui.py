@@ -386,7 +386,9 @@ def _desk(page, check) -> None:
               f"all-hands lists the {keys} key-account order(s) at risk, first, behind one click")
     page.click(".ptab[data-ptab='signals']")
     _settle(page, "document.querySelector('#siglist .cs') !== null", 20_000)
-    check(page.locator("#siglist .cs").count() == 1, "[signals] no carrier push-out section",
+    check("Bursts of small orders" in page.locator("#siglist").inner_text(),
+          "[signals] no bursts-of-small-orders section", "signals: bursts of small orders, a week ahead")
+    check(page.locator("#siglist .cs").count() == 2, "[signals] no carrier push-out section",
           "signals: carriers pushing out orders, raised and watched")
     page.click(".ptab[data-ptab='routes']")
     page.wait_for_timeout(300)

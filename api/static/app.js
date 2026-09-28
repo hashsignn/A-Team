@@ -1163,6 +1163,13 @@ function renderDetail(r) {
 
   $('d-name').textContent = r.name;
   renderContract(r);
+  // The week-ahead sign in one line; the full sentence is the tooltip.
+  const ew = r.early_warning;
+  $('d-ew').hidden = !ew;
+  if (ew) {
+    $('d-ew').innerHTML = `⚡ <b>Early warning:</b> ${ew.orders} small orders in one day (usual ${ew.usual}) · ${esc(fmtDay(ew.day))}${ew.synthetic ? ' <span class="pill">sample</span>' : ''}`;
+    $('d-ew').title = ew.sentence;
+  }
 
   // Critical with money at stake and no option left is not "no deadline":
   // the one thing left is telling the customer, and that is due now.
@@ -1651,7 +1658,8 @@ async function loadSignals() {
       shipments: String(p.shipments || 150),
     });
     const data = await (await fetch(`/api/v2/signals?${query}`)).json();
-    host.innerHTML = carrierHTML(state.board && state.board.carrier_signals) + signalsHTML(data);
+    host.innerHTML = burstHTML(state.board && state.board.order_signals)
+      + carrierHTML(state.board && state.board.carrier_signals) + signalsHTML(data);
   } catch (err) {
     host.innerHTML = `<p class="sig-note">Could not read it: ${esc(err.message)}</p>`;
   }
@@ -1683,6 +1691,29 @@ function keyAccountsHTML() {
 /* Carriers pushing out orders — the signal Sika said arrives before any
  * announcement. Patterns were raised as warnings; singles are only watched,
  * so the planner can see one becoming a pattern. */
+/* Bursts of small orders: Sika's week-ahead sign, per flow. */
+function burstHTML(o) {
+  if (!o) return '';
+  const bursts = o.bursts || [];
+  const row = (b) => `
+    <div class="cs-row is-raised" title="${esc(`${Math.round(b.small_share * 100)}% of them smaller than usual; ${b.times}x the usual count`)}">
+      <span class="cs-count">${b.orders}</span>
+      <span><b>${esc(b.flow.replace('_', ' → '))}</b> · ${esc(fmtDay(b.day))}
+        <span class="muted">· usual ${b.usual} a day</span></span>
+    </div>`;
+  return `
+    <section class="cs">
+      <p class="sig-head" title="Raised when ${esc(o.rule || '')}"><b>Bursts of small orders</b>
+        <span class="muted">· a week ahead ⓘ</span>${o.synthetic ? ' <span class="pill">sample</span>' : ''}</p>
+      ${bursts.length ? bursts.map(row).join('') : '<p class="sig-note">None in the last 10 days.</p>'}
+    </section>`;
+}
+
+function fmtDay(iso) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 function carrierHTML(c) {
   if (!c) return '';
   const patterns = c.patterns || [];
@@ -1828,6 +1859,7 @@ function renderTable() {
         <span class="rli-top">
           <span class="level-chip level-${esc(r.level)}" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span>
           ${r.lead_time_hours == null ? '' : `<span class="rli-when" title="Decide within">${ICON.clock}${hours(r.lead_time_hours)}</span>`}
+          ${r.early_warning ? `<span class="rli-ew" title="${esc(r.early_warning.sentence)}">⚡ orders</span>` : ''}
           <span class="rli-site">${esc(r.site ? r.site.name : '')}</span>
         </span>
         <span class="rli-title">

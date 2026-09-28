@@ -210,6 +210,10 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
         # Carried through from the board: what on this route is real, and the
         # recorded conditions at each of its places.
         "real_data": route.get("real_data") or {"focus": False},
+        # Sika's week-ahead sign: the current burst of small orders on this
+        # flow, and the earlier ones with what followed them.
+        "early_warning": route.get("early_warning"),
+        "burst_history": route.get("burst_history") or [],
         "conditions": route.get("conditions") or [],
         "legs": legs,
         "totals": {

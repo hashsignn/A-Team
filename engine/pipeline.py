@@ -23,12 +23,13 @@ from datetime import timedelta
 
 import numpy as np
 
+from engine import focus as focus_mod
 from engine.act.playbook import best_option, options_for
 from engine.clock import Clock
 from engine.config import Config, load_config
 from engine.gate.intersect import gate
+from engine.ingest import bursts, pushouts
 from engine.ingest import flows as flows_mod
-from engine.ingest import pushouts
 from engine.ingest.feeds import load_feed_items, social_promotion_status
 from engine.ingest.observations import FeedReport, FeedStatus, IngestBundle
 from engine.ingest.synthetic import generate_shipments, in_scope
@@ -111,6 +112,9 @@ class RunContext:
     conditions: dict = field(default_factory=dict)
     # Carrier push-outs read this run: patterns raised and singles watched.
     carrier_signals: dict = field(default_factory=dict)
+    # Bursts of small orders on a flow: the sign Sika sees a week before a
+    # crisis (engine/ingest/bursts.py).
+    order_signals: dict = field(default_factory=dict)
 
 
 def run(
@@ -187,6 +191,13 @@ def run(
     pushout_obs, pushout_report, carrier_signals = pushouts.assess(shipments, config, clock)
     bundle.add(pushout_report, pushout_obs)
     gauge_obs = [*gauge_obs, *pushout_obs]
+
+    # Bursts of small orders on a flow. An early warning on the flow's
+    # route, not a disruption: no probability and no delay, so it does not
+    # enter the Monte Carlo.
+    flows = sorted({r.sika_flow for r in focus_mod.focus_routes(config).values() if r.sika_flow})
+    burst_report, order_signals = bursts.assess(config, clock, flows)
+    bundle.add(burst_report)
 
     feed_items, feed_report = load_feed_items(clock)
     bundle.add(feed_report)
@@ -266,6 +277,7 @@ def run(
         unpromoted=unpromoted,
         conditions=conditions,
         carrier_signals=carrier_signals,
+        order_signals=order_signals,
     )
 
 

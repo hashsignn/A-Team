@@ -233,7 +233,9 @@ def main() -> int:
         # ---- choose an asset that exercises everything, via the agent -----
         chosen = page.evaluate("""(async () => {
             const s = MapAgent.getState();
-            const reds = MapStore.select.visibleAssets(s).filter(a => a.status !== 'green');
+            // Every vehicle, not only the visible ones: an open route shows
+            // only its own, and the one worth testing may be on another.
+            const reds = s.assets.items.filter(a => a.status !== 'green');
             for (const a of reds) {
               await MapAgent.selectAsset(a.id, {actor: 'LAYA'});
               const st = MapAgent.getState();

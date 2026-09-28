@@ -12,11 +12,13 @@ planner owns lanes, not headlines.
 
 from __future__ import annotations
 
+import dataclasses
 from collections import defaultdict
 
 from engine import desk as desk_mod
 from engine import focus as focus_mod
 from engine.act import contacts as contacts_mod
+from engine.ingest import bursts as bursts_mod
 from engine.ingest import flows as flows_mod
 from engine.ingest.observations import FeedStatus
 from engine.pipeline import RunContext
@@ -31,6 +33,7 @@ from engine.score.matrix import (
 from engine.score.severity import (
     LEVEL_DIRECTIVE,
     LEVEL_LABEL,
+    LEVEL_RANK,
     Level,
     classify,
     severity_score,
@@ -114,6 +117,7 @@ def build_board(context: RunContext) -> dict:
                                       context.clock, posture_value),
         },
         "carrier_signals": context.carrier_signals,
+        "order_signals": context.order_signals,
         "funnel": {
             "raw_observations": result.funnel.raw_observations,
             "after_geographic": result.funnel.after_geographic,
@@ -184,6 +188,12 @@ def _build_route(
         source_tiers=source_tiers,
         irreversible_damage=irreversible,
     )
+    # A burst of small orders on this route's flow: Sika's week-ahead sign.
+    # It lifts a quiet route to Bias (monitor closely, decide within 5 days)
+    # and says why; it never lowers a level and adds no CHF.
+    warning = _early_warning(lane, context)
+    if warning and LEVEL_RANK[verdict.level] < LEVEL_RANK[Level.WHITE]:
+        verdict = dataclasses.replace(verdict, level=Level.WHITE, reason=warning["sentence"])
     shipments = [s for s in context.shipments if s.lane_id == lane_id]
 
     return {
@@ -241,6 +251,10 @@ def _build_route(
         # button: the terms in one line, and whether the board is counting
         # them right now (the penalties switch).
         "clauses": _clauses(shipments, risks, context.config),
+        # Sika's week-ahead sign on this route's flow, and every earlier one
+        # in the order book with the public event that followed it, if any.
+        "early_warning": warning,
+        "burst_history": _burst_history(lane, context),
         "legs": _legs(lane, context),
         "events": _events(assessments, risks, context.config),
         "radar": _radar(assessments, lane, context),
@@ -876,6 +890,30 @@ def _urgency_band(hours: float | None, config) -> int:
         return 3
     level = _level_for_hours(hours, config)
     return {Level.RED: 0, Level.YELLOW: 1}.get(level, 2)
+
+
+def _flow_of(lane: dict, context: RunContext) -> str | None:
+    route = focus_mod.focus_routes(context.config).get(lane["id"])
+    return route.sika_flow if route and route.sika_flow else None
+
+
+def _early_warning(lane: dict, context: RunContext) -> dict | None:
+    """The newest burst of small orders on this route's flow, if recent."""
+    flow = _flow_of(lane, context)
+    signals = context.order_signals or {}
+    hits = [b for b in signals.get("bursts") or [] if b["flow"] == flow]
+    if not flow or not hits:
+        return None
+    burst = min(hits, key=lambda b: b["days_ago"])
+    label = flow.replace("_", " → ")
+    return {**burst, "synthetic": bool(signals.get("synthetic")),
+            "sentence": bursts_mod.sentence(burst, label)
+            + (" (sample order history)" if signals.get("synthetic") else "")}
+
+
+def _burst_history(lane: dict, context: RunContext) -> list[dict]:
+    flow = _flow_of(lane, context)
+    return [b for b in (context.order_signals or {}).get("history") or [] if b["flow"] == flow][-8:]
 
 
 def _clauses(shipments: list, risks: list, config) -> list[dict]:

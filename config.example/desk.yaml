@@ -154,6 +154,31 @@ crisis_authority:
 # show up before anyone announces them (Sika). A push-out is a booking the
 # CARRIER moved later — a rolled container, a cancelled train path, a
 # postponed barge departure — not one the planner rescheduled.
+order_bursts:
+  # Sika: "a week or so before a crisis begins, small shipments that normally
+  # go now and then start going in a single day". Read per flow, per working
+  # day, from config/orders_daily.yaml (scripts/import_sika_flows.py) or a
+  # labelled sample (engine/ingest/bursts.py).
+  window_days: 10        # a burst this recent is raised on its route
+  baseline_days: 20      # working days that define "usual"
+  min_orders: 4          # a day with fewer is never a burst
+  min_z: 3.0             # this many spreads above the usual count
+  small_share: 0.6       # and this share of the day's orders smaller than usual
+  min_baseline_orders: 10  # a nearly idle baseline (after New Year) has no "usual"
+  # Public events, to check that a burst in the history came BEFORE a
+  # crisis (scripts/check_order_bursts.py, the route page). Dates of
+  # effect, with the page that states them.
+  known_events:
+    - date: 2025-04-09
+      what: "US country tariffs take effect, then are paused for 90 days (a 10% floor stays)"
+      source: https://www.cnn.com/2025/04/09/business/reciprocal-tariff-pause-trump
+    - date: 2025-08-07
+      what: "US 39% tariff on most Swiss goods takes effect"
+      source: https://www.vatupdate.com/2025/08/01/us-increases-tariffs-for-products-from-switzerland-to-39-on-august-7-2025/
+    - date: 2025-11-14
+      what: "US agrees to cut the tariff on Swiss goods to 15%"
+      source: https://www.aljazeera.com/economy/2025/11/14/us-to-slash-tariffs-on-switzerland-to-15-from-crippling-39
+
 carrier_pushouts:
   # How far back to look, and how many distinct orders make a pattern.
   window_days: 7

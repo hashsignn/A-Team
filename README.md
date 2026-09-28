@@ -10,6 +10,13 @@ Open the **Ports** tab, click **port 8000**, and press **Ctrl+Shift+R** (Mac: Cm
 so the browser loads the new version. If `git pull` complains about local changes,
 run `git stash` once and paste the line again.
 
+**Once, after pulling, if Sika's export is in `config/`:** re-import it so the
+board can read the order book day by day (the burst-of-small-orders warning):
+
+```bash
+.venv/bin/python scripts/import_sika_flows.py config/20260921_innovathon_Sika_share.xlsx
+```
+
 > A supply chain planner at Sika is tracking 50–200 active shipments across
 > road, rail and sea. The world produces thousands of external events a day.
 > Almost none of them matter. **Tell the planner which ones do, early enough to
@@ -1779,6 +1786,26 @@ Onboarding a new customer is a profile swap — that is true here, not a claim.
   and model is worth shipping as a diagnostic but is *not* validation: both were
   written by the same people from the same variable list, so their errors
   correlate.
+
+## Bursts of small orders: the week-ahead sign
+
+Sika: *"a week or so before a crisis begins, small shipments that normally
+go now and then start going in a single day."* Sites and customers who have
+heard something pull their next orders forward and send them in whatever
+size is ready. `engine/ingest/bursts.py` looks for it per flow, per working
+day: at least 4 orders, 3 spreads above the usual of the previous 20 working
+days, and 60% of them smaller than usual (`desk.yaml → order_bursts`). A
+burst in the last 10 days lifts the flow's route to at least **Bias** with
+the burst as its reason; it adds no CHF and no probability.
+
+The order book is `config/orders_daily.yaml`, written by
+`scripts/import_sika_flows.py` from the export's order dates and weights, and
+never committed. Without it the board uses a labelled sample with one burst.
+`scripts/check_order_bursts.py` lists every burst in the book and the public
+event (`desk.yaml → order_bursts.known_events`) that followed it within two
+weeks, on the machine that has the export; nothing it prints is committed.
+Bursts also follow year-end ordering and campaigns, so a burst is a reason
+to look, not a verdict.
 
 ## Open questions for Sika
 

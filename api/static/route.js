@@ -299,8 +299,20 @@ function renderReal(v) {
       <span class="muted">${(d.trade_sources || []).map((u) => safeUrl(u))
         .filter(Boolean).map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(new URL(u).hostname.replace(/^www\./, ''))}</a>`).join(' · ')}</span>
     </div>` : '';
+  // Every burst of small orders on this flow in Sika's order book, and the
+  // public event that followed it, if one did: the check that the sign
+  // comes before the crisis. Only from the real book, never the sample.
+  const bh = v.burst_history || [];
+  const bursts = bh.length ? `
+    <div class="rt-trade"><b>Bursts of small orders on this flow</b>
+      <span class="muted">· Sika's order book</span>
+      <ul>${bh.map((b) => `<li>${esc(b.day)}: ${b.orders} orders (usual ${b.usual})${b.followed_by
+        ? ` <b>→ ${b.followed_by.days_later} day(s) later: ${esc(b.followed_by.what)}</b>` : ''}</li>`).join('')}</ul>
+      <span class="muted">A reason to look, not a verdict: bursts also follow year-end ordering and campaigns.</span>
+    </div>` : '';
   const chosen = `<ul class="rt-facts">${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${evidence('Received by', d.destination)}${volume}</ul>
     ${trade}
+    ${bursts}
     ${precarriageHTML(d.precarriage)}`;
   const sources = (d.sources || []).map((s) => `
     <li class="${s.real ? 'is-real' : 'is-not'}" title="${esc(s.detail || s.status)}">
