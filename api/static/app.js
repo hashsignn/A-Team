@@ -930,7 +930,7 @@ function renderMeetChip() {
   const h = state.board.all_hands;
   chip.className = `meet-chip meet-chip--${m.tone}`;
   chip.title = `${state.board.posture.headline || ''}\nClick for the agenda: who is in the room and what each function can pull.`;
-  chip.innerHTML = `<i aria-hidden="true"></i><span><b>All-hands</b> ${esc(m.when)}</span>`;
+  chip.innerHTML = `<i aria-hidden="true"></i><span><b>All-hands</b> ${esc(m.when)}</span>${rsvpDots(h)}`;
   // The tab carries the same dot while the meeting is stepped up.
   const dot = $('ptab-meet');
   if (dot) {
@@ -1980,6 +1980,95 @@ function openPanelTab(name) {
  * own convene rule now calls for, who sits in it, and one card per function
  * with the lever that function holds — computed from this board, proposed,
  * never pulled. */
+/* WHO HAS CONFIRMED the next sitting (engine/rsvp.py). A ring with one dot
+ * per department: green when it confirmed, hollow when it has not replied.
+ * A dot opens the department: mail and phone to chase it, and the tick. */
+const MAIL_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 5.5l7 5.5 7-5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+const PHONE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.2 2.8l2 3.6-1.5 1.5a10 10 0 0 0 5.4 5.4l1.5-1.5 3.6 2-1 3a2 2 0 0 1-2.1 1.3A15 15 0 0 1 1.9 5.9a2 2 0 0 1 1.3-2.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+
+function rsvpOf(h, id) {
+  return ((h.rsvp || {})[id] || { status: 'pending' }).status;
+}
+
+function rsvpDots(h) {
+  const people = h.attendees || [];
+  if (!people.length || !h.rsvp) return '';
+  return `<span class="meet-dots" title="${h.confirmed} of ${h.invited} departments confirmed">${people.map((a) =>
+    `<i class="${rsvpOf(h, a.id) === 'confirmed' ? 'is-yes' : ''}"></i>`).join('')}</span>`;
+}
+
+function rsvpRing(h) {
+  const people = h.attendees || [];
+  if (!people.length || !h.rsvp) return '';
+  const n = people.length;
+  const dots = people.map((a, i) => {
+    const angle = -90 + (360 / n) * i;
+    const yes = rsvpOf(h, a.id) === 'confirmed';
+    return `<button type="button" class="rsvp-dot${yes ? ' is-yes' : ''}" data-fn="${esc(a.id)}"
+      style="--a:${angle}deg" title="${esc(a.function)}: ${yes ? 'confirmed' : 'no reply'}"
+      aria-label="${esc(a.function)}, ${yes ? 'confirmed' : 'no reply'}"></button>`;
+  }).join('');
+  return `<div class="rsvp" id="rsvp">
+    <div class="rsvp-ring" role="group" aria-label="Who confirmed">
+      ${dots}
+      <span class="rsvp-n"><b>${h.confirmed}</b>/${h.invited}</span>
+    </div>
+    <div class="rsvp-card" id="rsvp-card" hidden></div>
+  </div>`;
+}
+
+function wireRsvp(host, h) {
+  const card = host.querySelector('#rsvp-card');
+  if (!card) return;
+  const people = Object.fromEntries((h.attendees || []).map((a) => [a.id, a]));
+  const open = (id) => {
+    const a = people[id];
+    const yes = rsvpOf(h, id) === 'confirmed';
+    const subject = `All-hands ${h.next_label}: please confirm`;
+    const mail = a.email ? `mailto:${a.email}?subject=${encodeURIComponent(subject)}` : null;
+    card.innerHTML = `
+      <b>${esc(a.function)}</b>
+      <span class="rsvp-state${yes ? ' is-yes' : ''}">${yes ? '✓ confirmed' : 'no reply'}</span>
+      <span class="rsvp-reach">
+        ${mail ? `<a class="icon-btn" href="${esc(mail)}" title="${esc(a.email)}" aria-label="Email ${esc(a.function)}">${MAIL_ICON}</a>` : ''}
+        ${a.phone ? `<a class="icon-btn" href="tel:${esc(a.phone.replace(/\s+/g, ''))}" title="${esc(a.phone)}" aria-label="Call ${esc(a.function)}">${PHONE_ICON}</a>` : ''}
+        <button type="button" class="ctl ctl--mini" data-set="${yes ? 'pending' : 'confirmed'}">${yes ? 'Undo' : '✓ Confirmed'}</button>
+      </span>`;
+    card.hidden = false;
+    card.dataset.fn = id;
+    host.querySelectorAll('.rsvp-dot').forEach((d) => d.classList.toggle('is-on', d.dataset.fn === id));
+    card.querySelector('[data-set]').addEventListener('click', (e) => setRsvp(id, e.currentTarget.dataset.set));
+  };
+  host.querySelectorAll('.rsvp-dot').forEach((d) => d.addEventListener('click', () => {
+    if (!card.hidden && card.dataset.fn === d.dataset.fn) {
+      card.hidden = true;
+      d.classList.remove('is-on');
+    } else {
+      open(d.dataset.fn);
+    }
+  }));
+  if (state.rsvpOpen && people[state.rsvpOpen]) open(state.rsvpOpen);
+}
+
+async function setRsvp(functionId, status) {
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  const res = await fetch(`/api/allhands/rsvp?${q}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ function_id: functionId, status }),
+  });
+  if (!res.ok) return;
+  const out = await res.json();
+  const h = state.board.all_hands;
+  h.rsvp = out.rsvp;
+  h.confirmed = out.confirmed;
+  h.invited = out.invited;
+  state.rsvpOpen = functionId;
+  renderAllHands();
+  renderMeetChip();
+  state.rsvpOpen = null;
+}
+
 function renderAllHands() {
   const host = $('allhands');
   const h = state.board && state.board.all_hands;
@@ -2067,6 +2156,7 @@ function renderAllHands() {
           <span class="ah2-was">UTC</span></div>
       </div>
       <div class="ah2-cal" aria-label="The next two weeks">${cells}</div>
+      ${rsvpRing(h)}
       <div class="ah2-rule"><i></i>${esc(h.change)}</div>
     </div>
     ${bars ? `<section class="ah2-sec"><div class="ah2-title">Why ${esc(h.cadence_label)}
@@ -2074,6 +2164,7 @@ function renderAllHands() {
       <div class="ah2-tiles">${bars}</div></section>` : ''}
     <section class="ah2-sec"><div class="ah2-title">In the room <span class="muted">· click a row for its list</span></div>${keyAccountsHTML()}${rows}</section>
     <p class="ah-foot">Proposals only. Nothing is booked or approved.</p>`;
+  wireRsvp(host, h);
   host.querySelectorAll('li[data-route]').forEach((li) => {
     const go = () => {
       openPanelTab('routes');

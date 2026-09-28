@@ -25,6 +25,8 @@ data/reports.*.jsonl
 # Closed cases: the risk ledger's history. Operational data (it names
 # customers and the people who closed them), append-only, like the reports.
 data/cases.jsonl
+# Who confirmed the all-hands (engine/rsvp.py). Working state.
+data/rsvp.jsonl
 
 # Python
 .venv/

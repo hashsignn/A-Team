@@ -33,6 +33,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api import fast_routes
 from engine import alerts as alerts_mod
+from engine import rsvp as rsvp_mod
 from engine.act import cases as cases_mod
 from engine.act import flow as flow_mod
 from engine.clock import Clock
@@ -159,11 +160,36 @@ def board(
     and by whom. Laid over the cached board per request, never cached with
     it, so a close shows on the next load.
     """
-    return JSONResponse(_with_cases(_board(as_of, shipments), as_of, shipments))
+    return JSONResponse(_with_state(_board(as_of, shipments), as_of, shipments))
 
 
-def _with_cases(board: dict, as_of: str, shipments: int) -> dict:
-    return cases_mod.annotate(board, _context(as_of, shipments).clock.as_of)
+def _with_state(board: dict, as_of: str, shipments: int) -> dict:
+    """The planners' working state over the cached board: each route's case,
+    and who has confirmed the next all-hands."""
+    board = cases_mod.annotate(board, _context(as_of, shipments).clock.as_of)
+    return rsvp_mod.annotate(board)
+
+
+# ------------------------------------------------------------ all-hands
+@app.post("/api/allhands/rsvp")
+def allhands_rsvp(
+    payload: Annotated[dict, Body()],
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """A department's reply to the next all-hands: confirmed, or back to
+    not replied. Returns the room's replies."""
+    meeting = _board(as_of, shipments).get("all_hands") or {}
+    try:
+        rsvp_mod.record(meeting, str(payload.get("function_id", "")),
+                        str(payload.get("status", "")), by=payload.get("by"),
+                        at=datetime.now(UTC))
+    except rsvp_mod.RsvpError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    replies = rsvp_mod.replies(meeting)
+    return JSONResponse({"ok": True, "rsvp": replies,
+                         "confirmed": sum(r["status"] == "confirmed" for r in replies.values()),
+                         "invited": len(replies)})
 
 
 # ------------------------------------------------------------------ cases
