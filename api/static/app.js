@@ -1320,7 +1320,7 @@ function keyAccountsHTML() {
     <div class="ah-card-head"><b>★ Key accounts at risk</b><span>served first</span></div>
     <ul class="ah-items">${rows.map((k) => `
       <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0" title="${esc(k.route)}">
-        <span class="ah-text"><b>${esc(k.customer)}</b> · decide in ${hours(k.lead_time_hours)}</span>
+        <span class="ah-text"><b>${esc(k.customer)}</b> · ${k.lead_time_hours == null ? 'no deadline' : `decide in ${hours(k.lead_time_hours)}`}</span>
         <span class="ah-detail">${esc(k.shipment_id)} · ${esc(siteName(k.site))} · ${esc(k.action || 'no option worth its cost')}</span>
       </li>`).join('')}</ul>
   </section>`;
