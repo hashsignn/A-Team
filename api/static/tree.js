@@ -226,7 +226,7 @@ function face(n) {
     case 'ask': {
       const p = d.approval?.procurement;
       return { kicker: 'Procurement', title: p?.name || 'Procurement', big: '1', unit: 'call',
-        sub: p?.phone || p?.email || '', tone: 'act' };
+        sub: '', tone: 'act' };
     }
     case 'sign': {
       const sign = signOff(n.x.cost);
@@ -576,13 +576,19 @@ function carriersTable(o, wayId) {
     ], rows)}</div>`;
 }
 
-function contact(r, brief = false) {
+/* Email, phone and website as icons; the address is the tooltip. */
+const REACH_ICON = {
+  phone: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.2 2.8l2 3.6-1.5 1.5a10 10 0 0 0 5.4 5.4l1.5-1.5 3.6 2-1 3a2 2 0 0 1-2.1 1.3A15 15 0 0 1 1.9 5.9a2 2 0 0 1 1.3-2.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  email: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 5.5l7 5.5 7-5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+  web: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.8 10h14.4M10 2.8c2 2.1 3 4.5 3 7.2s-1 5.1-3 7.2c-2-2.1-3-4.5-3-7.2s1-5.1 3-7.2z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
+};
+function contact(r) {
   if (!r) return '';
   const bits = [];
-  if (r.phone) bits.push(`<a href="tel:${esc(r.phone.replace(/\s+/g, ''))}" title="${esc(r.phone)}">${brief ? 'call' : esc(r.phone)}</a>`);
-  if (r.email) bits.push(`<a href="mailto:${esc(r.email)}" title="${esc(r.email)}">${brief ? 'email' : esc(r.email)}</a>`);
-  if (r.portal) bits.push(`<a href="${esc(r.portal)}" target="_blank" rel="noopener">portal</a>`);
-  return bits.join(brief ? ' · ' : '<br>') || '<span class="muted">see focus.yaml</span>';
+  if (r.email) bits.push(`<a class="reach" href="mailto:${esc(r.email)}" title="${esc(r.email)}" aria-label="Email">${REACH_ICON.email}</a>`);
+  if (r.phone) bits.push(`<a class="reach" href="tel:${esc(r.phone.replace(/\s+/g, ''))}" title="${esc(r.phone)}" aria-label="Call">${REACH_ICON.phone}</a>`);
+  if (r.portal) bits.push(`<a class="reach" href="${esc(r.portal)}" target="_blank" rel="noopener" title="${esc(r.portal)}" aria-label="Website">${REACH_ICON.web}</a>`);
+  return bits.length ? `<span class="reach-row">${bits.join('')}</span>` : '<span class="muted">—</span>';
 }
 
 function pathChain(path) {

@@ -123,8 +123,7 @@ function inHours(h) {
 function clockNote(working, clock) {
   if (working == null || clock == null || clock - working < 1) return '';
   const plain = hours(clock) === 'now' ? 'under 1 h' : hours(clock);
-  return working < 0.5 ? `closes in ${plain}, before the next working day`
-    : `working time (${plain} on the clock)`;
+  return working < 0.5 ? `closes in ${plain}` : `working time · ${plain} real`;
 }
 
 // ===============================================================
@@ -1315,7 +1314,7 @@ function renderAlloc(r) {
       <td class="num">${c.expected_loss_chf > 0 ? chf(c.expected_loss_chf) : '—'}</td>
       <td class="cust-more"><button type="button" class="icon-btn icon-btn--mini" aria-label="Details of ${esc(c.name)}">ⓘ</button></td>
     </tr>`).join('');
-  $('d-cust').innerHTML = customers.length ? `<h4 class="rp-h">Customers <span class="muted">· click one for its card</span></h4>
+  $('d-cust').innerHTML = customers.length ? `<h4 class="rp-h">Customers</h4>
     <table class="alloc-tab">
       <thead><tr><th>Customer</th><th>Importance</th><th>At risk</th><th>If nobody acts</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table>` : '';
@@ -1796,11 +1795,7 @@ function renderRContacts(r) {
     <div class="contact" title="${esc(p.why || '')}">
       <div class="contact-top"><span class="contact-name">${esc(plainName(p.name))}</span></div>
       <div class="contact-role">${esc(p.role)}</div>
-      <div class="contact-links">
-        ${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
-        ${p.phone ? `<span>${esc(p.phone)}</span>` : ''}
-        ${p.meta && p.meta.hours ? `<span>${esc(p.meta.hours)}</span>` : ''}
-      </div>
+      <div class="contact-links">${reachIcons(p)}</div>
     </div>`;
 
   const group = (title, note, items) => {
@@ -1971,8 +1966,8 @@ function openPanelTab(name) {
   // other number on the page.
   $('panel-list-count').textContent = {
     routes: state.listSubtitle || '',
-    allhands: 'When the cross-functional team meets, and what each function can pull',
-    signals: 'What came in, and what the filters kept',
+    allhands: '',
+    signals: '',
   }[name];
   if (name === 'signals' && !signalsLoaded) loadSignals();
 }
@@ -1985,6 +1980,18 @@ function openPanelTab(name) {
  * own convene rule now calls for, who sits in it, and one card per function
  * with the lever that function holds — computed from this board, proposed,
  * never pulled. */
+/* Email, phone and website as icons; the address is the tooltip. */
+function reachIcons(c, subject) {
+  if (!c) return '';
+  const mail = c.email ? `mailto:${c.email}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}` : null;
+  return [
+    mail ? `<a class="icon-btn icon-btn--mini" href="${esc(mail)}" title="${esc(c.email)}" aria-label="Email">${MAIL_ICON}</a>` : '',
+    c.phone ? `<a class="icon-btn icon-btn--mini" href="tel:${esc(String(c.phone).replace(/\s+/g, ''))}" title="${esc(c.phone)}" aria-label="Call">${PHONE_ICON}</a>` : '',
+    c.portal && /^https?:\/\//i.test(c.portal) ? `<a class="icon-btn icon-btn--mini" href="${esc(c.portal)}" target="_blank" rel="noopener" title="${esc(c.portal)}" aria-label="Website">${WEB_ICON}</a>` : '',
+  ].join('');
+}
+const WEB_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.8 10h14.4M10 2.8c2 2.1 3 4.5 3 7.2s-1 5.1-3 7.2c-2-2.1-3-4.5-3-7.2s1-5.1 3-7.2z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+
 /* WHO HAS CONFIRMED the next sitting (engine/rsvp.py). A ring with one dot
  * per department: green when it confirmed, hollow when it has not replied.
  * A dot opens the department: mail and phone to chase it, and the tick. */
@@ -2030,13 +2037,11 @@ function wireRsvp(host, h) {
     const a = people[id];
     const yes = rsvpOf(h, id) === 'confirmed';
     const subject = `All-hands ${h.next_label}: please confirm`;
-    const mail = a.email ? `mailto:${a.email}?subject=${encodeURIComponent(subject)}` : null;
     card.innerHTML = `
       <b>${esc(a.function)}</b>
       <span class="rsvp-state${yes ? ' is-yes' : ''}">${yes ? '✓ confirmed' : 'no reply'}</span>
       <span class="rsvp-reach">
-        ${mail ? `<a class="icon-btn" href="${esc(mail)}" title="${esc(a.email)}" aria-label="Email ${esc(a.function)}">${MAIL_ICON}</a>` : ''}
-        ${a.phone ? `<a class="icon-btn" href="tel:${esc(a.phone.replace(/\s+/g, ''))}" title="${esc(a.phone)}" aria-label="Call ${esc(a.function)}">${PHONE_ICON}</a>` : ''}
+        ${reachIcons({ email: a.email, phone: a.phone }, subject)}
         <button type="button" class="ctl ctl--mini" data-set="${yes ? 'pending' : 'confirmed'}">${yes ? 'Undo' : '✓ Confirmed'}</button>
       </span>`;
     card.hidden = false;
@@ -2165,10 +2170,9 @@ function renderAllHands() {
       <div class="ah2-rule"><i></i>${esc(h.change)}</div>
     </div>
     ${bars ? `<section class="ah2-sec"><div class="ah2-title">Why ${esc(h.cadence_label)}
-      <span class="muted">· any one limit crossed makes it daily · ${crossed} of ${checks.length} crossed now</span></div>
+      <span class="muted">· ${crossed}/${checks.length} crossed</span></div>
       <div class="ah2-tiles">${bars}</div></section>` : ''}
-    <section class="ah2-sec"><div class="ah2-title">In the room <span class="muted">· click a row for its list</span></div>${keyAccountsHTML()}${rows}</section>
-    <p class="ah-foot">Proposals only. Nothing is booked or approved.</p>`;
+    <section class="ah2-sec"><div class="ah2-title">In the room</div>${keyAccountsHTML()}${rows}</section>`;
   wireRsvp(host, h);
   host.querySelectorAll('li[data-route]').forEach((li) => {
     const go = () => {
@@ -2460,10 +2464,7 @@ function renderTable() {
   const onRoutes = !$('rlist').hidden;
   if (count && onRoutes) count.textContent = state.listSubtitle;
 
-  const f = state.board.funnel;
-  $('ranked-foot').innerHTML =
-    `${num(f.raw_observations)} signals → ${f.after_resolution} events → ` +
-    `${f.shipments_touched} of ${state.board.shipments_total} shipments hit`;
+  $('ranked-foot').innerHTML = '';
 }
 
 function markTableRow(routeId) {

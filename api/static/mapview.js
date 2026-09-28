@@ -975,7 +975,7 @@
         <div class="vb-row"><span class="vb-k">${esc(label)}</span>
           <span class="vb-track"><span class="vb-fill ${cls}" style="width:${Math.max(2, (n / top) * 100).toFixed(0)}%"></span></span>
           <span class="vb-n">${esc(n)}</span></div>`;
-      return `<div class="vb">${bar(w.usual, 'vb-usual', 'Usual day')}${bar(w.orders, 'vb-now', w.day)}</div>`;
+      return `<div class="vb">${bar(w.usual, 'vb-usual', 'usual')}${bar(w.orders, 'vb-now', String(w.day).slice(5))}</div>`;
     }
 
     function renderVolumePanel(state) {
@@ -998,26 +998,18 @@
 
       const card = (l) => {
         const w = l.early_warning;
-        const ago = w.days_ago === 0 ? 'today' : w.days_ago === 1 ? 'yesterday' : `${w.days_ago} days ago`;
+        const ago = w.days_ago === 0 ? 'today' : w.days_ago === 1 ? '1 d ago' : `${w.days_ago} d ago`;
         return `
-          <article class="surge-card${l.route_id === state.focusLane ? ' is-focus' : ''}" data-lane="${esc(l.route_id)}">
+          <article class="surge-card${l.route_id === state.focusLane ? ' is-focus' : ''}" data-lane="${esc(l.route_id)}"
+                   title="${esc(w.sentence)}">
             <header>
-              <span class="surge-kind">Unusual volume · ${esc(ago)}</span>
+              <span class="surge-name">${esc(l.name)}</span>
               <span class="surge-ratio">${w.times != null ? `${esc(w.times)}×` : ''}</span>
             </header>
-            <h4>${esc(l.name)}</h4>
             ${compareBars(w)}
-            <ul class="surge-traits">
-              <li class="is-met"><span aria-hidden="true">✓</span><b>Many</b>
-                ${esc(w.orders)} orders in one day against a usual ${esc(w.usual)} (${esc(w.z)} spreads above)</li>
-              <li class="is-met"><span aria-hidden="true">✓</span><b>Small</b>
-                ${esc(Math.round(w.small_share * 100))}% smaller than usual${w.size_ratio != null
-                  ? `, median ${esc(Math.round(w.size_ratio * 100))}% of the usual size` : ''}</li>
-            </ul>
-            <p class="surge-reading">${esc(w.sentence)}</p>
             <div class="surge-foot">
-              <button type="button" class="surge-show" data-lane="${esc(l.route_id)}">Show route</button>
-              <span class="surge-syn">${esc(String(w.flow || '').replace('_', ' → '))}${w.synthetic ? ' · sample orders' : ''}</span>
+              <span class="surge-syn">${esc(ago)} · ${esc(Math.round(w.small_share * 100))}% small${w.synthetic ? ' · sample' : ''}</span>
+              <button type="button" class="surge-show" data-lane="${esc(l.route_id)}" aria-label="Show route" title="Show route">→</button>
             </div>
           </article>`;
       };
@@ -1026,17 +1018,10 @@
           <h3>Unusual volume</h3>
           <button type="button" class="vp-close" aria-label="Close">×</button>
         </header>
-        <p class="vp-lede">A burst of small orders on a flow — sites and customers who have
-          heard something sending early, in whatever size is ready. Sika sees it about a
-          week before a crisis. The route is held at least at Bias while it lasts.</p>
-        <label class="vp-toggle"><input type="checkbox" id="vp-show" ${state.volume.show ? 'checked' : ''}>
-          Show on map</label>
+        <label class="vp-toggle"><input type="checkbox" id="vp-show" ${state.volume.show ? 'checked' : ''}> On map</label>
         <div class="vp-list">
-          ${lanes.length ? lanes.map(card).join('')
-            : '<p class="vp-empty">No flow has had a burst of small orders in the last days.</p>'}
-        </div>
-        <p class="vp-rule">Rule: ${esc(orders.rule || '')}.${orders.synthetic
-          ? ' Sample order history — run scripts/import_sika_flows.py to read Sika’s own.' : ''}</p>`;
+          ${lanes.length ? lanes.map(card).join('') : '<p class="vp-empty">None now.</p>'}
+        </div>`;
       panel.querySelector('.vp-close').addEventListener('click', () => agent.showVolumeSignals({ open: false }));
       panel.querySelector('#vp-show').addEventListener('change', (e) =>
         agent.showVolumeSignals({ show: e.target.checked }));

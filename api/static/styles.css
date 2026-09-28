@@ -3367,3 +3367,18 @@ button.dt-order:hover { color: var(--text-primary); }
   border: 1.5px solid var(--border-strong); background: transparent;
 }
 .meet-dots i.is-yes { background: var(--calm, #1f7a4a); border-color: var(--calm, #1f7a4a); }
+
+/* Email, phone and website as icons (the address is the tooltip). */
+.reach-row { display: inline-flex; gap: 5px; vertical-align: middle; }
+.reach, .vreach {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+}
+.reach svg, .vreach svg { width: 15px; height: 15px; }
+.reach:hover, .vreach:hover { color: var(--accent); border-color: var(--accent); }
+.contact-links { display: flex; gap: 6px; }
+.icon-btn--mini svg { width: 15px; height: 15px; }
+/* A contact is one row: who and what on the left, the icons on the right. */
+.contact { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
+.contact .contact-top, .contact .contact-role { grid-column: 1; }
+.contact .contact-links { grid-column: 2; grid-row: 1 / span 2; margin: 0; }

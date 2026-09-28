@@ -534,10 +534,10 @@
         <p class="hub-sub">${esc(v.kind.replace(/_/g, ' '))} · ${esc(v.city || '')} · ${Math.round(v.distance_km)} km away${v.synthetic ? ' · synthetic' : ''}</p>`;
       $('vcard-body').innerHTML = `
         <div class="vcontact">
-          ${c.phone ? `<a href="tel:${esc(c.phone.replace(/\s+/g, ''))}">☎ ${esc(c.phone)}</a>` : ''}
-          ${c.email ? `<a href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`Capacity request: ${s.selection.id}`)}">✉ ${esc(c.email)}</a>` : ''}
-          ${c.portal && /^https?:\/\//i.test(c.portal) ? `<a href="${esc(c.portal)}" target="_blank" rel="noopener noreferrer">⇱ ${v.checked_against ? 'Website' : 'Dispatch portal'}</a>` : ''}
-          ${!c.phone && !c.email && !c.portal ? '<span class="muted">No contact on file.</span>' : ''}
+          ${c.email ? `<a class="vreach" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`Capacity request: ${s.selection.id}`)}" title="${esc(c.email)}" aria-label="Email">${root.MapView.CHANNEL.email}</a>` : ''}
+          ${c.phone ? `<a class="vreach" href="tel:${esc(c.phone.replace(/\s+/g, ''))}" title="${esc(c.phone)}" aria-label="Call">${root.MapView.CHANNEL.phone}</a>` : ''}
+          ${c.portal && /^https?:\/\//i.test(c.portal) ? `<a class="vreach" href="${esc(c.portal)}" target="_blank" rel="noopener noreferrer" title="${esc(c.portal)}" aria-label="Website">${root.MapView.CHANNEL.portal}</a>` : ''}
+          ${!c.phone && !c.email && !c.portal ? '<span class="muted">—</span>' : ''}
         </div>
         ${v.checked_against && /^https?:\/\//i.test(v.checked_against) ? `<p class="chart-note" title="${esc(v.note || '')}">Real operator · checked ${esc(v.checked || '')} · <a href="${esc(v.checked_against)}" target="_blank" rel="noopener noreferrer">source</a> · confirm before booking</p>` : ''}
         <div class="k muted" style="font-size:10px;letter-spacing:.06em">AVAILABLE NOW</div>

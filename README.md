@@ -292,6 +292,64 @@ generated from the synthetic book and labelled synthetic. The customer tiers,
 sites and planners in `config.example/desk.yaml` are invented. Sika's real
 ones go in `config/desk.yaml`.
 
+## Horizon: the team's second round (28 September)
+
+| Asked for | What changed | Where |
+|---|---|---|
+| Call it **Horizon**, with Sika's logo | The header shows the logo, then **Horizon**. Put Sika's logo at `config/brand/logo.svg` (or `.png`/`.jpg`/`.webp`). `config/` is gitignored, so the file stays on your machine. Without it a neutral Horizon mark is shown. The line counting shipments, variables and routes is gone. | `api/static/index.html`, `GET /brand/logo` |
+| The grey rung is hard to see; orange should be yellow | **Bias** is violet (fuchsia on the blue theme, whose Watch rung is violet). **Alert** is yellow: mustard on light pages, which still reads on white, and bright yellow on dark. | `api/static/styles.css` |
+| The decision tree does it all, so why the checklist and Act fast? | Both are retired. `/ops` and `/fast` redirect to the route's decision tree or to the board. The tree still executes and undoes through `/api/v2`. | `api/main.py` |
+| Close a case when it is resolved, into the risk ledger as history | **✓ Close case** on the route panel and in the decision tree. One click records how it ended (rerouted, split, other port, customer informed, no impact, other), with an optional note. The route then leaves the list and the ladder counts; **✓ Closed (n)** brings closed routes back. **Risk profile → Risk ledger → History** lists every close, newest first, with Reopen. A close holds until the route climbs the ladder. | `engine/act/cases.py`, `/api/cases` |
+| Show which departments confirmed the all-hands | A ring with one dot per department on the **All-hands** tab: green when confirmed, hollow when no reply. A dot opens mail and phone buttons to chase that department, and a **Confirmed** tick. The header chip carries the same dots. Replies belong to one sitting, so each new sitting starts empty. | `engine/rsvp.py`, `POST /api/allhands/rsvp` |
+| Ports, inventory, road/rail and vendors around the freight, only when something is selected, one tick each, plus "nearby and available" | Select a shipment, open a route, or open a customer's card, and the map draws what is around the freight. Nothing is drawn while nothing is selected. The five layers are listed below the table. | `engine/fleet/context.py`, `GET /api/map/context` |
+| Less text | Contacts are mail, phone and web icons; the address is in the tooltip. The unusual-volume panel is a small translucent card: route, how many times the usual volume, two bars. The empty band below the map, the funnel footer and the footnotes are gone. | `api/static/*` |
+
+The five map layers, one tick each (bottom left of the map):
+
+- **Ports:** alternative and nearby ports, faded where an event sits on
+  them.
+- **Inventory:** Sika's plants and distribution centres, and partner
+  warehouses with their free slots.
+- **Vendors:** local hauliers, rail and barge operators, and forwarders.
+- **Road & rail:** from the vehicle to those places, with km and hours.
+  For a vessel at sea the links start at its next port, and rail is drawn
+  only where both ends have rail.
+- **Nearby & available:** the reach circle, plus a green ring on each place
+  inside it that is free now.
+
+A click on a place shows its distance, how to get there, and contact icons.
+
+**Closed cases and replies are working state, kept on the server.**
+`data/cases.jsonl` and `data/rsvp.jsonl` are append-only and gitignored,
+like the field reports.
+
+### Run it on your laptop with Qwen 2.5 (free, local)
+
+Ask answers from the board without any model. For free-form questions, run
+Qwen 2.5 locally through Ollama. Nothing leaves the machine.
+
+```bash
+# 1. Horizon itself (once)
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# 2. Ollama + Qwen 2.5 (once): installs Ollama if needed and downloads the model
+RADAR_LOCAL_MODEL=qwen2.5:7b-instruct bash scripts/setup_ai.sh    # ~4.7 GB; qwen2.5:3b-instruct is ~2 GB
+
+# 3. Every time: start Horizon with that model
+export RADAR_LOCAL_MODEL=qwen2.5:7b-instruct
+export RADAR_LLM_TIMEOUT=120
+.venv/bin/python run.py serve        # then open http://localhost:8000
+```
+
+On Windows, step 2 is
+`powershell -ExecutionPolicy Bypass -File scripts\setup_ai.ps1`.
+Then set the two variables with `$env:RADAR_LOCAL_MODEL = "qwen2.5:7b-instruct"`,
+and start with `.venv\Scripts\python run.py serve`.
+
+To check it worked, click **Ask** on the board: answers written by the
+model say `written by qwen2.5:7b-instruct`. If Ollama runs but the model
+is missing, the board says so and names the `ollama pull` to run.
+
 ## What Sika's answers changed
 
 Six questions went to Sika. Four of the answers changed the build.

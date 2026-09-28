@@ -401,7 +401,10 @@
 /* ---- the nested partner card ------------------------------------ */
 .vcard { position: fixed; z-index: 41; width: 330px; max-width: calc(100vw - 24px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; font-size: 14px; }
 .vcard-body { flex: 1 1 auto; min-height: 0; padding: 10px 14px 14px; overflow-y: auto; }
-.vcontact { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 10px; }
+.vcontact { display: flex; flex-direction: row; gap: 6px; margin: 4px 0 10px; }
+.vcontact .vreach { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
+.vcontact .vreach svg { width: 16px; height: 16px; }
 .vcontact a { color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 13.5px; }
 .vcontact a:hover { text-decoration: underline; }
 .vcap { font-size: 19.5px; font-weight: 700; }
@@ -532,7 +535,7 @@
 
 .volume-panel {
   position: absolute; z-index: 5; top: 56px; left: 18px;
-  width: min(340px, calc(100% - 36px));
+  width: min(290px, calc(100% - 36px));
   max-height: calc(100% - 110px); overflow: auto;
   padding: 12px 13px; border-radius: 12px;
   border: 1px solid var(--border-strong);
@@ -648,3 +651,9 @@
 .ctx-act:hover { color: var(--accent); border-color: var(--accent); }
 .ctx-yes { color: var(--calm, #1f7a4a); margin-right: 5px; }
 .ctx-no { color: var(--muted); margin-right: 5px; }
+
+/* Unusual volume, minimal: route, how many times usual, two bars. */
+.surge-name { font-size: 12.5px; font-weight: 650; line-height: 1.3; margin-right: 8px; }
+.surge-card header { align-items: flex-start; }
+.surge-card .surge-show { padding: 2px 10px; font-size: 14px; }
+.volume-panel { background: color-mix(in srgb, var(--surface-1) 78%, transparent); }
