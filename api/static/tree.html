@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="radar-default-as-of" content="__DEFAULT_AS_OF__">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Action decision tree · Supply Chain Risk Radar</title>
+<link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="stylesheet" href="/tree.css?v=__ASSETV__">
+<link rel="icon" href="data:,">
+<script src="/theme.js?v=__ASSETV__"></script>
+</head>
+<body class="tr-body">
+
+<!-- The Action decision tree for one route, in its own window.
+
+     A real tree: the disruption at the top, every way out below it, and
+     each choice growing the next level. Numbers first; the words are one
+     click away, behind "More detail". Built on /api/decision/{route}. -->
+<header class="topbar topbar--sub tr-top">
+  <a class="ctl ctl--ghost" id="tr-back" href="/">&larr; Board</a>
+  <div class="tr-head">
+    <span class="level-chip" id="tr-chip"></span>
+    <div class="tr-head-text">
+      <h1>Action decision tree</h1>
+      <p class="tr-route" id="tr-route">…</p>
+      <label class="tr-pick-wrap" id="tr-pick-wrap" hidden><span class="sr-only">Route</span>
+        <select class="tr-pick" id="tr-pick" aria-label="Route"></select>
+      </label>
+    </div>
+  </div>
+  <div class="tr-decide" id="tr-decide"></div>
+  <div class="tr-tools">
+    <button type="button" class="ctl ctl--ghost" id="tr-reset" title="Back to the top of the tree">Start over</button>
+    <a class="ctl ctl--ghost" id="tr-ops" href="/ops" title="The same decisions as a checklist">Checklist</a>
+    <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+  </div>
+</header>
+
+<main class="tr-main">
+  <section class="tr-stage" id="tr-stage" aria-label="Decision tree">
+    <p class="tr-key" id="tr-key">
+      <span class="tr-key-note">Click a box to grow the next level</span>
+      <span><i class="tr-key-sw" style="background:var(--rank-1)"></i>1st</span>
+      <span><i class="tr-key-sw" style="background:var(--rank-2)"></i>2nd</span>
+      <span><i class="tr-key-sw" style="background:var(--rank-3)"></i>3rd</span>
+      <span><i class="tr-key-sw tr-key-sw--base"></i>as planned</span>
+    </p>
+    <div class="tr-levels" id="tr-levels">
+      <svg class="tr-wires" id="tr-wires" aria-hidden="true"></svg>
+    </div>
+  </section>
+  <aside class="tr-side" id="tr-side" aria-live="polite" aria-label="Details"></aside>
+</main>
+
+<div class="tr-toast" id="tr-toast" role="status" hidden></div>
+
+<script src="/clock.js?v=__ASSETV__"></script>
+<script src="/tree.js?v=__ASSETV__"></script>
+</body>
+</html>

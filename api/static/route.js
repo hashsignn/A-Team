@@ -466,9 +466,7 @@ async function boot() {
 
   const onward = new URLSearchParams({ route: ROUTE_ID });
   if (params.get('as_of')) onward.set('as_of', params.get('as_of'));
-  const fastQ = new URLSearchParams();
-  if (params.get('as_of')) fastQ.set('as_of', params.get('as_of'));
-  $('rt-next').href = `/fast/${encodeURIComponent(ROUTE_ID)}?${fastQ}`;
+  $('rt-next').href = `/tree?${onward}`;
   $('rt-ops').href = `/ops?${onward}`;
   $('rt-back').href = `/?${onward}`;
 

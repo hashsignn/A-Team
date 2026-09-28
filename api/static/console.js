@@ -62,7 +62,7 @@ function render() {
   $('brand-sub').textContent = `${ROUTE} · as of ${AS_OF.slice(0, 16).replace('T', ' ')} UTC`;
   $('link-lane').href = `/route/${encodeURIComponent(ROUTE)}?${QS}`;
   // The same two ways onward as the board, and back to it on this route.
-  $('link-fast').href = `/fast/${encodeURIComponent(ROUTE)}?${QS}`;
+  $('link-fast').href = `/tree?route=${encodeURIComponent(ROUTE)}&${QS}`;
   $('link-board').href = `/?route=${encodeURIComponent(ROUTE)}&${QS}`;
   renderRail(c);
 

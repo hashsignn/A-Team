@@ -73,10 +73,12 @@ def _charge(terms: dict, value_chf: float, lateness: np.ndarray) -> np.ndarray:
     return total
 
 
-def per_draw(shipment: Shipment, lateness_days: np.ndarray, config: Config) -> np.ndarray:
-    """CHF of penalty in each Monte Carlo draw (zeros when switched off)."""
+def per_draw(shipment: Shipment, lateness_days: np.ndarray, config: Config,
+             force: bool = False) -> np.ndarray:
+    """CHF of penalty in each Monte Carlo draw (zeros when switched off,
+    unless *force*: what the clause WOULD charge, for "if counted")."""
     lateness = np.asarray(lateness_days, dtype=float)
-    if not enabled(config):
+    if not (enabled(config) or force):
         return np.zeros_like(lateness)
     terms = clause(shipment.customer, config)
     if terms is None:

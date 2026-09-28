@@ -136,11 +136,17 @@ def route_customers(shipments: list[Shipment], risks: list[ShipmentRisk], config
         row = rows.setdefault(s.customer, {
             "name": s.customer, "priority": priority_of(s.customer, config),
             "shipments": 0, "at_risk": 0, "expected_loss_chf": 0.0,
+            # What a late delivery does to them (scoring.yaml -> customer
+            # impact), and their orders on this route, for the customer card.
+            "impact": s.customer_impact_tier.value,
+            "orders": [], "orders_at_risk": [],
         })
         row["shipments"] += 1
+        row["orders"].append(s.shipment_id)
         if loss.get(s.shipment_id, 0.0) > 0:
             row["at_risk"] += 1
             row["expected_loss_chf"] += loss[s.shipment_id]
+            row["orders_at_risk"].append(s.shipment_id)
     out = sorted(rows.values(), key=lambda r: (PRIORITY_ORDER.index(r["priority"]),
                                                -r["expected_loss_chf"], r["name"]))
     for row in out:
@@ -348,13 +354,19 @@ def _procurement(at_risk: list[tuple[Shipment, ShipmentRisk]], lanes: dict, calm
         g = groups.setdefault((own["id"], other["id"]), {
             "from_site": own["name"], "to_site": site["name"], "route_id": other["id"],
             "route": other["name"], "orders": [], "customers": set(), "key_accounts": 0,
-            "value_chf": 0.0, "in_time": 0,
+            "value_chf": 0.0, "in_time": 0, "in_time_orders": [], "window_h": None,
+            "hours": HANDOVER_HOURS + _lane_hours(other),
         })
         g["orders"].append(shipment.shipment_id)
         g["customers"].add(shipment.customer)
         g["key_accounts"] += priority_of(shipment.customer, config) == "A"
         g["value_chf"] += shipment.value_chf
         g["in_time"] += in_time
+        if in_time:
+            # How long this source can wait before it too misses the date.
+            spare = (shipment.otif_committed_date - arrive).total_seconds() / 3600.0
+            g["in_time_orders"].append(shipment.shipment_id)
+            g["window_h"] = spare if g["window_h"] is None else min(g["window_h"], spare)
     # A source that still misses the date only moves the lateness somewhere
     # else; it is counted, not proposed.
     missing = sum(len(g["orders"]) for g in groups.values() if not g["in_time"])
@@ -368,6 +380,9 @@ def _procurement(at_risk: list[tuple[Shipment, ShipmentRisk]], lanes: dict, calm
             "hint": ", ".join(sorted(g["customers"])),
             "priority": "A" if g["key_accounts"] else "B",
             "route_id": g["route_id"], "orders": g["orders"],
+            "in_time_orders": g["in_time_orders"], "value_chf": round(g["value_chf"], 2),
+            "via": g["route"], "hours": round(g["hours"], 1),
+            "window_h": round(g["window_h"], 2) if g["window_h"] is not None else None,
         })
     return {
         "function": "Procurement", "id": "FN_PROCUREMENT",

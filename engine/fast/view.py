@@ -73,6 +73,8 @@ class _Grouped:
     worst_days_late: float
     worst_hours_to_resolve: float
     on_time_count: int
+    # The group closes when its first order's option does.
+    window_hours: float | None = None
 
     def as_dict(self) -> dict:
         payload = self.example.as_dict()
@@ -86,6 +88,8 @@ class _Grouped:
                 "hours_to_resolve": round(self.worst_hours_to_resolve, 1),
                 "on_time": self.on_time_count == len(self.shipment_ids),
                 "on_time_shipments": self.on_time_count,
+                "window_hours": (round(self.window_hours, 2)
+                                 if self.window_hours is not None else None),
             }
         )
         return payload
@@ -131,6 +135,7 @@ def _group(rankings: list[fast.Ranking]) -> list[_Grouped]:
                     worst_days_late=option.days_late_after,
                     worst_hours_to_resolve=option.hours_to_resolve,
                     on_time_count=1 if option.on_time else 0,
+                    window_hours=option.window_hours,
                 )
                 continue
             already = option.shipment_id in bucket.shipment_ids
@@ -146,6 +151,9 @@ def _group(rankings: list[fast.Ranking]) -> list[_Grouped]:
             bucket.worst_hours_to_resolve = max(
                 bucket.worst_hours_to_resolve, option.hours_to_resolve
             )
+            if option.window_hours is not None:
+                bucket.window_hours = (option.window_hours if bucket.window_hours is None
+                                       else min(bucket.window_hours, option.window_hours))
 
     grouped = list(buckets.values())
     grouped.sort(

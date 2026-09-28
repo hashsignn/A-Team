@@ -41,9 +41,6 @@
         </svg>
         Ask
       </button>
-      <!-- The delivery-first surface: every route that needs a decision, with
-           Do it buttons and an undo window. -->
-      <a class="ctl" id="link-fast" href="/fast" title="Every route that needs a decision, with Do it buttons">Act fast</a>
       <a class="ctl" id="link-profile" href="/profile" title="Lanes, cutoffs and who gets called">Risk profile</a>
       <div class="themes" id="themes"></div>
     </nav>
@@ -258,9 +255,9 @@
             <li><b>2</b> Click a card to see why</li>
             <li><b>3</b> The arrow opens its options</li>
           </ol>
-          <p class="howto-where"><b>Where to act:</b> this panel decides ·
-            <i>Act fast</i> does it, with an undo window · <i>Step by step</i> is the
-            checklist · a vehicle on the map opens its Action Hub.</p>
+          <p class="howto-where"><b>Where to act:</b> a route's <i>Act &amp; escalate</i> tab
+            decides · its <i>Action decision tree</i> opens every option in its own
+            window · a vehicle on the map opens its Action Hub.</p>
           <button type="button" class="ctl ctl--mini" id="howto-close">Got it</button>
         </div>
         <div class="rlist" id="rlist" role="list"></div>
@@ -307,14 +304,11 @@
         <!-- WHERE TO ACT. This panel decides; these are the two ways onward,
              named the same everywhere (the header, the Action Hub, the help). -->
         <div class="d-next" id="d-next">
-          <a class="ctl ctl--primary" id="link-act" href="/fast"
-             title="This route's options with Do it buttons and an undo window">
-            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M6 4l10 6-10 6z" fill="currentColor"/></svg>
-            Act fast on this route</a>
-          <a class="ctl" id="link-ops" href="/ops"
-             title="Detect, confirm, act, close out: the checklist for this route">
-            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M4 5h2M4 10h2M4 15h2M9 5h7M9 10h7M9 15h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            Step by step</a>
+          <!-- One way onward: the full decision tree, in its own window. -->
+          <a class="ctl ctl--primary" id="link-tree" href="/tree" target="_blank" rel="noopener"
+             title="Every option for this route as a decision tree, compared in numbers, in its own window">
+            <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M10 3v4M10 7l-5 4M10 7l5 4M5 11v3M15 11v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="3.5" r="1.8" fill="currentColor"/><circle cx="5" cy="15.5" r="1.8" fill="currentColor"/><circle cx="15" cy="15.5" r="1.8" fill="currentColor"/></svg>
+            Action decision tree ↗</a>
         </div>
 
 
@@ -327,10 +321,7 @@
             Act &amp; escalate
           </button>
           <button type="button" class="rtab" data-tab="customers" role="tab">
-            Customers &amp; shipments
-          </button>
-          <button type="button" class="rtab" data-tab="contacts" role="tab">
-            Who to contact
+            Customers &amp; contacts
           </button>
         </nav>
 
@@ -382,15 +373,13 @@
             </details>
           </div>
 
-          <!-- CUSTOMERS & SHIPMENTS — who this route serves, key accounts
-               first, and every shipment on it with its recovery. -->
+          <!-- CUSTOMERS & CONTACTS: who this route serves (a click on one opens
+               its card), every shipment on it, and who to call. One tab: they
+               answer the same question, who is involved. -->
           <div class="rpanel" data-panel="customers">
             <div id="d-cust"></div>
             <div class="dship" id="d-ships"></div>
-          </div>
-
-          <!-- WHO TO CONTACT -->
-          <div class="rpanel" data-panel="contacts">
+            <h4 class="rp-h">Who to contact</h4>
             <div id="r-contacts"></div>
           </div>
 
@@ -458,6 +447,7 @@
 </aside>
 
 <script src="/charts.js?v=__ASSETV__"></script>
+<script src="/clock.js?v=__ASSETV__"></script>
 <script src="/app.js?v=__ASSETV__"></script>
 <!-- The fleet map: MapLibre GL and Chart.js are vendored from npm, like the
      globe. mapstore holds the state, mapagent is the only thing that changes
@@ -468,5 +458,7 @@
 <script src="/mapagent.js?v=__ASSETV__"></script>
 <script src="/mapview.js?v=__ASSETV__"></script>
 <script src="/actionhub.js?v=__ASSETV__"></script>
+<!-- One customer's card, opened from its row in Customers & contacts. -->
+<div class="cust-card" id="cust-card" role="dialog" aria-label="Customer" hidden></div>
 </body>
 </html>

@@ -1073,6 +1073,7 @@ def _assess_one(
             expected_loss_chf=act["expected_loss_chf"],
             p90_loss_chf=act["p90_loss_chf"],
             conditional_loss_chf=act["conditional_loss_chf"],
+            cost_parts=act["cost_parts"],
             driving_event_ids=act_draws.driving_event_ids,
         )
         if impact_at is not None:
@@ -1121,6 +1122,7 @@ def _assess_one(
             expected_loss_chf=base["expected_loss_chf"],
             p90_loss_chf=base["p90_loss_chf"],
             conditional_loss_chf=base["conditional_loss_chf"],
+            cost_parts=base["cost_parts"],
             driving_event_ids=base_draws.driving_event_ids,
         ),
         best_action=chosen,

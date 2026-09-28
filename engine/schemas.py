@@ -372,6 +372,9 @@ class ShipmentOutcome(BaseModel):
     # matrix's impact axis; see engine/score/impact.py::summarise.
     conditional_loss_chf: float = 0.0
     driving_event_ids: list[str]
+    # The expected loss by driver: penalty, expediting, customer_impact,
+    # surcharge (CHF). They sum to expected_loss_chf.
+    cost_parts: dict[str, float] = {}
 
 
 class ActionOption(BaseModel):

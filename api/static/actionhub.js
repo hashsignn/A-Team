@@ -470,8 +470,7 @@
       const recent = s.journal.slice(-8).reverse();
       return `
       <div class="hub-foot">
-        <a class="ctl ctl--primary" href="/fast/${encodeURIComponent(lane)}?${q}" title="This route's options with Do it buttons and an undo window">▶ Act fast on this route</a>
-        <a class="ctl" href="/ops?${ops}" title="Detect, confirm, act, close out: the checklist for this route">Step by step</a>
+        <a class="ctl ctl--primary" href="/tree?${ops}" target="_blank" rel="noopener" title="Every option for this route as a decision tree, in its own window">Action decision tree ↗</a>
         <a class="ctl" href="/route/${encodeURIComponent(lane)}?${q}" title="Route page: matrix and charts">Route page</a>
       </div>
       <details class="journal"><summary>Actions on this map (${s.journal.length}) · planner or agent</summary>

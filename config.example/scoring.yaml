@@ -156,6 +156,38 @@ cost:
     # above mid = high
 
 # -------------------------------------------------------------------
+# CONTRACT CLOCKS: what an event's timestamp starts
+# -------------------------------------------------------------------
+# Every disruption event is timestamped, and that timestamp starts clocks in
+# the framework contracts. Each is shown on the Action decision tree counting
+# down from the event. The first three are ASSUMED typical terms, to be
+# replaced with Sika's framework contracts; the CMR one is law for road
+# carriage and starts at delivery, not at the event.
+contract_clocks:
+  from_event:
+    - id: carrier_notice
+      label: Carrier must tell Sika
+      hours: 24
+      party: carrier
+      basis: "ASSUMED: the carrier reports a known delay within 24 h of the event."
+    - id: agreed_reroute
+      label: Reroute at the agreed rate
+      hours: 48
+      party: sika
+      basis: "ASSUMED: inside 48 h of the event Sika may reroute at the pre-agreed contract rate; after that, spot rates apply."
+    - id: force_majeure
+      label: Carrier's force majeure notice
+      hours: 72
+      party: carrier
+      basis: "ASSUMED: a carrier invoking force majeure must say so within 72 h of the event."
+  after_delivery:
+    - id: cmr_delay
+      label: Delay claim, road (CMR)
+      days: 21
+      basis: "CMR Art. 30(3): no compensation for delay unless a written reservation reaches the carrier within 21 days of the goods being placed at the consignee's disposal."
+      source: https://www.jus.uio.no/lm/un.cmr.road.carriage.contract.convention.1956.amended.protocol.1978/30.html
+
+# -------------------------------------------------------------------
 # ACTIONABILITY — BRIEF §5.5
 # -------------------------------------------------------------------
 # Minimum hours needed to execute an action. Below this the option is gone.

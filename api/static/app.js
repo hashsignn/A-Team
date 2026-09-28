@@ -343,14 +343,21 @@ async function boot() {
   });
   $('meet-chip').addEventListener('click', openAllHands);
   $('pen-chip').addEventListener('click', togglePenalties);
+  document.addEventListener('click', (e) => {
+    const card = $('cust-card');
+    if (card && !card.hidden && !card.contains(e.target)) card.hidden = true;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('cust-card')) $('cust-card').hidden = true;
+  });
   // The Contract card folds away on a click anywhere else, like any menu.
   document.addEventListener('click', (e) => {
     const pop = $('contract-pop');
     if (pop && pop.open && !pop.contains(e.target)) pop.open = false;
   });
 
-  // ?route=<id> opens that route: the way back from Act fast, the checklist
-  // and the route page lands on the route you left, not on the list.
+  // ?route=<id> opens that route: the way back from the decision tree and
+  // the route page lands on the route you left, not on the list.
   const wanted = new URLSearchParams(location.search).get('route');
   if (wanted && board.routes.some((r) => r.route_id === wanted)) select(wanted, { fly: true, fit: true });
 }
@@ -470,6 +477,8 @@ function applyBoard(board) {
     `${board.shipments_total} shipments (synthetic) · ` +
     `${board.variables_total} risk variables · ${board.routes.length} routes`;
   $('asof-text').textContent = board.as_of_label;
+  // Every deadline clock on the board counts down from the board's moment.
+  if (window.DeadlineClock) DeadlineClock.start(board.as_of);
 
   renderPosture(board.posture);
   renderMeetChip();
@@ -1141,11 +1150,8 @@ function linkOps(routeId) {
   });
   const link = $('link-route');
   if (link) link.href = `/route/${encodeURIComponent(routeId)}?${query}`;
-  // Where to act, named the same everywhere: Act fast does it (with an undo
-  // window), Step by step is the checklist.
-  const fastQ = new URLSearchParams({ as_of: query.get('as_of'), shipments: query.get('shipments') });
-  if ($('link-act')) $('link-act').href = `/fast/${encodeURIComponent(routeId)}?${fastQ}`;
-  if ($('link-ops')) $('link-ops').href = `/ops?${query}`;
+  // Where to act, one place: the Action decision tree, in its own window.
+  if ($('link-tree')) $('link-tree').href = `/tree?${query}`;
 }
 
 function renderDetail(r) {
@@ -1174,13 +1180,18 @@ function renderDetail(r) {
   // Critical with money at stake and no option left is not "no deadline":
   // the one thing left is telling the customer, and that is due now.
   const stuck = r.lead_time_hours == null && r.level === 'red' && r.exposure_chf > 0 && !r.actions.length;
+  // The deadline as the calm clock: counting down, never red. The level
+  // chip above already says how urgent; the clock only says how long.
+  const due = r.clock_hours != null && state.board && window.DeadlineClock
+    ? new Date(Date.parse(state.board.as_of) + r.clock_hours * 3.6e6).toISOString() : null;
   const by = r.lead_time_hours != null
-    ? [hours(r.lead_time_hours), clockNote(r.lead_time_hours, r.clock_hours) || 'first option closes', true]
-    : stuck ? ['now', 'tell the customer', true] : ['no deadline', 'nothing closes', false];
+    ? [due ? DeadlineClock.html(due) : hours(r.lead_time_hours),
+      clockNote(r.lead_time_hours, r.clock_hours) || (due ? `closes ${DeadlineClock.at(due)}` : 'first option closes')]
+    : stuck ? ['now', 'tell the customer'] : ['no deadline', 'nothing closes'];
   $('d-stats').innerHTML = `
     <div class="stat">
       <div class="stat-k">Action by</div>
-      <div class="stat-v" style="${by[2] ? `color:${c}` : ''}">${by[0]}</div>
+      <div class="stat-v stat-v--clock">${by[0]}</div>
       <div class="stat-sub">${by[1]}</div>
     </div>
     <div class="stat">
@@ -1219,15 +1230,65 @@ function renderAlloc(r) {
      <span><b>${customers.length}</b> customer${customers.length === 1 ? '' : 's'}${
        keys ? `, <b>★ ${keys}</b> key account${keys === 1 ? '' : 's'}` : ''}</span>`;
   const rows = customers.map((c) => `
-    <tr class="${c.at_risk ? 'is-risk' : ''}">
+    <tr class="${c.at_risk ? 'is-risk' : ''}" data-cust="${esc(c.name)}" tabindex="0" title="Click for ${esc(c.name)}'s card">
       <td>${esc(c.name)}</td>
       <td>${priBadge(c.priority)}</td>
       <td class="num">${c.at_risk} of ${c.shipments}</td>
       <td class="num">${c.expected_loss_chf > 0 ? chf(c.expected_loss_chf) : '—'}</td>
+      <td class="cust-more"><button type="button" class="icon-btn icon-btn--mini" aria-label="Details of ${esc(c.name)}">ⓘ</button></td>
     </tr>`).join('');
-  $('d-cust').innerHTML = customers.length ? `<table class="alloc-tab">
-      <thead><tr><th>Customer</th><th>Importance</th><th>At risk</th><th>If nobody acts</th></tr></thead>
+  $('d-cust').innerHTML = customers.length ? `<h4 class="rp-h">Customers <span class="muted">· click one for its card</span></h4>
+    <table class="alloc-tab">
+      <thead><tr><th>Customer</th><th>Importance</th><th>At risk</th><th>If nobody acts</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table>` : '';
+  $('d-cust').querySelectorAll('tr[data-cust]').forEach((tr) => {
+    const open = (e) => { e.stopPropagation(); showCustomer(r, tr.dataset.cust, tr); };
+    tr.addEventListener('click', open);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(e); });
+  });
+}
+
+/* One customer, in a small see-through card beside its row: who they are to
+ * us, what a late delivery costs them and us, their orders on this route. */
+const IMPACT_WORDS = {
+  line_down: 'their line stops if late', stock_out: 'they run out if late',
+  inconvenience: 'an inconvenience if late',
+};
+function showCustomer(r, name, anchor) {
+  const card = $('cust-card');
+  const c = (r.customers || []).find((x) => x.name === name);
+  if (!card || !c) return;
+  const clause = (r.clauses || []).find((x) => x.customer === name) || {};
+  const tier = ((state.board && state.board.priorities) || {})[c.priority] || {};
+  const counted = !!(state.board.penalties && state.board.penalties.enabled);
+  const chips = (c.orders || []).map((id) => `<button type="button" class="dt-order${
+    (c.orders_at_risk || []).includes(id) ? ' is-risk' : ''}" data-order="${esc(id)}">${esc(id)}</button>`).join('');
+  card.innerHTML = `
+    <div class="cc2-head">
+      <b>${esc(c.name)}</b>${priBadge(c.priority)}
+      <button type="button" class="icon-btn icon-btn--mini cc2-x" aria-label="Close">✕</button>
+    </div>
+    <p class="cc2-type">${esc(clause.label || 'Customer')} · ${esc(IMPACT_WORDS[c.impact] || '')}</p>
+    <div class="cc2-nums">
+      <div><span>Orders here</span><b>${c.shipments}</b></div>
+      <div><span>At risk</span><b>${c.at_risk}</b></div>
+      <div><span>If nobody acts</span><b>${c.expected_loss_chf > 0 ? chf(c.expected_loss_chf) : '—'}</b></div>
+    </div>
+    <p class="cc2-row" title="${esc(clause.clause || '')}"><span>Delay clause</span> ${esc(clause.summary || 'not on file')}
+      <em>${counted ? 'counted' : 'not counted'}</em></p>
+    ${tier.rule ? `<p class="cc2-row"><span>${esc(tier.label || '')}</span> ${esc(tier.rule)}</p>` : ''}
+    <div class="dt-orders">${chips}</div>`;
+  card.hidden = false;
+  const box = anchor.getBoundingClientRect();
+  const w = Math.min(340, window.innerWidth - 24);
+  card.style.width = `${w}px`;
+  card.style.left = `${Math.max(12, Math.min(box.left - w - 12, window.innerWidth - w - 12))}px`;
+  card.style.top = `${Math.max(12, Math.min(box.top - 20, window.innerHeight - card.offsetHeight - 12))}px`;
+  card.querySelector('.cc2-x').addEventListener('click', () => { card.hidden = true; });
+  card.querySelectorAll('[data-order]').forEach((b) => b.addEventListener('click', () => {
+    card.hidden = true;
+    planRecovery(b.dataset.order);
+  }));
 }
 
 function planRecovery(id) {
@@ -1391,6 +1452,11 @@ function optionsTile(d) {
 }
 
 const cleanLabel = (l) => String(l || '').replace(/\s*\+\d+ more$/, '');
+// The decision tree page, opened on one option.
+function treeLink(optionId) {
+  const base = ($('link-tree') && $('link-tree').getAttribute('href')) || '/tree';
+  return `${base}${base.includes('?') ? '&' : '?'}opt=${encodeURIComponent(optionId)}`;
+}
 const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || `${one}s`)}`;
 function pathWords(path) {
   return (path || []).map((x) => esc(x.name)).join(' <span class="dt-arrow">→</span> ');
@@ -1469,12 +1535,23 @@ function treeHTML(r, d) {
   return `<div class="dt">${root}${who}${question}<div class="dt-branch dt-branch--${yesOn ? 'yes' : 'no'}">${branch}</div>${end}</div>`;
 }
 
+/* When a route's first option closes, on the clock. */
+function dueAt(r) {
+  return new Date(Date.parse(state.board.as_of) + r.clock_hours * 3.6e6).toISOString();
+}
+
+/* How long an option stays open, as the calm clock (clock.js). */
+function closesHTML(iso) {
+  if (!iso || !window.DeadlineClock) return '';
+  return `<span class="dt-closes"><span class="dt-closes-k">closes in</span> ${DeadlineClock.html(iso)}</span>`;
+}
+
 function optionHTML(o, body) {
   const open = state.dt.open === o.id;
   return `<li class="dt-opt${o.best ? ' is-best' : ''}${open ? ' is-open' : ''}" data-opt="${esc(o.id)}">
       <button type="button" class="dt-opt-head" aria-expanded="${open}">
         <span class="dt-opt-name">${o.best ? '<span class="dt-star" title="Best: keeps the most orders on time, soonest, for the least">★</span>' : ''}${esc(cleanLabel(o.label))}</span>
-        <span class="dt-opt-sum">${o.sum}</span>
+        <span class="dt-opt-sum">${o.sum}${closesHTML(o.closes_at)}</span>
         <span class="dt-opt-caret" aria-hidden="true">▸</span>
       </button>
       <div class="dt-opt-body"${open ? '' : ' hidden'}>${body}</div>
@@ -1492,7 +1569,7 @@ function routeBody(r, o) {
     <div class="dt-orders">${orders}</div>
     <div class="dt-acts">
       ${drawable ? `<button type="button" class="ctl ctl--mini" data-map="${esc(o.id)}">Show on map</button>` : ''}
-      <a class="ctl ctl--mini ctl--primary" href="${esc($('link-act').getAttribute('href') || '/fast')}">Do it in Act fast</a>
+      <a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(o.id))}" target="_blank" rel="noopener">Open in the decision tree ↗</a>
     </div>`;
 }
 
@@ -1500,10 +1577,14 @@ function yesHTML(r, d) {
   const opts = d.keep.options.map((o) => optionHTML({ ...o,
     sum: `${o.on_time} of ${o.orders} on time · ${extra(o.cost_chf)} · starts in ${hours(o.starts_in_h)}` },
   routeBody(r, o))).join('');
+  const stay = (d.compare || []).find((x) => x.baseline);
+  const cheapest = Math.min(...d.keep.options.map((o) => o.cost_chf));
   return `
     <div class="dt-node dt-q">
       <span class="dt-step">4</span>
       <div class="dt-body"><b class="dt-h">Which way keeps the date?</b>
+        ${d.keep.stay_best ? `<p class="dt-sub"><b>★ Best: stay as planned.</b> Every order is likely on time, and lateness would cost
+          ${chf(stay && stay.exposure_chf)} in expectation, less than the cheapest way (${chf(cheapest)}).</p>` : ''}
         <p class="dt-sub">Click one to open it; <button type="button" class="dt-link" data-view-to="compare">compare the routes</button> side by side.</p></div>
     </div>
     <ul class="dt-opts">${opts}</ul>
@@ -1517,11 +1598,11 @@ function noHTML(r, d) {
         sum: `${plural(g.orders_n, 'order')} · ${lateWords(g.late_after_days)} · ${extra(g.cost_chf)}` }, routeBody(r, g));
     }
     const orders = g.orders.map((o) => `<span class="dt-order" title="${esc(o.customer)}">${o.priority === 'A' ? '★ ' : ''}${esc(o.shipment_id)} · ${esc(o.customer)}</span>`).join('');
-    return optionHTML({ id: `act:${g.label}`, label: g.label, best: false,
+    return optionHTML({ id: `act:${g.label}`, label: g.label, best: false, closes_at: g.closes_at,
       sum: `${plural(g.orders.length, 'order')} · ${g.cost_chf > 0 ? `costs ${chf(g.cost_chf)}` : 'free'} · saves ${chf(g.saves_chf)} · decide ${inHours(g.decide_in_h)}` }, `
       <div class="dt-orders">${orders}</div>
       <p class="dt-sub">Takes ${Math.round(g.takes_h || 0)} h · ${g.owner === 'us' ? 'we can do this' : `${esc(g.owner || 'the carrier')} does this`}. "Saves" is the expected cost of lateness it avoids.</p>
-      <div class="dt-acts"><a class="ctl ctl--mini ctl--primary" href="${esc($('link-act').getAttribute('href') || '/fast')}">Do it in Act fast</a></div>`);
+      <div class="dt-acts"><a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(`act:${g.label}`))}" target="_blank" rel="noopener">Open in the decision tree ↗</a></div>`);
   }).join('');
   const tell = d.tell.orders;
   const leaf = tell.length ? `
@@ -2136,7 +2217,8 @@ function renderTable() {
       <button type="button" class="rli-main" aria-expanded="${open}">
         <span class="rli-top">
           <span class="level-chip level-${esc(r.level)}" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span>
-          ${r.lead_time_hours == null ? '' : `<span class="rli-when" title="Decide within">${ICON.clock}${hours(r.lead_time_hours)}</span>`}
+          ${r.lead_time_hours == null ? '' : `<span class="rli-when" title="Decide within${r.clock_hours != null && state.board ? `, by ${esc(DeadlineClock.at(dueAt(r)))}` : ''}">${
+            r.clock_hours != null && state.board ? DeadlineClock.html(dueAt(r)) : `${ICON.clock}${hours(r.lead_time_hours)}`}</span>`}
           ${r.early_warning ? `<span class="rli-ew" title="${esc(r.early_warning.sentence)}">⚡ orders</span>` : ''}
           <span class="rli-site">${esc(r.site ? r.site.name : '')}</span>
         </span>
@@ -2311,6 +2393,25 @@ function closeAsk() {
   $('btn-ask').classList.remove('is-on');
 }
 
+/* An answer's lines: the first is the answer, the rest are its numbers. */
+function askText(text) {
+  const lines = String(text || '').split('\n');
+  return lines.map((line, i) => {
+    const t = esc(line);
+    if (i === 0) return `<p class="ask-lead">${t}</p>`;
+    return line.startsWith('•') ? `<p class="ask-li">${t.replace(/^•\s*/, '')}</p>` : `<p>${t}</p>`;
+  }).join('');
+}
+
+function askLinks(links) {
+  if (!links.length) return '';
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  return `<div class="ask-links">${links.map((l) => (l.href
+    ? `<a class="ctl ctl--mini" href="${esc(l.href)}&${q}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`
+    : `<button type="button" class="ctl ctl--mini" data-ask-route="${esc(l.route_id)}">${esc(l.label)}</button>`)).join('')}</div>`;
+}
+
 function askBubble(who, html, cls) {
   const log = $('ask-log');
   const el = document.createElement('div');
@@ -2351,11 +2452,22 @@ async function sendAsk() {
     });
     const out = await res.json();
     pending.remove();
-    if (out.answered) {
+    const links = askLinks(out.links || []);
+    if (out.answered && out.generated) {
       askBubble('bot',
-        `<div class="ask-gen">generated by ${esc(out.model || out.backend)}</div>`
-        + esc(out.answer).replace(/\n/g, '<br>'),
+        `<div class="ask-gen">written by ${esc(out.model || out.backend)}, from the board</div>`
+        + askText(out.answer) + links,
         'is-generated');
+    } else if (out.answered) {
+      // Straight from the board: every line is a row the engine computed.
+      // Said once per session that a free local AI can be connected.
+      const hint = !ASK.hinted && out.model_status
+        ? `<div class="ask-unlock">No AI model is running (${esc(out.model_status)}), so this comes straight
+            from the board. For free-form questions, start the free local AI: <code>scripts/setup_ai.sh</code>
+            (Windows: <code>scripts\\setup_ai.ps1</code>).</div>` : '';
+      ASK.hinted = ASK.hinted || Boolean(hint);
+      askBubble('bot', `<div class="ask-gen ask-gen--board">from the board</div>${askText(out.answer)}${links}${hint}`,
+        'is-board');
     } else {
       // Not an error. The board is computed without a model and is unaffected
       // by its absence, so the panel says what is missing and what it buys.
@@ -2377,6 +2489,11 @@ async function sendAsk() {
 }
 
 document.addEventListener('click', (e) => {
+  const open = e.target.closest('[data-ask-route]');
+  if (open) {
+    select(open.dataset.askRoute, { fly: true });
+    return;
+  }
   const askBtn = e.target.closest('[data-ask]');
   if (askBtn) {
     e.stopPropagation();

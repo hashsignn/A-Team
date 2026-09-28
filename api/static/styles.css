@@ -2563,10 +2563,13 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
 .rli-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius); }
 .rli-top { display: flex; align-items: center; gap: 10px; padding-right: 42px; }   /* clear of the arrow */
 .rli-site { margin: 0 0 0 auto; font-size: 13px; color: var(--muted); }
+/* The deadline chip is the calm clock: never the level's red. The level
+ * chip beside it already says how urgent. */
 .rli-when {
   display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 700;
-  color: var(--lvl); padding: 2px 9px; border-radius: 999px;
-  background: color-mix(in srgb, var(--lvl) 10%, transparent);
+  color: var(--text-primary); padding: 2px 9px; border-radius: 999px;
+  background: color-mix(in srgb, var(--calm) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--calm) 22%, transparent);
 }
 .rli-when svg { width: 14px; height: 14px; }
 /* The count rides at the end of the heading, like a badge after a title:
@@ -2762,7 +2765,7 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
 /* The option that closes first says so; urgency, not just the customer,
    orders the list. */
 .act.is-now { border-left-color: var(--lvl-red); }
-.act.is-now .act-when { color: var(--lvl-red); font-weight: 700; }
+.act.is-now .act-when { color: var(--text-primary); font-weight: 700; }
 .act.is-soon .act-when { color: var(--lvl-yellow); font-weight: 650; }
 .act-when b { font-family: var(--sans); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; }
 .act-meta b { color: var(--text-primary); font-weight: 600; }
@@ -3101,3 +3104,117 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
 /* A news headline can run to four lines; two carry the point, the rest is
    the tooltip. */
 .dt-list li > span:first-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---- Customers & contacts: section heads, and one customer's card ---- */
+.rp-h { margin: 14px 18px 6px; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); }
+.rp-h .muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.alloc-tab tr[data-cust] { cursor: pointer; }
+.alloc-tab tr[data-cust]:hover, .alloc-tab tr[data-cust]:focus-visible { background: var(--surface-2); outline: none; }
+.alloc-tab .cust-more { width: 30px; text-align: right; }
+.icon-btn--mini { width: 26px; height: 26px; font-size: 13px; }
+.cust-card {
+  position: fixed; z-index: 120; padding: 12px 14px 12px; border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 80%, transparent);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .18); animation: cc2-in .14s ease-out;
+}
+.cust-card[hidden] { display: none; }
+@keyframes cc2-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+.cc2-head { display: flex; align-items: center; gap: 8px; }
+.cc2-head b { font-size: 15px; color: var(--text-primary); }
+.cc2-x { margin-left: auto; }
+.cc2-type { margin: 3px 0 10px; font-size: 12.5px; color: var(--text-secondary); }
+.cc2-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.cc2-nums > div { padding: 7px 8px; border-radius: 10px; background: color-mix(in srgb, var(--surface-2) 80%, transparent); }
+.cc2-nums span { display: block; font-size: 11.5px; color: var(--text-secondary); }
+.cc2-nums b { font-size: 16px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.cc2-row { margin: 0 0 6px; font-size: 12.5px; color: var(--text-primary); line-height: 1.4; }
+.cc2-row span { display: inline-block; min-width: 86px; font-size: 11.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.cc2-row em { font-style: normal; font-size: 11.5px; color: var(--text-secondary); margin-left: 4px; }
+button.dt-order { border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+button.dt-order:hover { color: var(--text-primary); }
+.dt-order.is-risk { box-shadow: inset 2px 0 0 var(--lvl-red); }
+
+/* ==========================================================================
+   Deadline clock (clock.js) and the rank ramp.
+
+   The clock is calm on purpose: a small green clock, hours and minutes in
+   the text colour, seconds in grey, "closed" in grey. Never red.
+
+   The rank ramp orders alternatives, best first. One hue per theme, dark to
+   light on light pages (light to dark on the dark one), checked with the
+   dataviz validator (ordinal: monotone lightness, visible steps, the light
+   end clears 2:1 on the surface). It is NOT a ladder colour: rank says
+   "better than the next one", the ladder says "how soon".
+   ========================================================================== */
+:root,
+:root[data-theme="light"] {
+  --calm: #1f7a4a;
+  --rank-1: #0b5b70; --rank-1-ink: #ffffff;
+  --rank-2: #2b8ea8; --rank-2-ink: #08222b;
+  --rank-3: #6db7c9; --rank-3-ink: #08222b;
+}
+:root[data-theme="sika"] {
+  --calm: #1f7a4a;
+  --rank-1: #1a1a17; --rank-1-ink: #ffc700;
+  --rank-2: #6b6b63; --rank-2-ink: #ffffff;
+  --rank-3: #a3a39a; --rank-3-ink: #1a1a17;
+}
+:root[data-theme="dark"] {
+  --calm: #4ade80;
+  --rank-1: #8be3f0; --rank-1-ink: #04202a;
+  --rank-2: #27a2bb; --rank-2-ink: #04202a;
+  --rank-3: #1a6b80; --rank-3-ink: #eef2f9;
+}
+
+.dl {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.dl-hm { font-weight: 650; color: var(--text-primary); }
+.dl-sec { color: var(--muted); font-weight: 450; }
+.dl-closed, .dl--none { color: var(--muted); font-weight: 500; }
+.dl-ico {
+  position: relative;
+  align-self: center;
+  margin-right: 0.32em;
+  width: 0.82em;
+  height: 0.82em;
+  flex: none;
+  border: 1.6px solid var(--calm);
+  border-radius: 50%;
+}
+.dl-ico::before,
+.dl-ico::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 1.4px;
+  background: var(--calm);
+  transform-origin: 50% 100%;
+  border-radius: 1px;
+}
+.dl-ico::before { height: 34%; transform: translateX(-50%); }
+.dl-ico::after { height: 26%; transform: translateX(-50%) rotate(90deg); }
+.dl.is-closed .dl-ico { border-color: var(--muted); }
+
+/* The option heads in the Act & escalate tree carry their clock. */
+.dt-closes { display: inline-flex; align-items: baseline; gap: 5px; margin-left: 8px; white-space: nowrap; }
+.dt-closes-k { font-size: 11px; font-weight: 650; color: var(--calm); }
+.stat-v--clock .dl { font-size: 0.86em; }
+
+/* Ask: an answer from the board reads as the board does. The first line
+ * answers; the rest are its numbers, one per line. */
+.ask-msg.is-board { border-left: 3px solid var(--calm); }
+.ask-gen--board { color: var(--calm); }
+.ask-lead { margin: 0 0 6px; font-weight: 600; line-height: 1.45; }
+.ask-msg p { margin: 0 0 4px; line-height: 1.45; }
+.ask-li { position: relative; padding-left: 12px; font-size: 13px; color: var(--text-secondary); }
+.ask-li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 4px; height: 4px; border-radius: 50%; background: var(--axis); }
+.ask-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ask-unlock code { font-family: var(--code); font-size: 11.5px; }

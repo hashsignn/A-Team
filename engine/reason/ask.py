@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 
+from engine.reason import answer as answer_mod
 from engine.reason import llm
 
 SYSTEM = """You are a supply chain risk assistant embedded in a planning tool.
@@ -104,68 +105,107 @@ def event_question(board: dict, event_id: str, question: str) -> dict:
         "route": route_name,
         "event": _event_context(found),
     }
-    return _ask(context, question)
+    return _ask(context, question, answer_mod.event_reply(board, event_id))
 
 
-def board_question(board: dict, question: str, route_id: str | None = None) -> dict:
+def board_brief(board: dict, route: dict | None = None, tree: dict | None = None) -> str:
+    """Everything a question about the board could need, as short lines: the
+    routes at risk, the key accounts, the meeting, the early warnings, the
+    penalties, and the route the question is about with its decision tree.
+
+    Lines, not JSON: a small model on a laptop reads 1,500 tokens in
+    seconds and 8,000 in minutes, and the rows say the same either way."""
+    lines = [f"BOARD at {board['as_of_label']}. {(board.get('posture') or {}).get('headline', '')}",
+             "Levels: " + ", ".join(f"{lv['count']} {lv['label']} ({lv['directive'].lower()})"
+                                    for lv in board["levels"]),
+             "Delay penalties from contracts counted: "
+             + ("yes" if (board.get("penalties") or {}).get("enabled") else "no"),
+             "", "ROUTES WITH ORDERS AT RISK:"]
+    at_risk = sorted([r for r in board["routes"] if r.get("shipments_at_risk")], key=answer_mod._urgency)
+    lines += [f"- {answer_mod._route_line(board, r)}" for r in at_risk]
+    calm = [r["name"] for r in board["routes"] if not r.get("shipments_at_risk")]
+    if calm:
+        lines.append(f"Calm routes (nothing at risk): {len(calm)}")
+    keys = answer_mod.key_accounts(board)["facts"]
+    if keys:
+        lines += ["", "KEY ACCOUNTS AT RISK:", *keys[1:]]
+    lines += ["", "ALL-HANDS:", *answer_mod.meeting(board)["facts"]]
+    warn = answer_mod.signals(board)["facts"]
+    lines += ["", "EARLY WARNINGS:", *(warn or ["none"])]
+    if route:
+        lines += ["", f"THE ROUTE ASKED ABOUT: {route['name']} ({route['level_label']})",
+                  *[f"- event: {e['title']} ({e.get('kind_label', '')}, {answer_mod.orders(e.get('shipments_here', 0))}, "
+                    f"{answer_mod.chf(e.get('exposure_chf'))})" for e in route.get("events", [])[:4]]]
+        lines += [f"- {x.lstrip('• ')}" for x in answer_mod._if_nobody_acts(tree, route)]
+        lines += [f"- {x.lstrip('• ')}" for x in answer_mod._tree_lines(board, tree)]
+        for o in ((tree or {}).get("keep") or {}).get("options", [])[:3]:
+            lines.append(f"- way: {o['label']}, {o['on_time']}/{o['orders']} on time, "
+                         f"extra {answer_mod.chf(o['cost_chf'])}, closes {answer_mod._fmt_iso(o.get('closes_at'))}")
+        for a in route.get("actions", [])[:5]:
+            lines.append(f"- playbook: {a.get('sentence', a['label'])}")
+        manager = (route.get("response") or {}).get("route_manager") or {}
+        if manager.get("name"):
+            lines.append(f"- route manager: {manager['name']}, {manager.get('phone', '')}, {manager.get('email', '')}")
+    return "\n".join(lines)
+
+
+def board_question(board: dict, question: str, route_id: str | None = None,
+                   tree_for: answer_mod.TreeFor | None = None) -> dict:
     """Answer a question about the whole board.
 
-    The selected route is included in full when there is one, because most
-    questions asked with a route open are about that route.
+    Answered from the board first, always (engine/reason/answer.py): that
+    works with no model at all. With a model connected, the model writes
+    the answer from the full context, starting from those same rows.
     """
-    context: dict = {
-        "as_of": board["as_of_label"],
-        "posture": board["posture"],
-        "levels": board["levels"],
-        "routes": [
-            {
-                "name": r["name"],
-                "level": r["level_label"],
-                "directive": r["directive"],
-                "why": r["reason"],
-                "expected_loss_chf": r["exposure_chf"],
-                "shipments_at_risk": r["shipments_at_risk"],
-                "hours_until_a_decision_is_needed": r["lead_time_hours"],
-            }
-            for r in board["routes"]
-        ],
-    }
-    if route_id:
-        route = next(
-            (r for r in board["routes"] if r["route_id"] == route_id), None
-        )
-        if route:
-            context["selected_route"] = {
-                "name": route["name"],
-                "level": route["level_label"],
-                "why": route["reason"],
-                "events": [_event_context(e) for e in route.get("events", [])],
-                "actions": [
-                    {
-                        "what": a["label"],
-                        "costs_chf": a["cost_chf"],
-                        "avoids_chf": a.get("avoids_chf"),
-                        "decide_by": a.get("deadline_text"),
-                    }
-                    for a in route.get("actions", [])
-                ],
-                "who_to_contact": route.get("response", {}).get("route_manager"),
-            }
-    return _ask(context, question)
-
-
-def _ask(context: dict, question: str) -> dict:
+    builtin = answer_mod.reply(board, question, route_id, tree_for)
     status = llm.detect()
     if not status.available:
-        return _no_model(status)
+        return _builtin(builtin, status)
+    about = builtin.get("route_id") or route_id
+    route = next((r for r in board["routes"] if r["route_id"] == about), None) if about else None
+    tree = tree_for(about) if (tree_for and about) else None
+    return _ask(board_brief(board, route, tree), question, builtin, status)
 
+
+def _builtin(reply: dict, status: llm.BackendStatus | None = None, reason: str = "") -> dict:
+    return {
+        "answered": True,
+        "answer": reply["answer"],
+        "links": reply.get("links") or [],
+        "backend": "builtin",
+        "model": None,
+        # Not written by a model: every line is a row of the board.
+        "generated": False,
+        "unsure": bool(reply.get("unsure")),
+        "model_status": reason or (status.detail if status else ""),
+        "unlocks_if_connected": status.unlocks_if_connected if status else "",
+    }
+
+
+def _ask(context: dict | str, question: str, builtin: dict | None = None,
+         status: llm.BackendStatus | None = None) -> dict:
+    status = status or llm.detect()
+    if not status.available:
+        if builtin:
+            return _builtin(builtin, status)
+        return _no_model(status)
+    missing = llm.model_missing(status)
+    if missing and builtin:
+        return _builtin(builtin, status, missing)
+
+    facts = (builtin or {}).get("facts") or []
+    text = context if isinstance(context, str) else json.dumps(context, indent=1, default=str)
     prompt = (
         "CONTEXT (the planner's current board):\n"
-        f"{json.dumps(context, indent=1, default=str)}\n\n"
-        f"QUESTION: {question.strip()}"
+        f"{text}\n\n"
+        + ("ROWS THAT ANSWER IT (from the board, already checked):\n"
+           + "\n".join(facts) + "\n\n" if facts else "")
+        + f"QUESTION: {question.strip()}"
     )
     answer = llm.ask_text(SYSTEM, prompt, status)
     if answer is None:
+        if builtin:
+            return _builtin(builtin, status, "The model did not answer; this is from the board.")
         return _no_answer(
             "The model did not answer. Everything on the board was computed "
             "without it and is unaffected."
@@ -173,6 +213,7 @@ def _ask(context: dict, question: str) -> dict:
     return {
         "answered": True,
         "answer": answer,
+        "links": (builtin or {}).get("links") or [],
         "backend": status.backend.value,
         "model": status.model,
         # Carried so the UI can mark it. A planner must be able to tell at a

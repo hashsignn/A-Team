@@ -148,17 +148,22 @@ def decision(
     """The route's Action tab as a decision tree (engine/export/decision.py):
     what is happening, who is hit, can the dates be kept and how, what
     reduces the damage otherwise, who to tell."""
+    board = _board(as_of, shipments)
+    route = _route(board, route_id)
+    return JSONResponse(_tree(board, route, as_of, shipments))
+
+
+def _tree(board: dict, route: dict, as_of: str, shipments: int) -> dict:
+    """One route's Action decision tree, the optimiser's lanes cached."""
     from engine.export import decision as decision_mod  # noqa: PLC0415
     from engine.fast import view as fast_view  # noqa: PLC0415
 
-    board = _board(as_of, shipments)
-    route = _route(board, route_id)
     context = _context(as_of, shipments)
     key = (as_of, shipments)
     if key not in _LANES:
         _LANES[key] = fast_view.route_summaries(context)
-    detail = next((row for row in _LANES[key] if row["route_id"] == route_id), None)
-    return JSONResponse(decision_mod.build(context, route, detail))
+    detail = next((row for row in _LANES[key] if row["route_id"] == route["route_id"]), None)
+    return decision_mod.build(context, route, detail, board)
 
 
 def _route(board: dict, route_id: str) -> dict:
@@ -301,8 +306,15 @@ def ask(
     event_id = payload.get("event_id")
     if event_id:
         return JSONResponse(ask_mod.event_question(board, str(event_id), question))
+
+    def tree_for(route_id: str) -> dict | None:
+        # The decision tree of any route the question is about, built on
+        # demand: the answer can then say which way keeps the date.
+        route = next((r for r in board["routes"] if r["route_id"] == route_id), None)
+        return _tree(board, route, as_of, shipments) if route else None
+
     return JSONResponse(
-        ask_mod.board_question(board, question, payload.get("route_id"))
+        ask_mod.board_question(board, question, payload.get("route_id"), tree_for)
     )
 
 
@@ -959,6 +971,14 @@ def profile_page() -> Response:
 @app.head("/ops")
 def ops_page() -> Response:
     return _page("ops.html")
+
+
+# The Action decision tree: every option for one route as a tree, in its
+# own window (api/static/tree.html, built on /api/decision/{route}).
+@app.get("/tree")
+@app.head("/tree")
+def tree_page() -> Response:
+    return _page("tree.html")
 
 
 # A real page with a real URL, not a dialog. A planner looking at one lane

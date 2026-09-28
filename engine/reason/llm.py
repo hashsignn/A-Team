@@ -135,6 +135,25 @@ def _ollama_reachable() -> bool:
         return False
 
 
+def model_missing(status: BackendStatus) -> str:
+    """Why the chosen local model cannot answer, or "" when it can: Ollama
+    runs, but the model was never pulled. Said plainly, with the command,
+    because otherwise every call fails and nothing on screen says why."""
+    if status.backend is not Backend.LOCAL or not status.model:
+        return ""
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_HOST}/api/tags", timeout=2) as response:
+            names = {m.get("name", "") for m in json.loads(response.read()).get("models", [])}
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
+        return ""
+    wanted = status.model if ":" in status.model else f"{status.model}:latest"
+    if wanted in names:
+        return ""
+    return (f"Ollama is running, but the model {status.model} is not downloaded: "
+            f"run `ollama pull {status.model}`, or set RADAR_LOCAL_MODEL to one you have "
+            f"({', '.join(sorted(names)) or 'none yet'})")
+
+
 def _has_api_key() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -380,7 +399,10 @@ def ask_text(
             body = json.dumps({
                 "model": model or LOCAL_MODEL,
                 "stream": False,
-                "options": {"temperature": 0.1},
+                # A context window big enough for the board brief (Ollama's
+                # default can cut the prompt without a word), and a short
+                # answer, which is also a quick one on a laptop.
+                "options": {"temperature": 0.1, "num_ctx": 8192, "num_predict": 400},
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt},

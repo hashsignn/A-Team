@@ -57,6 +57,50 @@ def value_band(shipment: Shipment, config: Config) -> str:
     return "high"
 
 
+def loss_parts_per_draw(
+    shipment: Shipment,
+    draws: ShipmentDraws,
+    config: Config,
+    cost_multiplier: float = 1.0,
+) -> dict[str, np.ndarray]:
+    """The loss per Monte Carlo draw, by what drives it: the contract's delay
+    penalty, the expediting to recover, the customer impact, and any
+    surcharge. Kept apart so the board can say which driver the money is."""
+    cost = config.scoring["cost"]["components"]
+    lateness = draws.lateness_days
+    is_late = lateness > 0.0
+    zero = np.zeros_like(lateness)
+
+    parts = {
+        # The customer's delay clause (score/penalty.py): zeros while off.
+        "penalty": penalty.per_draw(shipment, lateness, config),
+        "expediting": zero,
+        "customer_impact": zero,
+        "surcharge": zero,
+        # What the delay clause would charge if the switch were on. Shown as
+        # "if counted", never added to the loss.
+        "penalty_if_counted": penalty.per_draw(shipment, lateness, config, force=True),
+    }
+    if cost["expediting"]["enabled"]:
+        band = value_band(shipment, config)
+        per_event = cost["expediting"]["chf_per_event_by_value_band"][band]
+        parts["expediting"] = np.where(is_late, float(per_event), 0.0)
+
+    if cost["customer_impact"]["enabled"]:
+        tiers = cost["customer_impact"]["chf_by_tier"]
+        tier_value = tiers.get(
+            shipment.customer_impact_tier.value,
+            tiers[cost["customer_impact"]["default_tier"]],
+        )
+        parts["customer_impact"] = np.where(is_late, float(tier_value), 0.0)
+
+    # Surcharges (e.g. a Rhine low-water surcharge) raise the cost of moving
+    # the freight whether or not it ends up late.
+    if cost_multiplier != 1.0:
+        parts["surcharge"] = zero + shipment.value_chf * 0.04 * (cost_multiplier - 1.0)
+    return parts
+
+
 def loss_per_draw(
     shipment: Shipment,
     draws: ShipmentDraws,
@@ -69,35 +113,8 @@ def loss_per_draw(
     shipments *within a draw* and get a correctly correlated portfolio
     distribution. Summing means would throw that away.
     """
-    cost = config.scoring["cost"]["components"]
-    lateness = draws.lateness_days
-    is_late = lateness > 0.0
-
-    total = np.zeros_like(lateness)
-
-    # The customer's delay clause (score/penalty.py): zeros while switched off.
-    total += penalty.per_draw(shipment, lateness, config)
-
-    if cost["expediting"]["enabled"]:
-        band = value_band(shipment, config)
-        per_event = cost["expediting"]["chf_per_event_by_value_band"][band]
-        total += np.where(is_late, float(per_event), 0.0)
-
-    if cost["customer_impact"]["enabled"]:
-        tiers = cost["customer_impact"]["chf_by_tier"]
-        tier_value = tiers.get(
-            shipment.customer_impact_tier.value,
-            tiers[cost["customer_impact"]["default_tier"]],
-        )
-        total += np.where(is_late, float(tier_value), 0.0)
-
-    # Surcharges (e.g. a Rhine low-water surcharge) raise the cost of moving
-    # the freight whether or not it ends up late.
-    if cost_multiplier != 1.0:
-        surcharge = shipment.value_chf * 0.04 * (cost_multiplier - 1.0)
-        total = total + surcharge
-
-    return total
+    parts = loss_parts_per_draw(shipment, draws, config, cost_multiplier)
+    return parts["penalty"] + parts["expediting"] + parts["customer_impact"] + parts["surcharge"]
 
 
 def summarise(
@@ -107,7 +124,8 @@ def summarise(
     cost_multiplier: float = 1.0,
 ) -> dict:
     """Headline numbers for one shipment under one scenario."""
-    losses = loss_per_draw(shipment, draws, config, cost_multiplier)
+    parts = loss_parts_per_draw(shipment, draws, config, cost_multiplier)
+    losses = parts["penalty"] + parts["expediting"] + parts["customer_impact"] + parts["surcharge"]
     late = draws.lateness_days > 0.0
 
     # CONDITIONAL loss: the bill IF this goes wrong, averaged over the draws
@@ -134,6 +152,8 @@ def summarise(
         "expected_loss_chf": float(np.mean(losses)),
         "p90_loss_chf": float(np.percentile(losses, 90)),
         "conditional_loss_chf": conditional,
+        # What the expected loss is made of, CHF by driver.
+        "cost_parts": {k: round(float(np.mean(v)), 2) for k, v in parts.items()},
         "losses": losses,
     }
 

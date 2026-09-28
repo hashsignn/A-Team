@@ -95,6 +95,11 @@ class FastOption:
     # the same thing. Without this flag the notification wins every ranking on
     # a lane with schedule slack, because it is always the quickest to do.
     restores_delivery: bool = True
+    # How long this option stays open, in hours from now: after that,
+    # starting it misses the promised date (or, for a playbook action, the
+    # freight has reached the disruption first). None when nothing closes
+    # it: a late option only gets later.
+    window_hours: float | None = None
 
     @property
     def executable(self) -> bool:
@@ -152,6 +157,8 @@ class FastOption:
             "contacts": list(self.contacts),
             "expired": self.expired,
             "expired_reason": self.expired_reason,
+            "window_hours": (round(self.window_hours, 2)
+                             if self.window_hours is not None else None),
         }
 
 
@@ -189,6 +196,23 @@ def _days_late(clock: Clock, shipment: Shipment, resolve_hours: float,
     arrival = clock.as_of + timedelta(hours=resolve_hours + remaining_transit_hours)
     slip = (arrival - shipment.otif_committed_date).total_seconds() / 86400.0
     return max(0.0, round(slip, 3))
+
+
+def _spare_hours(clock: Clock, shipment: Shipment, resolve_hours: float,
+                 remaining_transit_hours: float) -> float:
+    """Hours between arriving by this option, taken now, and the committed
+    date: how long starting it can wait. Negative when it is already late."""
+    arrival = clock.as_of + timedelta(hours=resolve_hours + remaining_transit_hours)
+    return (shipment.otif_committed_date - arrival).total_seconds() / 3600.0
+
+
+def _window(on_time: bool, spare_hours: float, before_impact: float | None = None) -> float | None:
+    """How long an option stays open: an on-time option until waiting would
+    miss the date, a playbook action until the freight reaches the event."""
+    limits = [spare_hours] if on_time else []
+    if before_impact is not None:
+        limits.append(before_impact)
+    return max(0.0, min(limits)) if limits else None
 
 
 def _blocked_nodes(shipment: Shipment, hits: list[GateHit]) -> set[str]:
@@ -269,6 +293,7 @@ def from_template(
         clock, shipment, resolve, remaining + residual_days * 24.0
     )
 
+    spare = _spare_hours(clock, shipment, resolve, remaining + residual_days * 24.0)
     expired = not action.feasible
     reason = action.infeasible_reason
     if not expired and hours_until_impact < action.min_hours:
@@ -297,6 +322,7 @@ def from_template(
         # The same 0.95 the old playbook used to decide an option "recovers
         # time". Above it, the action leaves the delay essentially intact.
         restores_delivery=action.residual_delay_days < RESTORES_BELOW_RESIDUAL,
+        window_hours=_window(days_late <= 0.0, spare, hours_until_impact - action.min_hours),
     )
 
 
@@ -353,6 +379,7 @@ def from_path(
         margin=margin_mod.evaluate(shipment, config, extra, days_late),
         route=tuple(path.node_ids),
         modes=tuple(sorted({m.value for m in path.modes})),
+        window_hours=_window(days_late <= 0.0, _spare_hours(clock, shipment, resolve, path.hours)),
     )
 
 
@@ -385,6 +412,7 @@ def from_local(
         cost_chf=option.cost_chf,
         margin=margin_mod.evaluate(shipment, config, option.cost_chf, days_late),
         contacts=(f"{option.vendor}: {option.phone}",) if option.phone else (),
+        window_hours=_window(days_late <= 0.0, _spare_hours(clock, shipment, resolve, remaining_hours)),
     )
 
 
