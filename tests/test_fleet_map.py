@@ -732,3 +732,13 @@ def test_a_split_reports_the_co2e_of_each_branch(board, context, fleet):
     total = sum(b["co2e_kg"] for b in s["branches"])
     assert s["summary"]["co2e_after_kg"] == pytest.approx(total, abs=0.5)
     assert s["summary"]["co2e_before_kg"] > 0
+
+
+def test_the_map_draws_its_own_borders_unless_tiles_are_asked_for():
+    """Sika review: borders, no names. Tiles are an opt-in; a self-hosted
+    tile server named in the short form is one."""
+    from engine.fleet.settings import basemap
+
+    assert settings(load_config())["basemap"]["draw_tiles"] is False
+    assert basemap({"tiles": ["https://tiles.example.internal/{z}/{x}/{y}.png"]})["draw_tiles"] is True
+    assert basemap({"draw_tiles": True, "providers": []})["draw_tiles"] is True

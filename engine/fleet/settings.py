@@ -184,7 +184,12 @@ def basemap(block: dict | None) -> dict:
             "attribution": str(entry.get("attribution") or ""),
             "max_zoom": int(entry.get("max_zoom") or 18),
         })
-    return {"providers": providers}
+    # Off unless asked for: the board draws its own land, sea and borders in
+    # the theme's colours, with no names (Sika review: "only the borders, no
+    # names"). A self-hosted `tiles:` block is an explicit ask.
+    draw = block.get("draw_tiles")
+    draw = bool(block.get("tiles")) if draw is None else bool(draw)
+    return {"providers": providers, "draw_tiles": draw}
 
 
 def settings(config: Config) -> dict:

@@ -32,7 +32,7 @@
 
   --map-sea:     #e9eef5;
   --map-land:    #d9e0ea;
-  --map-border:  #b9c3d3;
+  --map-border:  #98a6bc;
   --map-lane:    #8793a8;
   --map-original:#6b7485;
   /* The tiles are a faint layer over the theme's own land and sea: they add
@@ -52,14 +52,14 @@
 :root[data-theme="blue"] {
   --map-sea:     #e3ecf9;
   --map-land:    #d2deef;
-  --map-border:  #aebfd9;
+  --map-border:  #8fa4c7;
   --map-lane:    #7b8fb0;
   --glass-bg: rgba(250, 252, 255, 0.8);
 }
 :root[data-theme="sika"] {
   --map-sea:     #ecebe5;
   --map-land:    #dedbd0;
-  --map-border:  #c2bdab;
+  --map-border:  #a59f8a;
   --map-lane:    #8c8878;
   --glass-bg: rgba(255, 255, 253, 0.8);
 }
@@ -71,7 +71,7 @@
 
   --map-sea:     #0a111e;
   --map-land:    #131c2e;
-  --map-border:  #26324a;
+  --map-border:  #3a4a68;
   --map-lane:    #53627e;
   --map-original:#94a0b8;
   /* Inverted and dimmed: OSM's light cartography becomes a dark one without

@@ -420,6 +420,21 @@ def _check_basemap_fallback(browser, check) -> None:
     without a network: the first provider refuses every tile, the second
     serves one. Then every provider refuses, which is the offline case.
     """
+    # By default the map draws the theme's own outline and asks no tile
+    # server for anything: borders, no names.
+    fetched: list[str] = []
+    page = browser.new_page(viewport={"width": 1280, "height": 860})
+    page.on("request", lambda r: fetched.append(r.url) if any(h in r.url for h in TILE_HOSTS) else None)
+    page.goto(f"{BASE}/", wait_until="load", timeout=90_000)
+    page.wait_for_function("window.__fleetmap && window.__fleetmap.getLayer('asset-icons')",
+                           timeout=60_000)
+    page.wait_for_timeout(1_500)
+    check(not fetched and page.evaluate("!!window.__fleetmap.getLayer('land-line')")
+          and not page.evaluate("!!window.__fleetmap.getLayer('basemap')") and not _legend_note(page),
+          f"[basemap] the default map fetched {len(fetched)} tile(s) or lost its borders",
+          "default map: the theme's land and borders, no names, no tile requests")
+    page.close()
+
     asked: list[str] = []
 
     def serve(route):
@@ -433,7 +448,7 @@ def _check_basemap_fallback(browser, check) -> None:
     page = browser.new_page(viewport={"width": 1280, "height": 860})
     page.route("**/*", lambda route: serve(route)
                if any(h in route.request.url for h in TILE_HOSTS) else route.continue_())
-    page.goto(f"{BASE}/", wait_until="load", timeout=90_000)
+    page.goto(f"{BASE}/?tiles=on", wait_until="load", timeout=90_000)
     page.wait_for_function("window.__fleetmap && window.__fleetmap.getLayer('asset-icons')",
                            timeout=60_000)
     page.wait_for_function(
@@ -451,7 +466,7 @@ def _check_basemap_fallback(browser, check) -> None:
     page = browser.new_page(viewport={"width": 1280, "height": 860})
     page.route("**/*", lambda route: route.fulfill(status=403, body="refused")
                if any(h in route.request.url for h in TILE_HOSTS) else route.continue_())
-    page.goto(f"{BASE}/", wait_until="load", timeout=90_000)
+    page.goto(f"{BASE}/?tiles=on", wait_until="load", timeout=90_000)
     page.wait_for_function(
         "(document.querySelector('#map-note') || {}).textContent"
         ".includes('Offline outline')", timeout=30_000)

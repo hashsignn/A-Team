@@ -167,6 +167,10 @@ routing:
 #   basemap: {tiles: ["https://tiles.example.internal/{z}/{x}/{y}.png"]}
 # which is used ALONE — no fallback to a third party.
 basemap:
+  # false: the map draws its own land, sea and borders in the theme's colours,
+  # with no place names and no tile requests. true: the providers below are
+  # drawn faintly underneath (?tiles=on in the URL does the same for a visit).
+  draw_tiles: false
   providers:
     - name: "Esri World Light Gray"
       tiles:

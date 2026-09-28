@@ -177,7 +177,7 @@
       hazard: null, fittedFor: null,
       // Which basemap provider is drawing, and how it is going. `refused`
       // names the ones given up on, for the legend.
-      tiles: { index: -1, errors: 0, ok: false, offline: false, refused: [], meta: null },
+      tiles: { index: -1, errors: 0, ok: false, offline: false, outline: false, refused: [], meta: null },
       hoverAsset: null,
     };
 
@@ -311,7 +311,8 @@
         map.addSource('land', { type: 'geojson', data: land });
         map.addLayer({ id: 'land', type: 'fill', source: 'land', paint: { 'fill-color': tokenOf('--map-land') } });
         map.addLayer({ id: 'land-line', type: 'line', source: 'land',
-          paint: { 'line-color': tokenOf('--map-border'), 'line-width': 0.6 } });
+          paint: { 'line-color': tokenOf('--map-border'),
+                   'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.7, 5, 1.1, 8, 1.4] } });
       } catch (err) {
         console.warn('[map] country outlines unavailable', err);
       }
@@ -332,10 +333,25 @@
      * as its own and never counted against the one that replaced it. */
     const basemapSource = (index) => `basemap-${index}`;
 
+    /* Tiles are drawn only when asked for (fleet.yaml draw_tiles, or
+     * ?tiles=on). Otherwise the map is the theme's own land, sea and
+     * borders: no names, nothing fetched from a tile server. */
+    function wantsTiles(meta) {
+      const q = new URLSearchParams(location.search).get('tiles');
+      if (q === 'on') return true;
+      if (q === 'off') return false;
+      return !!(meta && meta.basemap && meta.basemap.draw_tiles);
+    }
+
     function ensureBasemap(meta) {
       const t = view.tiles;
-      if (!view.ready || !meta || t.index >= 0 || t.offline) return;
+      if (!view.ready || !meta || t.index >= 0 || t.offline || t.outline) return;
       t.meta = meta;
+      if (!wantsTiles(meta)) {
+        t.outline = true;
+        renderLegend(store.getState());
+        return;
+      }
       useProvider(0);
     }
 
