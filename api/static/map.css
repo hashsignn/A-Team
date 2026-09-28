@@ -35,10 +35,12 @@
   --map-border:  #b9c3d3;
   --map-lane:    #8793a8;
   --map-original:#6b7485;
-  --map-raster-min: 0.20;
+  /* The tiles are a faint layer over the theme's own land and sea: they add
+     borders and place names, the colours stay the theme's. */
+  --map-raster-min: 0;
   --map-raster-max: 1;
-  --map-raster-contrast: -0.12;
-  --map-raster-opacity: 0.95;
+  --map-raster-contrast: 0.25;
+  --map-raster-opacity: 0.38;
   --map-casing: rgba(255, 255, 255, 0.92);
 
   --glass-bg: rgba(255, 255, 255, 0.8);
@@ -74,10 +76,10 @@
   --map-original:#94a0b8;
   /* Inverted and dimmed: OSM's light cartography becomes a dark one without
      a second tile source. min > max is the inversion. */
-  --map-raster-min: 0.70;
-  --map-raster-max: 0.06;
-  --map-raster-contrast: -0.25;
-  --map-raster-opacity: 0.9;
+  --map-raster-min: 0.85;
+  --map-raster-max: 0.04;
+  --map-raster-contrast: 0.3;
+  --map-raster-opacity: 0.34;
   --map-casing: rgba(7, 11, 20, 0.9);
 
   --glass-bg: rgba(15, 22, 36, 0.74);
