@@ -255,6 +255,8 @@
       map.on('error', (e) => {
         if (e && typeof e.sourceId === 'string' && e.sourceId.startsWith('basemap-')) {
           onTileError(e.sourceId);
+        } else if (e && typeof e.sourceId === 'string' && e.sourceId.startsWith('labels-')) {
+          // Names are a nicety over the base: a missing tile is not news.
         } else if (e && e.error) {
           console.warn('[map]', e.error.message || e.error);
         }
@@ -347,6 +349,7 @@
         if (list[t.index]) t.refused.push(list[t.index].name);
         if (map.getLayer('basemap')) map.removeLayer('basemap');
         if (map.getSource(basemapSource(t.index))) map.removeSource(basemapSource(t.index));
+        removeLabels(map);
       }
       Object.assign(t, { index, errors: 0, ok: false });
       const provider = list[index];
@@ -360,7 +363,30 @@
         maxzoom: provider.max_zoom || 18, attribution: provider.attribution,
       });
       map.addLayer({ id: 'basemap', type: 'raster', source: basemapSource(index), paint: rasterPaint() }, 'lanes');
+      addLabels(map, provider);
       renderLegend(store.getState());
+    }
+
+    /* Names and borders, on their own transparent tiles, at full strength
+     * over the faint base: the colours stay the theme's, the words stay
+     * readable. Light text on the dark theme, dark text on the others. */
+    const labelsTone = () => (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    function removeLabels(map) {
+      if (map.getLayer('basemap-labels')) map.removeLayer('basemap-labels');
+      for (const tone of ['light', 'dark']) {
+        if (map.getSource(`labels-${tone}`)) map.removeSource(`labels-${tone}`);
+      }
+    }
+    function addLabels(map, provider) {
+      removeLabels(map);
+      const tone = labelsTone();
+      const urls = provider && provider.labels && (provider.labels[tone] || provider.labels.light);
+      if (!urls || !urls.length) return;
+      map.addSource(`labels-${tone}`, {
+        type: 'raster', tiles: urls, tileSize: 256, maxzoom: provider.max_zoom || 18,
+      });
+      map.addLayer({ id: 'basemap-labels', type: 'raster', source: `labels-${tone}`,
+        paint: { 'raster-opacity': parseFloat(tokenOf('--map-labels-opacity')) || 0.9 } }, 'lanes');
     }
 
     function onTileError(sourceId) {
@@ -873,6 +899,9 @@
       }
       if (map.getLayer('basemap')) {
         for (const [k, v] of Object.entries(rasterPaint())) map.setPaintProperty('basemap', k, v);
+        const t = view.tiles;
+        const provider = providersOf(t.meta)[t.index];
+        if (provider && !t.offline) addLabels(map, provider);
       }
       map.setPaintProperty('lanes', 'line-color', tokenOf('--map-lane'));
       map.setPaintProperty('route-original', 'line-color', tokenOf('--map-original'));
