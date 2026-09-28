@@ -385,3 +385,14 @@ def test_urgency_bands_read_from_config(config):
 def test_a_missing_fast_config_makes_the_tool_more_cautious_not_less():
     """A missing file must not silently authorise spend it has no basis for."""
     assert margin_mod.FALLBACK_MARGIN_RATE < 0.18
+
+
+def test_an_option_stays_open_until_waiting_would_miss_the_date():
+    """window_hours: how long an option can wait. An on-time option until the
+    slack to the committed date is gone; a playbook action until the freight
+    reaches the disruption, whichever is sooner; a late one never closes."""
+    assert fast._window(True, 30.0) == 30.0
+    assert fast._window(True, 30.0, before_impact=10.0) == 10.0
+    assert fast._window(True, -1.0) == 0.0
+    assert fast._window(False, -5.0) is None
+    assert fast._window(False, -5.0, before_impact=6.0) == 6.0

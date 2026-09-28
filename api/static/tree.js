@@ -27,6 +27,8 @@ const pct = (v) => (v == null ? '–' : `${Math.round(v * 100)}%`);
 const hrs = (h) => (h == null ? '–' : h < 1 ? '<1 h' : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`);
 const days = (d) => (d == null ? '–' : d < 0.05 ? '0 d' : `${d < 10 ? (+d).toFixed(1) : Math.round(d)} d`);
 const ORD = ['', '1st', '2nd', '3rd'];
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || `${one}s`)}`;
+const ords = (n) => (n === 1 ? 'order' : 'orders');
 const MODE = { road: 'Road', rail: 'Rail', sea: 'Sea', barge: 'Barge', air: 'Air' };
 const plain = (name) => String(name || '').replace(/\s*\(synthetic\)\s*$/i, '');
 
@@ -159,19 +161,21 @@ function face(n) {
         more: ev.length > 1 ? `+ ${short(ev[1].title, 40)}` : '', wide: true,
       };
     }
-    case 'nothit': return { kicker: 'Not hit', big: String(n.n), unit: 'orders', sub: 'no change', tone: 'leaf' };
-    case 'absorbed': return { kicker: 'Absorbed', big: String(n.n), unit: 'orders', sub: 'buffers take it', tone: 'leaf' };
-    case 'need': return { kicker: 'Need action', big: String(n.n), unit: 'orders', sub: `${chf(n.total)} if nobody acts` };
+    case 'nothit': return { kicker: 'Not hit', big: String(n.n), unit: ords(n.n), sub: 'no change', tone: 'leaf' };
+    case 'absorbed': return { kicker: 'Absorbed', big: String(n.n), unit: ords(n.n), sub: 'buffers take it', tone: 'leaf' };
+    case 'need': return { kicker: 'Need action', big: String(n.n), unit: ords(n.n),
+      sub: `${chf(n.total)} if nobody acts` };
     case 'keep': {
       const best = d.keep?.options?.[0];
       return { kicker: 'Yes', title: 'Keep the date', big: `${n.n}/${d.hit.need}`, unit: 'orders',
         sub: d.keep?.stay_best ? 'best: stay as planned' : best ? `best way ${chf(best.cost_chf)} extra` : '' };
     }
-    case 'reduce': return { kicker: 'Partly', title: 'Cut the damage', big: String(n.n), unit: 'orders',
-      sub: `${(d.reduce?.options || []).length} ways` };
+    case 'reduce': return { kicker: 'Partly', title: 'Cut the damage', big: String(n.n), unit: ords(n.n),
+      sub: plural((d.reduce?.options || []).length, 'way') };
     case 'tell': {
       const c = new Set((d.tell?.orders || []).map((o) => o.customer)).size;
-      return { kicker: 'No', title: 'Tell the customer', big: String(n.n), unit: 'orders', sub: `${c} customers` };
+      return { kicker: 'No', title: 'Tell the customer', big: String(n.n), unit: ords(n.n),
+        sub: plural(c, 'customer') };
     }
     case 'way': {
       const o = n.o;
@@ -206,15 +210,18 @@ function face(n) {
     }
     case 'cust': {
       const c = n.c;
+      const small = c.late < 0.5;
       return { kicker: tierOf(c.customer) === 'A' ? 'Key account' : 'Customer', title: c.customer,
-        big: days(c.late), unit: 'late', sub: `${c.orders.length} order${c.orders.length === 1 ? '' : 's'} · ${pct(c.p)} chance` };
+        big: small ? pct(c.p) : days(c.late), unit: small ? 'chance late' : 'late',
+        sub: `${plural(c.orders.length, 'order')} · ${small ? 'under a day if late' : `${pct(c.p)} chance`}` };
     }
     case 'car': {
       const c = carrierFor(n.way, n.mode);
+      const cap = capacity(c?.capacity);
       return { kicker: MODE[n.mode] || n.mode, title: c ? plain(c.name) : 'None listed',
-        big: c?.capacity || 'on request', unit: '',
-        sub: c ? `${num(c.km)} km away · ${c.channel || 'call'}` : '', tone: c?.synthetic ? '' : 'real',
-        tag: c ? (c.synthetic ? 'example' : 'real operator') : '' };
+        big: cap.big || 'on request', unit: '',
+        sub: c ? [cap.rest, `${num(c.km)} km away · ${c.channel || 'call'}`].filter(Boolean).join(' · ') : '',
+        tone: c?.synthetic ? '' : 'real', tag: c ? (c.synthetic ? 'example' : 'real operator') : '' };
     }
     case 'ask': {
       const p = d.approval?.procurement;
@@ -229,9 +236,9 @@ function face(n) {
     case 'book': {
       const done = S.booked[n.x.act];
       return { kicker: done ? 'Booked' : 'Book', title: done ? 'Running' : 'Book it', big: String(n.x.orders),
-        unit: 'orders', sub: done ? 'undo possible' : 'undo within 15 min', tone: 'act' };
+        unit: ords(n.x.orders), sub: done ? 'undo possible' : 'undo within 15 min', tone: 'act' };
     }
-    case 'told': return { kicker: 'Tell', title: 'Tell customers', big: String(n.x.orders), unit: 'orders',
+    case 'told': return { kicker: 'Tell', title: 'Tell customers', big: String(n.x.orders), unit: ords(n.x.orders),
       sub: 'new date, one message' };
     default: return { title: n.id };
   }
@@ -248,6 +255,14 @@ function wayName(o) {
 
 function tierOf(customer) {
   return (S.d.orders || []).find((o) => o.customer === customer)?.tier || 'B';
+}
+
+/* "140 TEU on a Cape-routed service" is a number and a note: the number
+ * goes big, the note goes under it. */
+function capacity(text) {
+  const t = String(text || '').trim();
+  const m = t.match(/^([\d.,]+\s*[A-Za-z]+)\s*(.*)$/);
+  return m ? { big: m[1], rest: m[2] } : { big: t, rest: '' };
 }
 
 function carrierFor(wayId, mode) {
@@ -400,11 +415,13 @@ function choose(id, level, { scroll = true } = {}) {
   if (!n) return;
   S.focus = id;
   S.more = false;
-  if (!n.disabled) {
-    const changed = S.path[level] !== id || S.path.length !== level + 1;
+  if (!n.disabled && S.path[level] !== id) {
+    // A different choice at this level: the branch below it regrows.
     S.path = S.path.slice(0, level).concat([id]);
-    render(changed ? level + 1 : S.path.length + 1);
+    render(level + 1);
   } else {
+    // Already on the path (or not a choice): show its numbers, keep the
+    // tree below it as it is.
     render(99, false);
   }
   side(n);
@@ -481,9 +498,9 @@ function compareTable(selId) {
     { k: '#', w: 30, f: rankCell },
     { k: 'Way', f: (r) => `<span class="ins-way" title="${esc(r._base ? 'Stay as planned' : r.label)}">${esc(r._base ? 'Stay as planned' : wayName(r))}</span>` },
     { k: 'On time', num: true, w: 62, f: (r) => `${r.on_time}/${r.orders}` },
-    { k: '+CHF', num: true, w: 54, f: (r) => (r._base ? '0'
+    { k: '+CHF', num: true, w: 50, f: (r) => (r._base ? '0'
       : r.cost_chf == null ? '<span class="muted">n/a</span>' : num(r.cost_chf)) },
-    { k: 'Closes in', num: true, w: 112, f: (r) => (r._base ? `<span class="muted">${days(r.late_after_days)} late</span>`
+    { k: 'Closes in', num: true, w: 124, f: (r) => (r._base ? `<span class="muted">${days(r.late_after_days)} late</span>`
       : DeadlineClock.html(r.closes_at)) },
   ], rows, { sel: selId, key: '_id', cap: 'All ways, best first' });
 }
@@ -553,7 +570,7 @@ function carriersTable(o, wayId) {
           data-i="${r._i}" data-way="${esc(wayId)}" ${r._chosen ? 'checked' : ''} aria-label="Choose ${esc(plain(r.name))}">` },
       { k: 'Carrier', f: (r) => `<span class="ins-mode">${esc(MODE[r._mode] || r._mode)}</span>
           ${esc(plain(r.name))}${r.synthetic ? '' : ' <span class="ins-real">real</span>'}` },
-      { k: 'Free', num: true, f: (r) => esc(r.capacity || 'ask') },
+      { k: 'Free', num: true, f: (r) => `<span title="${esc(r.capacity || '')}">${esc(capacity(r.capacity).big || 'ask')}</span>` },
       { k: 'Away', num: true, f: (r) => `${num(r.km)} km` },
       { k: 'Contact', f: (r) => contact(r, true) },
     ], rows)}</div>`;
@@ -652,11 +669,17 @@ function side(n) {
       break;
     case 'tell': {
       const rows = d.tell.orders;
-      html = head('Tell the customer', `${rows.length} orders will miss their date`)
+      const likely = rows.filter((o) => o.p_late >= 0.5).length;
+      const customers = new Set(rows.map((o) => o.customer)).size;
+      const latest = Math.max(0, ...rows.map((o) => o.late_days));
+      html = head('Tell the customer', likely
+        ? `${plural(likely, 'order')} likely to miss the date`
+        : `${plural(rows.length, 'order')} at risk, no way left to protect ${rows.length === 1 ? 'it' : 'them'}`)
         + tiles([
-          { v: String(rows.length), k: 'orders' },
-          { v: String(new Set(rows.map((o) => o.customer)).size), k: 'customers' },
-          { v: days(Math.max(0, ...rows.map((o) => o.late_days))), k: 'latest' },
+          { v: String(rows.length), k: ords(rows.length) },
+          { v: String(customers), k: customers === 1 ? 'customer' : 'customers' },
+          { v: pct(Math.max(0, ...rows.map((o) => o.p_late))), k: 'highest chance late' },
+          latest >= 0.5 ? { v: days(latest), k: 'latest, if late' } : null,
         ])
         + `<div class="ins-sec">${ordersTable((o) => o.branch === 'told')}</div>`
         + more('<p>No way on the network lands these on time and still pays. Telling the customer early turns a missed date into an agreed one.</p>');
@@ -740,9 +763,9 @@ function side(n) {
       const c = n.c;
       html = head(tierOf(c.customer) === 'A' ? 'Key account' : 'Customer', c.customer)
         + tiles([
-          { v: String(c.orders.length), k: 'orders late' },
+          { v: String(c.orders.length), k: c.orders.length === 1 ? 'order at risk' : 'orders at risk' },
+          { v: pct(c.p), k: 'chance late' },
           { v: days(c.late), k: 'expected late' },
-          { v: pct(c.p), k: 'chance' },
         ])
         + draft(c.customer, c.orders);
       break;
@@ -803,10 +826,14 @@ function side(n) {
 }
 
 function draft(customer, orders) {
-  const list = orders.map((o) => `${o.shipment_id} (about ${days(o.late_days)} late)`).join(', ');
+  const likely = orders.some((o) => (o.p_late ?? 1) >= 0.5);
+  const list = orders.map((o) => (o.late_days >= 0.5 ? `${o.shipment_id} (about ${days(o.late_days)})` : o.shipment_id)).join(', ');
   const who = customer || 'customer';
-  const text = `Dear ${who},\n\nA disruption on the route is delaying your order${orders.length === 1 ? '' : 's'} ${list}. `
-    + 'We are working on it and will confirm a new delivery date within 24 hours.\n\nKind regards,\nSika Supply Chain';
+  const text = `Dear ${who},\n\nA disruption on the route ${likely ? 'is delaying' : 'may delay'} your order`
+    + `${orders.length === 1 ? '' : 's'} ${list}. `
+    + (likely ? 'We are working on it and will confirm a new delivery date within 24 hours.'
+      : 'We are watching it closely and will confirm the delivery date within 24 hours.')
+    + '\n\nKind regards,\nSika Supply Chain';
   return `<div class="ins-sec"><h3>Message</h3><textarea class="ins-draft" rows="7" readonly>${esc(text)}</textarea>
     <p class="ins-actions"><button type="button" class="ctl ctl--ghost" id="copy-draft">Copy</button>
     <a class="ctl ctl--primary" href="mailto:?subject=${encodeURIComponent('Delivery update')}&body=${encodeURIComponent(text)}">Email</a></p></div>`;
@@ -943,10 +970,12 @@ function header(d) {
   chip.className = `level-chip level-${d.route?.level || 'green'}`;
   chip.textContent = d.route?.level_label || '';
   $('tr-route').textContent = d.route?.name || d.route_id;
+  const stuck = !d.decide_at && ['red', 'yellow'].includes(d.route?.level) && (d.tell?.orders || []).length;
   $('tr-decide').innerHTML = d.decide_at
-    ? `<span class="tr-decide-k">Decide within</span> ${DeadlineClock.html(d.decide_at)}
+    ? `<span class="tr-decide-k" title="The route's deadline: when its first option closes">First option closes in</span> ${DeadlineClock.html(d.decide_at)}
        <span class="tr-decide-at">${esc(DeadlineClock.at(d.decide_at))}</span>`
-    : '<span class="tr-decide-k">No decision deadline</span>';
+    : stuck ? '<span class="tr-decide-k">No option left: tell the customer now</span>'
+      : '<span class="tr-decide-k">No decision deadline</span>';
   // The route line doubles as the route picker when there is more than one.
   const pick = $('tr-pick');
   const others = d.others || [];

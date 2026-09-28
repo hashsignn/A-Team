@@ -13,6 +13,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -23,6 +24,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from api import fast_routes
+from engine import alerts as alerts_mod
 from engine.act import flow as flow_mod
 from engine.clock import Clock
 from engine.config import load_config
@@ -48,6 +50,7 @@ STATIC = Path(__file__).resolve().parent / "static"
 # a new recording is picked up by the restart it needs anyway.
 PINNED_AS_OF = "2026-09-18T06:00:00+00:00"
 DEFAULT_AS_OF = recorded_as_of() or PINNED_AS_OF
+log = logging.getLogger(__name__)
 
 app = FastAPI(title="Supply Chain Risk Radar", docs_url="/api/docs")
 
@@ -108,6 +111,12 @@ def _board(as_of: str, shipments: int) -> dict:
     key = (as_of, shipments)
     if key not in _BOARDS:
         _BOARDS[key] = build_board(_context(as_of, shipments))
+        # A new board may have turned a route critical: email it, if the
+        # planner asked for that (engine/alerts.py). Never fails the board.
+        try:
+            alerts_mod.on_board(_BOARDS[key])
+        except Exception:  # noqa: BLE001
+            log.exception("alert check failed; the board is unaffected")
     return _BOARDS[key]
 
 
@@ -246,6 +255,41 @@ def profile_save(edits: Annotated[dict, Body()]) -> JSONResponse:
     if outcome["applied"]:
         _invalidate()
     return JSONResponse(outcome)
+
+
+# =====================================================================
+# Critical alerts by email (engine/alerts.py). Settings and the record of
+# what was sent live in config/, which is gitignored: an email address is
+# personal data.
+@app.get("/api/alerts")
+def alerts_state() -> JSONResponse:
+    smtp = alerts_mod.smtp_config()
+    return JSONResponse({
+        "settings": dataclasses.asdict(alerts_mod.load_settings()),
+        "mail_server": bool(smtp),
+        "mail_server_host": smtp["host"] if smtp else None,
+        "recent": alerts_mod.recent(),
+    })
+
+
+@app.post("/api/alerts")
+def alerts_save(body: Annotated[dict, Body()]) -> JSONResponse:
+    try:
+        alerts_mod.save_settings(body)
+    except ValueError as err:
+        raise HTTPException(422, str(err)) from err
+    return alerts_state()
+
+
+@app.post("/api/alerts/test")
+def alerts_test(
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """A test email now, with what is on the board at this moment."""
+    receipt = alerts_mod.test(_board(as_of, shipments))
+    state = json.loads(alerts_state().body)
+    return JSONResponse({"receipt": receipt.as_dict(), **state})
 
 
 @app.get("/api/penalties")

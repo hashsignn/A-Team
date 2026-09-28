@@ -38,6 +38,7 @@ import sys
 import urllib.request
 from collections import Counter
 from pathlib import Path
+from urllib.parse import quote
 
 from PIL import Image
 from playwright.sync_api import sync_playwright
@@ -359,12 +360,12 @@ def _desk(page, check) -> None:
         page.wait_for_timeout(500)
         seen = page.evaluate("""(() => [...document.querySelectorAll('#rlist .rli')].filter(e => {
             const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight - 60; }).length)()""")
-        links = page.evaluate("""(() => ['link-fast', 'link-profile'].every(id => {
+        links = page.evaluate("""(() => ['btn-alerts', 'link-profile'].every(id => {
             const r = document.getElementById(id).getBoundingClientRect();
             return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }))()""")
         check(seen >= 2 and links, f"[layout] at {w}x{h}: {seen} route card(s) begin on screen, "
               f"header links {'visible' if links else 'CUT OFF'}",
-              f"at {w}x{h}: {seen} route cards on screen, Act fast and Risk profile visible")
+              f"at {w}x{h}: {seen} route cards on screen, Alerts and Risk profile visible")
     page.set_viewport_size(kept)
     page.wait_for_timeout(300)
 
@@ -485,13 +486,25 @@ def _response(page, check) -> None:
     page.locator('.dt-view[data-view="tree"]').click()
     page.wait_for_timeout(300)
 
-    page.get_by_role("tab", name="Who to contact").click()
+    # Customers and who to contact are one tab; each customer opens a card.
+    page.get_by_role("tab", name="Customers & contacts").click()
     page.wait_for_timeout(600)
     groups = page.locator("#r-contacts .cgroup").count()
     people = page.locator("#r-contacts .contact").count()
     check(groups >= 3 and people >= 3,
           f"[response] contacts thin: {groups} groups, {people} people",
-          f"contacts: {groups} groups, {people} people")
+          f"customers & contacts: {groups} contact groups, {people} people")
+    info = page.locator("#d-cust tr[data-cust] .cust-more button")
+    if info.count():
+        info.first.click()
+        page.wait_for_timeout(300)
+        card = page.locator("#cust-card")
+        check(card.is_visible() and len(card.inner_text().strip()) > 20,
+              "[response] the customer card did not open", "a customer opens its small card")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
+        check(not card.is_visible(), "[response] Escape did not close the customer card",
+              "Escape closes the customer card")
     page.screenshot(path=str(OUT / "response-contacts.png"))
 
     page.get_by_role("tab", name="Act & escalate").click()
@@ -654,17 +667,18 @@ def _review(page, check) -> None:
             const best = document.querySelector('#r-actions .dt-opt');
             return { route: d.route_id,
                      first_best: !best || best.classList.contains('is-best')
-                                 || (d.keep && d.keep.options.length === 0),
+                                 || (d.keep && (d.keep.options.length === 0 || d.keep.stay_best)),
                      tile: document.querySelector('#d-stat-opt .stat-sub').innerText,
-                     act: document.getElementById('link-act').getAttribute('href'),
-                     ops: document.getElementById('link-ops').getAttribute('href') };
+                     tree: document.getElementById('link-tree').getAttribute('href'),
+                     fast: document.getElementById('link-fast') !== null };
         }""", rid)
         check(order["route"] == rid and order["first_best"],
               f"[options] the tree is not this route's, or its first way is not the best: {order}",
               f"options: the best way is first; the tile says {order['tile']!r}")
-        check(order["act"].startswith(f"/fast/{rid}") and order["ops"].startswith("/ops?route="),
-              f"[options] the onward links are wrong: {order}",
-              "Act fast on this route and Step by step are linked from the panel")
+        check(order["tree"].startswith(f"/tree?route={rid}") and not order["fast"],
+              f"[options] the onward link is wrong: {order}",
+              "the Action decision tree is linked from the panel; no Act fast link")
+        _tree_page(page, check, rid)
         # The way back from those pages lands on this route.
         page.goto(f"{BASE}/?route={rid}", wait_until="load", timeout=90_000)
         page.wait_for_function("typeof state !== 'undefined' && state.board && state.selected", timeout=60_000)
@@ -866,26 +880,81 @@ def _themes_and_unsourced(page, check) -> None:
 # THE ASSISTANT
 # =====================================================================
 def _assistant(page, check) -> None:
-    """With no model reachable the assistant must EXPLAIN, not fail."""
+    """Ask always answers: from the board with no model, written by the
+    model (and marked so) with one."""
     _open_board(page)
     page.locator("#btn-ask").click()
     page.wait_for_timeout(500)
     page.locator("#ask-input").fill("which route needs a decision first?")
     page.locator("#ask-send").click()
-    page.wait_for_timeout(2_500)
+    _settle(page, "document.querySelector('#ask-log .ask-msg.is-board, #ask-log .ask-msg.is-generated') !== null",
+            90_000)
     answer = page.locator("#ask-log").inner_text()
     status = page.request.get(f"{BASE}/api/model").json()
-    if status["status"] == "connected":
-        check("generated by" in answer.lower(),
-              "[ask] a model answered but the output was not marked generated",
-              f"ask: answered by {status['model']}, marked as generated")
+    if page.locator("#ask-log .ask-msg.is-generated").count():
+        check("written by" in answer.lower(),
+              "[ask] a model answered but the output was not marked as written by it",
+              f"ask: answered by {status.get('model')}, marked as written by the model")
     else:
-        check("No model is connected" in answer,
-              f"[ask] no-model socket message missing: {answer[:100]!r}")
-        check("unaffected" in answer, "[ask] did not say the board is computed without a model",
-              "ask: no model, socket message shown, board unaffected")
+        check("First:" in answer, f"[ask] the board's own answer is missing: {answer[:120]!r}",
+              "ask: no model needed, the board answers which route is first")
+        check("from the board" in answer.lower(), "[ask] a board answer is not marked as from the board",
+              "ask: the answer is marked as coming from the board")
+    links = page.locator("#ask-log .ask-links a, #ask-log .ask-links button").count()
+    check(links >= 1, "[ask] the answer has no link to the route", f"ask: {links} link(s) onward")
     page.screenshot(path=str(OUT / "assistant.png"))
     page.locator("#ask-close").click()
+
+    # Alerts by email: the bell opens its window, which says whether mail
+    # can go out, and closes on Escape. Nothing is saved here.
+    page.locator("#btn-alerts").click()
+    page.wait_for_timeout(500)
+    pop = page.locator("#al-pop")
+    status_line = page.locator("#al-status").inner_text()
+    check(pop.is_visible() and ("mail server" in status_line.lower()),
+          f"[alerts] the alerts window did not open or say how mail goes out: {status_line!r}",
+          "alerts: the bell opens its window and says how mail goes out")
+    page.screenshot(path=str(OUT / "alerts.png"))
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(200)
+    check(not pop.is_visible(), "[alerts] Escape did not close the alerts window", "alerts: Escape closes it")
+
+
+def _tree_page(page, check, rid: str) -> None:
+    """The Action decision tree in its own window: it grows along the
+    recommended path, a click grows the next level, and its clocks are
+    calm (no red, seconds ticking)."""
+    as_of = page.evaluate("state.board.as_of")
+    page.goto(f"{BASE}/tree?route={rid}&as_of={quote(as_of)}", wait_until="load", timeout=90_000)
+    _settle(page, "document.querySelectorAll('.tr-level').length >= 3", 60_000)
+    page.wait_for_timeout(1_600)
+    levels = page.locator(".tr-level").count()
+    wires = page.locator("#tr-wires path").count()
+    check(levels >= 3 and wires >= 3, f"[tree page] did not grow: {levels} level(s), {wires} branch(es)",
+          f"tree page: {levels} levels grown, {wires} branches drawn")
+    boxes = page.locator(".tr-level").last.locator(".tn:not(.is-off)")
+    if boxes.count():
+        before = page.locator(".tr-level").count()
+        boxes.first.click()
+        page.wait_for_timeout(900)
+        after = page.locator(".tr-level").count()
+        check(after >= before or page.locator(".tr-side .ins-head").count() == 1,
+              "[tree page] a click did not grow the tree or fill the details",
+              f"tree page: a click grows the next level ({before} to {after}) and fills the details")
+    clocks = page.locator(".dl[data-due]")
+    if clocks.count():
+        first = clocks.first.inner_text()
+        page.wait_for_timeout(1_300)
+        ticked = clocks.first.inner_text() != first or "closed" in first
+        red = page.evaluate("""(() => [...document.querySelectorAll('.dl .dl-hm')].some(e => {
+            const c = getComputedStyle(e).color.match(/\\d+/g).map(Number);
+            return c[0] > 150 && c[1] < 90 && c[2] < 90; }))()""")
+        check(ticked and not red, f"[tree page] clocks: ticking={ticked}, red={red}",
+              "tree page: deadline clocks tick, and none is red")
+    table = page.locator(".tr-side .ins-table").count()
+    check(table >= 1, "[tree page] the details panel has no numbers table",
+          f"tree page: {table} table(s) of numbers in the details")
+    page.screenshot(path=str(OUT / "tree-page.png"))
 
 
 # =====================================================================

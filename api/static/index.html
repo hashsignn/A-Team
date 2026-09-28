@@ -41,6 +41,16 @@
         </svg>
         Ask
       </button>
+      <!-- Critical alerts by email: a route turning critical reaches your
+           phone. Settings in a small window; see engine/alerts.py. -->
+      <button type="button" class="ctl" id="btn-alerts" aria-haspopup="dialog" aria-expanded="false"
+              title="Critical alerts by email">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M8 1.6a4 4 0 0 0-4 4v2.5L2.6 10.8h10.8L12 8.1V5.6a4 4 0 0 0-4-4zM6.3 12.7a1.8 1.8 0 0 0 3.4 0"
+                fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        Alerts<span class="al-dot" id="al-dot" hidden aria-label="on"></span>
+      </button>
       <a class="ctl" id="link-profile" href="/profile" title="Lanes, cutoffs and who gets called">Risk profile</a>
       <div class="themes" id="themes"></div>
     </nav>
@@ -460,5 +470,40 @@
 <script src="/actionhub.js?v=__ASSETV__"></script>
 <!-- One customer's card, opened from its row in Customers & contacts. -->
 <div class="cust-card" id="cust-card" role="dialog" aria-label="Customer" hidden></div>
+
+<!-- Alerts by email: the settings window under the bell. -->
+<div class="al-pop" id="al-pop" role="dialog" aria-label="Critical alerts by email" hidden>
+  <div class="al-head">
+    <b>Critical alerts by email</b>
+    <button type="button" class="mx-close" id="al-close" aria-label="Close">&times;</button>
+  </div>
+  <p class="al-sub">An email to your phone when a route turns critical: the route, the deadline and the CHF at risk,
+    with a link to its decision tree. Customer names stay on the board.</p>
+  <label class="al-field"><span>Email</span>
+    <input type="email" id="al-email" placeholder="you@company.com" autocomplete="email" inputmode="email"></label>
+  <fieldset class="al-levels">
+    <legend>Send me</legend>
+    <label><input type="checkbox" id="al-red" checked> Critical <span>act within 8 h</span></label>
+    <label><input type="checkbox" id="al-yellow"> Alert <span>act within 24–36 h</span></label>
+    <label><input type="checkbox" id="al-ew" checked> Early warnings <span>push-outs, order bursts</span></label>
+  </fieldset>
+  <label class="al-on"><input type="checkbox" id="al-enabled" checked> Alerts on</label>
+  <div class="al-actions">
+    <button type="button" class="ctl ctl--primary" id="al-save">Save</button>
+    <button type="button" class="ctl" id="al-test">Send a test</button>
+  </div>
+  <p class="al-status" id="al-status" role="status"></p>
+  <details class="al-setup">
+    <summary>How the email is sent</summary>
+    <p>Through your own mail account, over TLS. Set these before starting the server, for example with a
+      Gmail app password (Google account, Security, App passwords):</p>
+    <pre>RADAR_SMTP_HOST=smtp.gmail.com
+RADAR_SMTP_PORT=587
+RADAR_SMTP_USER=you@gmail.com
+RADAR_SMTP_PASSWORD=your-app-password</pre>
+    <p>Without them nothing leaves this machine: alerts are recorded here and listed below.</p>
+  </details>
+  <ul class="al-recent" id="al-recent"></ul>
+</div>
 </body>
 </html>

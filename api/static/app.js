@@ -326,6 +326,7 @@ async function boot() {
   renderFilters();
   initResponseTabs();
   initAsk();
+  initAlerts();
   applyBoard(board);
 
   $('asof-form').addEventListener('submit', (e) => {
@@ -2506,6 +2507,105 @@ document.addEventListener('click', (e) => {
     openAsk({ kind: 'event', event_id: id, title });
   }
 });
+
+// ===============================================================
+// Alerts by email (engine/alerts.py): the bell in the header.
+// ===============================================================
+async function alertsLoad() {
+  try {
+    const res = await fetch('/api/alerts');
+    const d = await res.json();
+    alertsFill(d);
+    return d;
+  } catch { return null; }
+}
+
+function alertsFill(d) {
+  const s = d.settings || {};
+  $('al-email').value = s.email || '';
+  $('al-red').checked = (s.levels || ['red']).includes('red');
+  $('al-yellow').checked = (s.levels || []).includes('yellow');
+  $('al-ew').checked = s.early_warnings !== false;
+  $('al-enabled').checked = s.email ? Boolean(s.enabled) : true;
+  $('al-dot').hidden = !(s.enabled && s.email);
+  $('al-status').textContent = d.mail_server
+    ? `Mail server: ${d.mail_server_host}. Alerts are sent.`
+    : 'No mail server is set on this server yet, so alerts are recorded here, not sent. See "How the email is sent".';
+  const word = { sent: 'sent', recorded: 'recorded, not sent', failed: 'not sent', queued: 'on its way', nothing: '' };
+  $('al-recent').innerHTML = (d.recent || []).map((r) => `
+    <li><span class="al-when">${esc((r.at || '').replace('T', ' ').slice(0, 16))}</span>
+      <span class="al-subj" title="${esc(r.detail || '')}">${esc(r.subject || '')}</span>
+      <span class="al-st al-st--${esc(r.status)}">${esc(word[r.status] || r.status)}</span></li>`).join('');
+}
+
+function alertsBody() {
+  const levels = [];
+  if ($('al-red').checked) levels.push('red');
+  if ($('al-yellow').checked) levels.push('yellow');
+  return {
+    email: $('al-email').value.trim(), levels, early_warnings: $('al-ew').checked,
+    enabled: $('al-enabled').checked, base_url: location.origin,
+  };
+}
+
+async function alertsSave() {
+  $('al-status').textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/alerts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(alertsBody()),
+    });
+    const d = await res.json();
+    if (!res.ok) { $('al-status').textContent = d.detail || 'Could not save.'; return false; }
+    alertsFill(d);
+    $('al-status').textContent = d.settings.enabled
+      ? `Saved. ${d.mail_server ? 'You will get an email' : 'Alerts will be recorded here'} when a route turns critical.`
+      : 'Saved. Alerts are off.';
+    return true;
+  } catch { $('al-status').textContent = 'Could not reach the server.'; return false; }
+}
+
+async function alertsTest() {
+  if (!(await alertsSave())) return;
+  $('al-status').textContent = 'Sending a test…';
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  try {
+    const res = await fetch(`/api/alerts/test?${q}`, { method: 'POST' });
+    const d = await res.json();
+    alertsFill(d);
+    const r = d.receipt || {};
+    $('al-status').textContent = r.status === 'sent' ? `Sent to ${r.to}. Check your phone.`
+      : r.status === 'recorded' ? 'Recorded here, not sent: no mail server is set on this server.'
+        : r.detail || 'Not sent.';
+  } catch { $('al-status').textContent = 'Could not reach the server.'; }
+}
+
+function initAlerts() {
+  const pop = $('al-pop');
+  const btn = $('btn-alerts');
+  if (!pop || !btn) return;
+  const close = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!pop.hidden) { close(); return; }
+    // Under the bell, wherever the header wraps it.
+    const at = btn.getBoundingClientRect();
+    pop.style.top = `${Math.round(at.bottom + 8)}px`;
+    pop.style.right = `${Math.max(12, Math.round(window.innerWidth - at.right))}px`;
+    pop.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    await alertsLoad();
+    $('al-email').focus();
+  });
+  $('al-close').addEventListener('click', close);
+  $('al-save').addEventListener('click', alertsSave);
+  $('al-test').addEventListener('click', alertsTest);
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) close(); });
+  alertsLoad();
+}
 
 function initAsk() {
   $('btn-ask').addEventListener('click', () => {

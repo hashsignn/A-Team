@@ -10,6 +10,20 @@ Open the **Ports** tab, click **port 8000**, and press **Ctrl+Shift+R** (Mac: Cm
 so the browser loads the new version. If `git pull` complains about local changes,
 run `git stash` once and paste the line again.
 
+**Ask works with no setup:** it answers from the board itself. For free-form
+questions, start the free local AI once (nothing is sent anywhere, nothing is
+billed), then restart the server with the line it prints:
+
+```bash
+bash scripts/setup_ai.sh                                        # Mac, Linux, Codespace
+powershell -ExecutionPolicy Bypass -File scripts\setup_ai.ps1   # Windows
+```
+
+**Critical alerts to your phone (optional):** click **Alerts** in the header,
+enter your email, Save. To actually send, start the server with your mail
+account set (see [Alerts by email](#alerts-by-email)); without it the alerts
+are recorded on the server and listed in that window.
+
 **Once, after pulling, if Sika's export is in `config/`:** re-import it so the
 board can read the order book day by day (the burst-of-small-orders warning):
 
@@ -57,7 +71,7 @@ reachable from the forwarded URL.
 ```bash
 .venv/bin/python run.py demo          # the whole pipeline, in the terminal
 .venv/bin/python run.py inputs        # what is real / standing in / absent
-.venv/bin/python -m pytest -q         # 78 tests
+.venv/bin/python -m pytest -q         # about 1,100 tests
 
 # any instant you like — the board is reproducible from it
 .venv/bin/python run.py demo --as-of 2026-09-19T12:00:00+00:00
@@ -578,17 +592,30 @@ never at a computed 0.5, with the card saying so in as many words.
 
 ### The assistant
 
-A grounded chat panel, opened from the topbar for the whole board or from the
-speech-bubble on an event for that event. The context is assembled in
-`engine/reason/ask.py` from the board itself; the model gets no tools, no
-search and no internet, and the system prompt asks for *"The board does not
-carry that"* rather than a guess.
+**Ask**, in the topbar (or the speech bubble on an event), always answers.
+Most questions a planner types are lookups the board has already computed,
+so `engine/reason/answer.py` answers them directly, with no model at all:
 
-**Every answer is visibly marked as generated.** The numbers on the page were
-computed by the engine and can be reproduced from the command line; an answer
-here was written by a model from a context built out of those numbers. Those
-are different kinds of claim, and a planner is entitled to tell them apart at
-a glance.
+| Ask about | It answers from |
+|---|---|
+| "which route first?" | the most urgent route: deadline, CHF, events, the best way from its decision tree |
+| a place ("the Rhine", "Houston") | the route that runs through it |
+| a customer ("Kestrel") | their orders at risk, per route, and what lateness means for them |
+| an order ("SYN-0041") | its route, customer, promised date, chance of being late, its branch in the tree |
+| "key accounts", "cost", "if nobody acts" | the key accounts at risk; exposure by route and by cost driver |
+| "when is the meeting", "early warnings", "who do I call" | the all-hands, the carrier push-outs and order bursts, the route's contacts |
+
+Every answer is a first line that answers and a few lines of numbers, with
+links to open the route or its decision tree, and it is marked **from the
+board**. What the board does not carry, it says so.
+
+With the free local model running (`scripts/setup_ai.sh`), the model writes
+the answer instead, from a short brief of the same rows (the routes at risk,
+key accounts, the meeting, warnings, and the route asked about with its
+decision tree), and the answer is marked **written by** the model. The model
+gets no tools, no search and no internet, and the system prompt asks for
+*"The board does not carry that"* rather than a guess. If Ollama runs but the
+model is not downloaded, Ask says which `ollama pull` to run.
 
 ### The risk profile
 
@@ -1096,13 +1123,89 @@ planner does, one numbered step each, down one line
 ```
 
 Two engines answer the options, and each answers the question it is for:
-the delivery-first optimiser (Act fast) the routes that keep the date, the
+the delivery-first optimiser the routes that keep the date, the
 playbook the actions that reduce the damage otherwise. Every order at risk
 sits in exactly one branch, so the tab can no longer show one order under two
 answers (`tests/test_decision.py`). A click on an option opens it, with its
 orders, and draws its path on the map; **Compare routes** lays staying as
 planned and every alternative side by side: orders on time, lateness, extra
 cost, when it starts.
+
+### The Action decision tree, in its own window
+
+**Action decision tree ↗** on the route panel opens `/tree?route=…`: the same
+decisions as a real tree, top down, that grows as you choose. Each box is
+numbers first; the panel on the right fills with the numbers behind the box
+you clicked, and the long text is behind **More detail**.
+
+```
+1 What is happening       the events, when they started, the contract clocks they start
+2 Who is hit              not hit  |  absorbed by buffers  |  need action
+3 Keep the dates?         keep the date  |  cut the damage  |  tell the customer
+4 Which way, best first   the ways, ranked; another Sika site; stay as planned
+5 Who carries it          per mode, the carriers along the way (real operators marked)
+6 Sign off and book       within your limit or not; book it, with a 15-minute undo
+```
+
+- **Ranked in one hue**: darker is better (1st, 2nd, 3rd), grey is staying as
+  planned. The ramp is not a ladder colour, and it was checked for
+  colour-blind separation.
+- **Stay as planned ranks first** when every order is more likely than not on
+  time anyway and its expected loss is below what the cheapest way costs for
+  certain: paying CHF 5,000 to protect CHF 800 of expected loss is not a
+  recommendation (`tests/test_decision.py`).
+- **Sign-off** compares the way's cost with the delegated limit (CHF 10,000,
+  raised to the crisis limit while the all-hands is convened), and names
+  Controlling with a ready email when it is above.
+- **What it costs** splits the expected loss of doing nothing into customer
+  impact, expediting and surcharges, and shows the contract delay penalties
+  as a dashed bar when they are not counted, with a switch to count them.
+
+### Deadline clocks
+
+Every deadline is a live countdown, and a calm one: a small green clock,
+hours and minutes in the text colour, seconds in grey, "closed" in grey. No
+red, anywhere a deadline is shown (`api/static/clock.js`).
+
+- **A way closes** when starting it later would miss a promised date: the
+  optimiser's slack between arriving by that way, started now, and the
+  committed date (`window_hours` in `engine/fast/options.py`). A way that is
+  late anyway never closes; it only gets later.
+- **Contract clocks** start at each event's timestamp: the carrier must tell
+  Sika (24 h), Sika may reroute at the agreed rate (48 h), the carrier's force
+  majeure notice (72 h). These three are **assumed** and marked so in
+  `config.example/scoring.yaml` under `contract_clocks`; put the framework
+  contracts' real terms there. After delivery, a road delay claim must reach
+  the carrier in writing within **21 days** (CMR Art. 30(3), linked).
+
+### Alerts by email
+
+**Alerts** in the header: your email, which levels (Critical, Alert, early
+warnings), Save, **Send a test**. When a new board shows a route newly at a
+chosen level (or climbing from Alert to Critical), or a new early warning,
+the server sends one short email: the route, the deadline, the CHF at risk,
+the order count, and a link to its decision tree. **Customer names are not
+in the email.** A route alerts once per level; going back in time on the
+as-of never pages anyone (`engine/alerts.py`, `tests/test_alerts.py`).
+
+It goes through **your own mail account**, over TLS with the certificate
+checked. Set these before starting the server, for example with a Gmail app
+password (Google account → Security → App passwords):
+
+```bash
+export RADAR_SMTP_HOST=smtp.gmail.com
+export RADAR_SMTP_PORT=587            # 465 for implicit TLS
+export RADAR_SMTP_USER=you@gmail.com
+export RADAR_SMTP_PASSWORD=your-app-password
+.venv/bin/python run.py serve --host 0.0.0.0
+```
+
+In a Codespace, put them in the repository's Codespaces secrets instead of
+typing them. Without them nothing leaves the machine: alerts are recorded and
+listed in the Alerts window as "recorded, not sent". The settings and the
+record of what was sent are kept in `config/` (gitignored): an email address
+is personal data. With Sika's real data loaded, the email carries real route
+names and figures to that mail account: use a company account.
 
 ### The response path: a decision flow that branches
 
