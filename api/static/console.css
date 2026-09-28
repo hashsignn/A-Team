@@ -406,3 +406,10 @@
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
   cursor: help;
 }
+
+/* Labels and headings in sentence case, like the board; status pills keep
+   their capitals. */
+.cons-fact dt, .stage-title, .out-title, .dtable th, .cons-sub, .block-facts dt {
+  text-transform: none; letter-spacing: 0;
+}
+.cons-fact dt, .block-facts dt { font-size: 13px; color: var(--text-secondary); }

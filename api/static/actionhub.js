@@ -26,7 +26,7 @@
     getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const chf = (v) => (v == null ? '—' : `CHF ${Math.round(v).toLocaleString('en-CH')}`);
+  const chf = (v) => (v == null ? '—' : `CHF ${Math.round(v).toLocaleString('en-US')}`);
   const when = (iso) => {
     if (!iso) return '—';
     const d = new Date(iso);
@@ -119,21 +119,32 @@
     // ---------------------------------------------------------------
     function head(d, s) {
       const st = d.status;
-      const crew = d.asset.crew;
       $('hub-title').innerHTML = `
-        <h3><span class="mono">${esc(d.asset.asset_id)}</span>
+        <h3>${esc(d.asset.name)} <span class="hub-id">${esc(d.asset.asset_id)}</span>
           <span class="st-chip" style="--c:${levelColour(routeLevel(s, d.shipment_id))}" title="The route's level on the ladder: how soon a decision on this lane is due"><i></i>${esc(LEVEL_LABEL[routeLevel(s, d.shipment_id)])} route</span></h3>
-        <p class="hub-sub">${esc(d.asset.name)} · carrying <b>${esc(d.shipment_id)}</b> · ${esc(d.phase_label)}</p>`;
-      const pos = d.position;
+        <p class="hub-sub">Carrying order <b>${esc(d.shipment_id)}</b> for ${esc(d.logistics.customer)} · ${esc(d.phase_label)}</p>`;
       return `
       <section class="hsec" data-sec="header">
+        <p class="hreason"><b>${esc(st.label)}:</b> ${esc(st.reason)}</p>
+      </section>`;
+    }
+
+    /* The vehicle itself: who drives it, where it is, where it is going.
+     * Below the ways round, which are what a planner opened the card for. */
+    function vehicle(d) {
+      const crew = d.asset.crew;
+      const pos = d.position;
+      const planned = pos.source === 'schedule';
+      return `
+      <section class="hsec" data-sec="vehicle">
+        <h4>Vehicle</h4>
         <div class="kv">
           <div><div class="k">${esc(crew.role)}</div>
             <div class="v">${esc(crew.name)}</div>
             <div class="s">${crew.verified ? 'verified' : 'synthetic'}</div></div>
-          <div><div class="k">Live GPS</div>
+          <div><div class="k">${planned ? 'Position (planned)' : 'Position (reported)'}</div>
             <div class="v mono">${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}</div>
-            <div class="s">${pos.source === 'schedule' ? 'planned position' : `field report${pos.accuracy_m ? ` ±${Math.round(pos.accuracy_m)} m` : ''}`}${d.drift_km != null ? ` · ${d.drift_km} km off plan` : ''}</div></div>
+            <div class="s">${planned ? 'from the schedule, no GPS feed' : `field report${pos.accuracy_m ? ` ±${Math.round(pos.accuracy_m)} m` : ''}`}${d.drift_km != null ? ` · ${d.drift_km} km off plan` : ''}</div></div>
           <div><div class="k">Last sync</div>
             <div class="v mono">${esc(when(d.last_sync))} UTC</div>
             <div class="s" title="${esc(d.last_sync_source)}">${esc(String(d.last_sync_source || '').split(/[,(]/)[0])}</div></div>
@@ -141,7 +152,6 @@
             <div class="v">${Math.round(d.heading_deg)}° · ${d.leg.index + 1}/${d.leg.count} ${esc(d.leg.mode)}</div>
             <div class="s">${esc(d.leg.from_name)} → ${esc(d.leg.to_name)}</div></div>
         </div>
-        <p class="hreason"><b>${esc(st.label)}:</b> ${esc(st.reason)}</p>
       </section>`;
     }
 
@@ -166,7 +176,7 @@
           <span class="ours" style="width:${pct(l.ours_teu)}"></span>
           ${l.usable_teu != null ? `<em style="left:${pct(l.usable_teu)}" title="usable at current draught"></em>` : ''}
         </div>
-        ${l.usable_teu != null ? `<p class="chart-note" title="A low-water derate, not a stoppage.">Usable now: ${l.usable_teu} TEU (red mark)</p>` : ''}
+        ${l.usable_teu != null ? `<p class="chart-note" title="A low-water derate, not a stoppage.">Red mark: only ${l.usable_teu} TEU can be carried at today's water level</p>` : ''}
         <div class="boxes">${boxes}</div>
         <p class="chart-note" title="Synthetic manifest, ISO 6346 ids, a deadline per box">${d.containers.length} containers · synthetic</p>
       </section>`;
@@ -179,9 +189,9 @@
       <section class="hsec" data-sec="logistics">
         <h4>Logistics <span>${esc(g.customer)}</span></h4>
         <div class="eta">
-          <div><div class="k muted" style="font-size:10px">ORIGINAL ETA</div><div class="v">${esc(when(g.eta_original))}</div></div>
+          <div><div class="k muted">Planned arrival</div><div class="v">${esc(when(g.eta_original))}</div></div>
           <div class="arrow">→</div>
-          <div><div class="k muted" style="font-size:10px">REVISED ETA</div>
+          <div><div class="k muted">Expected now</div>
             <div class="v${late ? ' late' : ''}">${esc(when(g.eta_revised))}</div></div>
         </div>
         <div class="kv" style="margin-top:8px">
@@ -292,7 +302,7 @@
               ticks: { display: false, stepSize: 25 },
               grid: { color: tokenOf('--grid') },
               angleLines: { color: tokenOf('--axis') },
-              pointLabels: { color: tokenOf('--text-secondary'), font: { size: 9.5 } },
+              pointLabels: { color: tokenOf('--text-secondary'), font: { size: 12 } },
             },
           },
         },
@@ -319,7 +329,7 @@
           <span class="rbadge" style="--c:${altColour(c.rank)}">${esc(c.badge || `#${c.rank}`)}</span>
           <span class="alt-label">${esc(c.label)}</span>
           <span class="alt-delta">${esc(c.delta.text)}</span>
-          <span class="alt-notes" title="${esc([c.touches.length ? `Still passes: ${c.touches.map((t) => t.title).join('; ')}` : '', ...c.notes].filter(Boolean).join('\n'))}">ETA ${esc(when(c.eta))} · ${Math.round(c.km).toLocaleString()} km · setup ${c.setup_hours} h${c.touches.length ? ` · ${c.touches.length} hazard${c.touches.length === 1 ? '' : 's'} left` : ''}${c.beats_original ? '' : ' · worse than staying'}</span>
+          <span class="alt-notes" title="${esc([c.touches.length ? `Still passes: ${c.touches.map((t) => t.title).join('; ')}` : '', ...c.notes].filter(Boolean).join('\n'))}">ETA ${esc(when(c.eta))} · ${Math.round(c.km).toLocaleString('en-US')} km · setup ${c.setup_hours} h${c.touches.length ? ` · ${c.touches.length} hazard${c.touches.length === 1 ? '' : 's'} left` : ''}${c.beats_original ? '' : ' · worse than staying'}</span>
         </button>`).join('');
       return `
       <section class="hsec" data-sec="routes">
@@ -460,8 +470,9 @@
       const recent = s.journal.slice(-8).reverse();
       return `
       <div class="hub-foot">
-        <a class="ctl" href="/route/${encodeURIComponent(lane)}?${q}">Lane page →</a>
-        <a class="ctl" href="/ops?${ops}" title="The playbook gate: confirm the disruption before rerouting">Playbook →</a>
+        <a class="ctl ctl--primary" href="/fast/${encodeURIComponent(lane)}?${q}" title="This route's options with Do it buttons and an undo window">▶ Act fast on this route</a>
+        <a class="ctl" href="/ops?${ops}" title="Detect, confirm, act, close out: the checklist for this route">Step by step</a>
+        <a class="ctl" href="/route/${encodeURIComponent(lane)}?${q}" title="Route page: matrix and charts">Route page</a>
       </div>
       <details class="journal"><summary>Actions on this map (${s.journal.length}) · planner or agent</summary>
         <ol>${recent.map((j) => `<li><span class="who">${esc(j.actor)}</span> ${esc(j.summary || j.action)}</li>`).join('')}</ol>
@@ -497,8 +508,11 @@
       const detailChanged = !prev || prev.selection.detail !== sel.detail;
       const d = sel.detail;
       if (detailChanged) {
-        hubBody.innerHTML = `${head(d, s)}${load(d)}${logistics(d)}${logs(d)}${risk(d)}
+        // What to do comes first (the ways round, the split, who can help);
+        // what the vehicle is and carries follows.
+        hubBody.innerHTML = `${head(d, s)}
           <div id="hub-routes"></div><div id="hub-split"></div><div id="hub-partners"></div>
+          ${logistics(d)}${vehicle(d)}${load(d)}${risk(d)}${logs(d)}
           <div id="hub-foot"></div>`;
         drawRadar(d);
       }

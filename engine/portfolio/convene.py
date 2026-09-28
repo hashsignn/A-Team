@@ -159,9 +159,26 @@ def evaluate(
         contracts_exposed=len(contracts),
         shipments_needing_decision=len(pressing),
         next_meeting_at=meeting,
-        headline=_headline(posture, fired, exposure, len(pressing), meeting, agreed),
+        headline=_headline(posture, fired, exposure, len(pressing), meeting, agreed,
+                           _sooner(posture, config, clock)),
         exposure_from_warnings_chf=round(from_warnings, 2),
     )
+
+
+def rule_state(agreed: bool) -> str:
+    """One wording for the crossed rule, everywhere it is said."""
+    return "All-hands rule crossed" if agreed else "Proposed all-hands rule crossed (not yet agreed)"
+
+
+def _sooner(posture: Posture, config: Config, clock: Clock) -> tuple[datetime, str] | None:
+    """When, and how often, the all-hands sits at the cadence this posture
+    calls for."""
+    from engine import desk  # noqa: PLC0415
+
+    if posture is Posture.NORMAL:
+        return None
+    at = desk.next_meeting(posture.value, config, clock)
+    return (at, desk.cadence_words(desk.cadence(posture.value, config))) if at else None
 
 
 def _headline(
@@ -171,19 +188,19 @@ def _headline(
     pressing: int,
     meeting: datetime | None,
     agreed: bool,
+    sooner: tuple[datetime, str] | None = None,
 ) -> str:
     when = f"{meeting:%A %d %b}" if meeting else "the next meeting"
 
     if posture is Posture.CONVENE:
-        prefix = (
-            "Convene rule crossed"
-            if agreed
-            else "Proposed convene rule would be crossed (not yet agreed with the team)"
-        )
+        # The regular slot and the crisis slot are both said, so nothing on
+        # the board can read as a different "next meeting".
+        meets = (f"The all-hands meets {sooner[1]} from {sooner[0]:%a %d %b, %H:%M} UTC "
+                 f"instead of waiting for {when}." if sooner else
+                 f"The regular meeting is not until {when}.")
         return (
-            f"{prefix}: {fired[0]}. "
-            f"{pressing} shipment(s) need a decision within 48 hours, and the "
-            f"team does not sit again until {when}."
+            f"{rule_state(agreed)}: {fired[0]}. "
+            f"{pressing} shipment(s) need a decision within 48 hours. {meets}"
         )
 
     if posture is Posture.WATCH:

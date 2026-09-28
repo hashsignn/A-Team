@@ -481,6 +481,7 @@ def _judgement(event, risks: list[ShipmentRisk], config) -> dict:
     return {
         "kind": event.kind,
         "kind_label": onset.LABELS.get(event.kind, event.kind),
+        "kind_meaning": onset.MEANING.get(event.kind, ""),
         "kind_basis": event.kind_basis,
         "delay_days": (
             {"best": points[0], "likely": points[1], "worst": points[2]}
@@ -839,7 +840,22 @@ def _actions(risks: list[ShipmentRisk], context: RunContext) -> list[dict]:
                 "expected_loss_chf": round(risk.do_nothing.expected_loss_chf, 2),
             }
         )
-    return out[:12]
+    # Chosen key-accounts-first, SHOWN soonest-window-first: an option that
+    # closes inside the Critical window cannot sit behind one due in four
+    # days, whoever the customer. Within a window, key accounts still lead.
+    return sorted(out[:12], key=lambda a: (_urgency_band(a["lead_time_hours"], config),
+                                           desk_mod.PRIORITY_ORDER.index(a["customer_priority"]),
+                                           -a["value_chf"]))
+
+
+def _urgency_band(hours: float | None, config) -> int:
+    """0 inside the Critical window, 1 inside Alert, 2 later, 3 no deadline."""
+    from engine.score.severity import Level, _level_for_hours
+
+    if hours is None:
+        return 3
+    level = _level_for_hours(hours, config)
+    return {Level.RED: 0, Level.YELLOW: 1}.get(level, 2)
 
 
 def _nodes(context: RunContext) -> list[dict]:

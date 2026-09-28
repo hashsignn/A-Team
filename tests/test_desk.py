@@ -162,3 +162,35 @@ def test_a_carrier_export_replaces_the_synthetic_changes(config, tmp_path):
     obs, report, summary = pushouts.assess([], config, Clock(NOW), customer_dir=tmp_path)
     assert report.status.value == "connected" and not summary["synthetic"]
     assert len(obs) == 1 and obs[0]["node_ids"] == ["CHBSL"]
+
+
+# ---------------------------------------------------------------------
+# The review of 28 September — the soonest option first, one meeting time
+# ---------------------------------------------------------------------
+def test_an_option_closing_inside_the_critical_window_is_listed_first(config):
+    from engine.export import board as board_mod
+
+    def a(label, lead, priority, value):
+        return {"label": label, "lead_time_hours": lead, "customer_priority": priority, "value_chf": value}
+
+    options = [a("key, 4 days", 97, "A", 46000), a("key, 29 h", 29, "A", 44000),
+               a("flexible, 5 h", 5, "C", 10000), a("standard, 7 days", 167, "B", 9000)]
+    ordered = sorted(options, key=lambda x: (board_mod._urgency_band(x["lead_time_hours"], config),
+                                             desk.PRIORITY_ORDER.index(x["customer_priority"]),
+                                             -x["value_chf"]))
+    # Inside each window key accounts still lead; the windows come first.
+    assert [x["label"] for x in ordered] == ["flexible, 5 h", "key, 29 h", "key, 4 days", "standard, 7 days"]
+    assert board_mod._urgency_band(None, config) == 3
+
+
+def test_the_rule_sentence_names_the_same_meeting_as_the_tab(config):
+    from engine.portfolio import convene
+
+    clock = Clock(datetime(2026, 9, 26, 23, 0, tzinfo=UTC))
+    sooner = convene._sooner(Posture.CONVENE, config, clock)
+    tab = desk.meeting(_verdict(Posture.CONVENE), config, clock)
+    words = convene._headline(Posture.CONVENE, ["x"], 1.0, 3,
+                              convene.next_meeting(config, clock), False, sooner)
+    assert tab["next_label"].split(",")[0] in words          # "Mon 28 Sep"
+    assert "daily" in words and "instead of waiting" in words
+    assert tab["change"] == convene.rule_state(False) and words.startswith(convene.rule_state(False))

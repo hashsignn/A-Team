@@ -52,7 +52,7 @@ const Board = (() => {
           <span style="width:${(share * 100).toFixed(1)}%"></span>
         </div>
         <div class="alloc__foot">
-          <span>${row.tonnes.toLocaleString()} t · ${row.shipments} consignments</span>
+          <span>${row.tonnes.toLocaleString('en-US')} t · ${row.shipments} consignments</span>
           <span>ready ${FastUI.hoursShort(row.hours_to_ready)}, last away
             ${FastUI.hoursShort(row.hours_to_last_away)}</span>
           <span class="num">${row.cost_chf > 0 ? `+${FastUI.chf(row.cost_chf)}` : 'no premium'}</span>
@@ -71,10 +71,10 @@ const Board = (() => {
           <span class="cover__left" style="width:${((1 - moved) * 100).toFixed(1)}%"></span>
         </div>
         <div class="cover__legend">
-          <span><i class="sw sw--moved"></i>${plan.covered_tonnes.toLocaleString()} t
+          <span><i class="sw sw--moved"></i>${plan.covered_tonnes.toLocaleString('en-US')} t
             moving (${pct(plan.coverage)})</span>
           ${plan.deferred_tonnes > 0
-            ? `<span><i class="sw sw--left"></i>${plan.deferred_tonnes.toLocaleString()} t
+            ? `<span><i class="sw sw--left"></i>${plan.deferred_tonnes.toLocaleString('en-US')} t
                  waiting (${plan.deferred.length} consignments)</span>`
             : '<span class="muted">nothing left behind</span>'}
         </div>
@@ -96,8 +96,8 @@ const Board = (() => {
 
   function planPanel(plan, index) {
     const facts = [
-      ['Moves', pct(plan.coverage), `${plan.covered_tonnes.toLocaleString()} of
-        ${plan.displaced_tonnes.toLocaleString()} t`],
+      ['Moves', pct(plan.coverage), `${plan.covered_tonnes.toLocaleString('en-US')} of
+        ${plan.displaced_tonnes.toLocaleString('en-US')} t`],
       ['First freight away', FastUI.hoursShort(plan.hours_to_first_move),
         'from now'],
       ['Worst case', plan.worst_days_late > 0
@@ -263,7 +263,7 @@ const Board = (() => {
           <h3>How the freight actually moves</h3>
           <p class="sboard__sub">
             ${data.displaced_shipments} consignments,
-            <strong>${data.displaced_tonnes.toLocaleString()} t</strong> displaced
+            <strong>${data.displaced_tonnes.toLocaleString('en-US')} t</strong> displaced
             ${pressureHTML(data)}
             · window ${FastUI.hoursShort(data.horizon_hours)}
           </p>

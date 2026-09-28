@@ -61,7 +61,11 @@ const LEVEL_WHEN = {
 const state = {
   board: null,
   selected: null,
-  hidden: new Set(),   // levels toggled off in the ladder
+  // A ladder click shows ONLY that level; a second click shows them all.
+  levelOnly: null,
+  // Normal routes need nothing, so the list of affected routes leaves them
+  // out until asked. The map and the globe still draw all freight.
+  showNormal: false,
   focusOnly: false,    // the list narrowed to the focus routes
   // WHOSE BOARD THIS IS. The site a planner answers for, and which
   // customers they are looking at ('' all, 'A' key accounts, 'AB' key and
@@ -86,7 +90,12 @@ const state = {
 const RESUME_AFTER_MS = 7000;
 
 const $ = (id) => document.getElementById(id);
-const chf = (v) => v == null ? '—' : 'CHF ' + Math.round(v).toLocaleString('en-CH');
+const chf = (v) => v == null ? '—' : 'CHF ' + Math.round(v).toLocaleString('en-US');
+// One grouping style everywhere (CHF 204,523), the same as the engine's
+// sentences and the reports, so no two numbers on a screen look different.
+const num = (v) => Math.round(v).toLocaleString('en-US');
+// Stand-in names carry "(synthetic)"; the board says so once per section.
+const plainName = (n) => String(n ?? '').replace(/\s*\(synthetic[^)]*\)\s*$/i, '');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -205,7 +214,7 @@ function withAgent(fn, tries = 40) {
 }
 
 function syncMapFilters() {
-  const filtered = state.site || state.cust || state.hidden.size || state.focusOnly;
+  const filtered = state.site || state.cust || state.levelOnly || state.focusOnly;
   const lanes = filtered ? visibleRoutes().map((r) => r.route_id) : null;
   const priorities = state.cust === 'A' ? ['A'] : state.cust === 'AB' ? ['A', 'B'] : null;
   withAgent((agent) => agent.setFilter({ lanes, priorities },
@@ -308,7 +317,23 @@ async function boot() {
     $('asof-input').value = isoToInput(DEFAULT_AS_OF);
     reload(DEFAULT_AS_OF);
   });
+  // The as-of folds away again on a click anywhere else, like any menu.
+  document.addEventListener('click', (e) => {
+    const pop = $('asof-pop');
+    if (pop && pop.open && !pop.contains(e.target)) pop.open = false;
+  });
+  $('meet-chip').addEventListener('click', openAllHands);
 
+  // ?route=<id> opens that route: the way back from Act fast, the checklist
+  // and the route page lands on the route you left, not on the list.
+  const wanted = new URLSearchParams(location.search).get('route');
+  if (wanted && board.routes.some((r) => r.route_id === wanted)) select(wanted, { fly: true, fit: true });
+}
+
+/* The all-hands tab, from anywhere: the header chip, the globe strip. */
+function openAllHands() {
+  if (!$('panel-body').hidden) showRouteList();
+  openPanelTab('allhands');
 }
 
 /* Re-run at a different instant WITHOUT rebuilding the globe.
@@ -338,6 +363,7 @@ async function reload(asOf) {
   } finally {
     stage.classList.remove('is-loading');
     $('asof-apply').disabled = false;
+    if ($('asof-pop')) $('asof-pop').open = false;
   }
 }
 
@@ -345,10 +371,12 @@ async function reload(asOf) {
  * cannot drift apart. */
 function applyBoard(board) {
   $('brand-sub').textContent =
-    `${board.as_of_label} · ${board.shipments_total} shipments (synthetic) · ` +
+    `${board.shipments_total} shipments (synthetic) · ` +
     `${board.variables_total} risk variables · ${board.routes.length} routes`;
+  $('asof-text').textContent = board.as_of_label;
 
   renderPosture(board.posture);
+  renderMeetChip();
   initDesk();
   initPanelTabs();
   renderAllHands();
@@ -741,15 +769,53 @@ function nodeTip(n) {
 // ===============================================================
 // Ladder & posture
 // ===============================================================
-/* The convene strip, on the globe's lane view (it sits over the map's
- * vehicles otherwise). The cadence it implies is on the All-hands tab. */
+/* The all-hands, in one line: how often it meets now, when it next sits and
+ * how many of the rule's checks are crossed. The full sentence is the
+ * tooltip; the details are the All-hands tab. The same line sits in the
+ * header chip, so the meeting is in sight on the map as well as the globe. */
+function meetLine() {
+  const h = state.board && state.board.all_hands;
+  if (!h) return null;
+  const checks = h.checks || [];
+  const crossed = checks.filter((c) => c.crossed).length;
+  const tone = { convene: 'red', watch: 'yellow', normal: 'green' }[h.posture] || 'blue';
+  return {
+    tone,
+    when: `${h.cadence_label} · next ${h.next_label.replace(' UTC', '')}`,
+    crossed: checks.length ? `${crossed} of ${checks.length} checks crossed` : '',
+  };
+}
+
 function renderPosture(p) {
-  const tone = { convene: 'red', watch: 'yellow', normal: 'green' }[p.posture] || 'blue';
-  const c = LEVEL_COLOR[tone];
-  $('posture').style.borderLeftColor = c;
-  $('posture').innerHTML =
-    `<span class="posture-label" style="color:${c}">${esc(p.posture)}</span>
-     <span class="posture-text">${esc(p.headline)}</span>`;
+  const m = meetLine();
+  const host = $('posture');
+  if (!m) { host.innerHTML = ''; return; }
+  const c = LEVEL_COLOR[m.tone];
+  host.style.borderLeftColor = c;
+  host.title = p.headline || '';
+  host.innerHTML =
+    `<span class="posture-label" style="color:${c}">All-hands</span>
+     <span class="posture-text">meets <b>${esc(m.when)}</b>${m.crossed ? ` · ${esc(m.crossed)}` : ''}</span>
+     <button type="button" class="ctl ctl--mini posture-go">Details</button>`;
+  host.querySelector('.posture-go').addEventListener('click', openAllHands);
+}
+
+function renderMeetChip() {
+  const chip = $('meet-chip');
+  const m = meetLine();
+  if (!chip) return;
+  chip.hidden = !m;
+  if (!m) return;
+  const h = state.board.all_hands;
+  chip.className = `meet-chip meet-chip--${m.tone}`;
+  chip.title = `${state.board.posture.headline || ''}\nClick for the agenda: who is in the room and what each function can pull.`;
+  chip.innerHTML = `<i aria-hidden="true"></i><span><b>All-hands</b> ${esc(m.when)}</span>`;
+  // The tab carries the same dot while the meeting is stepped up.
+  const dot = $('ptab-meet');
+  if (dot) {
+    dot.hidden = !h.changed;
+    dot.style.background = LEVEL_COLOR[m.tone];
+  }
 }
 
 const LADDER_SKELETON = [
@@ -762,12 +828,14 @@ function renderLadder(levels) {
   // are drawn at their final size and filled in, so the header never moves.
   const rows = levels || LADDER_SKELETON;
   const mine = state.board ? deskRoutes() : null;
+  const only = state.levelOnly;
   $('ladder').innerHTML = rows.map((l) => {
     const count = mine ? mine.filter((r) => r.level === l.level).length : null;
+    const on = only === l.level;
     return `
-    <button type="button" class="rung${state.hidden.has(l.level) ? ' is-off' : ''}${count ? ' has-items' : ''}"
-            data-level="${l.level}" title="${esc(l.directive)}"
-            aria-pressed="${!state.hidden.has(l.level)}">
+    <button type="button" class="rung${on ? ' is-on' : ''}${only && !on ? ' is-off' : ''}${count ? ' has-items' : ''}"
+            data-level="${l.level}" title="${esc(l.directive)}${l.directive ? '. ' : ''}${on ? 'Click to show every level' : 'Click to show only this level'}"
+            aria-pressed="${on}">
       <span class="rung-dot" style="background:${LEVEL_COLOR[l.level]}"></span>
       <span>
         <span class="rung-name">${esc(l.label)}</span>
@@ -779,16 +847,32 @@ function renderLadder(levels) {
 
   if (!levels) return;
   $('ladder').querySelectorAll('.rung').forEach((b) => {
-    b.addEventListener('click', () => {
-      const lvl = b.dataset.level;
-      state.hidden.has(lvl) ? state.hidden.delete(lvl) : state.hidden.add(lvl);
-      b.classList.toggle('is-off', state.hidden.has(lvl));
-      b.setAttribute('aria-pressed', String(!state.hidden.has(lvl)));
-      refreshPaths();
-      renderTable();
-      syncMapFilters();
-    });
+    b.addEventListener('click', () => setLevel(state.levelOnly === b.dataset.level ? null : b.dataset.level));
   });
+}
+
+/* Show only one level, or (null) every level. Everything that reads the
+ * level filter redraws: the ladder, the list, the globe, the map. */
+function setLevel(level) {
+  state.levelOnly = level;
+  if (state.board) renderLadder(state.board.levels);
+  markLevelChip();
+  refreshPaths();
+  renderTable();
+  syncMapFilters();
+  if (state.selected && !visibleRoutes().some((r) => r.route_id === state.selected)) {
+    showRouteList();
+  }
+}
+
+function markLevelChip() {
+  const chip = $('f-all');
+  if (!chip) return;
+  const onRoutes = !$('rlist').hidden;
+  const label = state.levelOnly && (state.board.levels.find((l) => l.level === state.levelOnly) || {}).label;
+  chip.hidden = !state.levelOnly || !onRoutes;
+  chip.innerHTML = label ? `Only ${esc(label)} <span aria-hidden="true">✕</span>` : '';
+  chip.title = 'Show every level again';
 }
 
 /* Which lane to open when somebody clicks a port.
@@ -804,9 +888,18 @@ function busiestRouteThrough(nodeId) {
     (r.severity_score || 0) > (worst.severity_score || 0) ? r : worst);
 }
 
+/* What the ladder, the focus toggle and the desk leave in view. The map and
+ * the globe draw these. */
 function visibleRoutes() {
-  return deskRoutes().filter((r) => !state.hidden.has(r.level)
+  return deskRoutes().filter((r) => (!state.levelOnly || r.level === state.levelOnly)
     && (!state.focusOnly || (r.real_data && r.real_data.focus)));
+}
+
+/* The list of AFFECTED routes: the visible ones, less the Normal routes
+ * (nothing to decide) unless they were asked for. */
+function listRoutes() {
+  const keepNormal = state.showNormal || state.levelOnly === 'green';
+  return visibleRoutes().filter((r) => keepNormal || r.level !== 'green');
 }
 
 /* The focus-route label. It counts the sources this run actually read as
@@ -820,17 +913,26 @@ function focusBadge(r) {
   const detail = (d.sources || [])
     .map((s) => `${s.real ? '✓' : '✗'} ${s.label}${s.real ? '' : ' (not real yet)'}`).join('\n');
   return `<span class="rli-real${full ? ' is-full' : ''}${none ? ' is-none' : ''}"
-      title="${esc(detail)}">Real data ${d.real}/${d.of}</span>`;
+      title="Sources read from real data this run:\n${esc(detail)}">${d.real}/${d.of} real sources</span>`;
 }
 
 // ===============================================================
 // Selection & detail panel
 // ===============================================================
-function select(routeId, { fly, fit, ship } = {}) {
+function select(routeId, { fly, fit, ship, fromMap } = {}) {
   const r = state.board.routes.find((x) => x.route_id === routeId);
   if (!r) return;
   state.selected = routeId;
   state.shipFocus = ship || null;
+  // One route in view at a time: a vehicle card for a different route is
+  // closed, so the map and the panel never describe two things.
+  if (!fromMap) {
+    withAgent((agent) => {
+      const st = agent.getState();
+      const a = st.selection.id && st.assets.byId[st.selection.id];
+      if (a && a.lane_id !== routeId) agent.clearSelection({ actor: 'board', summary: 'another route was opened' });
+    });
+  }
 
   refreshPaths();
   renderDetail(r);
@@ -862,11 +964,13 @@ function linkOps(routeId) {
     as_of: p.as_of || DEFAULT_AS_OF,
     shipments: String(p.shipments || 150),
   });
-  // ONE way onward from this panel, to the route's own page. It used to
-  // offer two links to two surfaces that showed overlapping subsets of the
-  // same thing; the route page is where all of it lives now.
   const link = $('link-route');
   if (link) link.href = `/route/${encodeURIComponent(routeId)}?${query}`;
+  // Where to act, named the same everywhere: Act fast does it (with an undo
+  // window), Step by step is the checklist.
+  const fastQ = new URLSearchParams({ as_of: query.get('as_of'), shipments: query.get('shipments') });
+  if ($('link-act')) $('link-act').href = `/fast/${encodeURIComponent(routeId)}?${fastQ}`;
+  if ($('link-ops')) $('link-ops').href = `/ops?${query}`;
 }
 
 function renderDetail(r) {
@@ -878,19 +982,17 @@ function renderDetail(r) {
   chip.textContent = r.level_label;
   chip.style.color = c;
   chip.className = `level-chip level-${r.level}`;
+  // The level's rule is the tooltip; the panel states ONE deadline, the
+  // real one, in the first tile.
+  chip.title = `${r.level_label}: ${r.directive.toLowerCase()}${r.reason ? `\n${r.reason}` : ''}`;
 
   $('d-name').textContent = r.name;
-  $('d-directive').textContent = r.directive;
-  $('d-directive').title = r.reason || '';
-  // The reason repeats the numbers right below it; it is the tooltip.
-  $('d-reason').textContent = '';
-  $('d-reason').hidden = true;
 
   $('d-stats').innerHTML = `
     <div class="stat">
       <div class="stat-k">Action by</div>
-      <div class="stat-v" style="color:${c}">${hours(r.lead_time_hours)}</div>
-      <div class="stat-sub">first deadline</div>
+      <div class="stat-v" style="color:${c}">${r.lead_time_hours == null ? 'no deadline' : hours(r.lead_time_hours)}</div>
+      <div class="stat-sub">${r.lead_time_hours == null ? 'nothing closes' : 'first option closes'}</div>
     </div>
     <div class="stat">
       <div class="stat-k">Exposure</div>
@@ -898,10 +1000,11 @@ function renderDetail(r) {
       <div class="stat-sub">${r.shipments_at_risk} of ${r.shipments} shipments</div>
     </div>
     <div class="stat">
-      <div class="stat-k">Options open</div>
+      <div class="stat-k">Options</div>
       <div class="stat-v">${r.actions.length}</div>
       <div class="stat-sub">worth doing</div>
     </div>`;
+  $('d-next').hidden = !r.actions.length && r.level === 'green';
 
   renderAlloc(r);
   renderShips(r);
@@ -922,10 +1025,10 @@ function renderAlloc(r) {
   const customers = r.customers || [];
   const keys = customers.filter((c) => c.priority === 'A').length;
   $('d-alloc').innerHTML =
-    `<span><i>Ships from</i> <b>${esc(site.name || '—')}</b></span>
-     ${port ? `<span><i>Leaves by</i> <b>${esc(port)}</b></span>` : ''}
-     <span><i>Serves</i> <b>${customers.length}</b> customer${customers.length === 1 ? '' : 's'}${
-       keys ? `, <b>${keys}</b> key account${keys === 1 ? '' : 's'}` : ''}</span>`;
+    `<span>From <b>${esc(site.name || '—')}</b></span>
+     ${port ? `<span>via <b>${esc(port)}</b></span>` : ''}
+     <span><b>${customers.length}</b> customer${customers.length === 1 ? '' : 's'}${
+       keys ? `, <b>★ ${keys}</b> key account${keys === 1 ? '' : 's'}` : ''}</span>`;
   const rows = customers.map((c) => `
     <tr class="${c.at_risk ? 'is-risk' : ''}">
       <td>${esc(c.name)}</td>
@@ -983,10 +1086,27 @@ function renderShips(r) {
   }));
 }
 
-/* Keep the open route's shipment list in step with the map's assets. */
+/* Keep the panel in step with the map.
+ *
+ * A vehicle opened on the map (one click, its Action Hub) also opens its
+ * route here, with that shipment marked, so the map and the panel describe
+ * the same thing. And the open route's shipment list follows the assets. */
 withAgent((agent) => {
   agent.subscribe((st, prev) => {
     if (!state.board) return;
+    const id = st.selection.id;
+    if (id && id !== (prev && prev.selection.id)) {
+      const a = st.assets.byId[id];
+      if (a && state.board.routes.some((r) => r.route_id === a.lane_id)) {
+        if (state.selected !== a.lane_id || $('panel-body').hidden) {
+          openPanelTab('routes');
+          select(a.lane_id, { fromMap: true, ship: id });
+        } else {
+          state.shipFocus = id;
+          renderShips(state.board.routes.find((r) => r.route_id === a.lane_id));
+        }
+      }
+    }
     if (st.assets.items !== (prev && prev.assets.items) && state.selected && !$('panel-body').hidden) {
       renderShips(state.board.routes.find((r) => r.route_id === state.selected));
     }
@@ -1037,20 +1157,24 @@ function renderRActions(r) {
     $('r-actions').innerHTML = '<div class="response-empty">No option worth its cost right now.</div>';
     return;
   }
-  // What to do, what it costs, what it saves, by when — as numbers. The
-  // whole sentence is the tooltip.
+  // Soonest first (the engine orders them: the Critical window, then
+  // Alert, then later; key accounts first inside each). The one that closes
+  // first says so. What it costs, saves and takes, as numbers; the whole
+  // sentence is the tooltip.
+  const soonest = Math.min(...actions.map((a) => (a.lead_time_hours == null ? Infinity : a.lead_time_hours)));
+  const urgency = (h) => (h == null ? '' : h <= 6 ? 'is-now' : h <= 48 ? 'is-soon' : '');
   $('r-actions').innerHTML = actions.map((a) => `
-    <div class="act${a.customer_priority === 'A' ? ' is-key' : ''}" title="${esc(a.sentence)}">
+    <div class="act${a.customer_priority === 'A' ? ' is-key' : ''} ${urgency(a.lead_time_hours)}" title="${esc(a.sentence)}">
       <div class="act-top">
         <b class="act-label">${esc(a.label)}</b>
-        <span class="act-when">decide in ${hours(a.lead_time_hours)}</span>
+        <span class="act-when">${a.lead_time_hours === soonest && Number.isFinite(soonest) ? '<b>closes first</b> · ' : ''}decide in ${hours(a.lead_time_hours)}</span>
       </div>
       <div class="act-nums">
         <span><i>Cost</i> ${chf(a.cost_chf)}</span>
         <span><i>Net benefit</i> ${chf(a.value_chf)}</span>
         <span><i>Takes</i> ${Math.round(a.min_hours)} h</span>
       </div>
-      <div class="act-meta">${priBadge(a.customer_priority)} ${esc(a.shipment_id)} · ${esc(a.customer)} · by ${esc(a.owner)}</div>
+      <div class="act-meta">${priBadge(a.customer_priority)} <b>${esc(a.customer)}</b> · order ${esc(a.shipment_id)} · ${a.owner === 'us' ? 'we can do this' : `${esc(a.owner)} does this`}</div>
     </div>`).join('');
 }
 
@@ -1060,7 +1184,7 @@ function renderRContacts(r) {
 
   const card = (p) => `
     <div class="contact" title="${esc(p.why || '')}">
-      <div class="contact-top"><span class="contact-name">${esc(p.name)}</span></div>
+      <div class="contact-top"><span class="contact-name">${esc(plainName(p.name))}</span></div>
       <div class="contact-role">${esc(p.role)}</div>
       <div class="contact-links">
         ${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
@@ -1078,6 +1202,10 @@ function renderRContacts(r) {
     </div>`;
   };
 
+  const people = [resp.route_manager, ...(resp.standing_teams || []), ...(resp.seniors || [])].filter(Boolean);
+  if (people.some((p) => /\(synthetic/i.test(p.name || ''))) {
+    out.push('<p class="synthetic-note">Stand-in contacts until Sika\'s own are loaded.</p>');
+  }
   if (resp.route_manager) out.push(group('Route manager', '', [resp.route_manager]));
   out.push(group('Teams to convene', r.level_label, resp.standing_teams));
   out.push(group('Seniors', '', resp.seniors));
@@ -1215,7 +1343,8 @@ function openPanelTab(name) {
   if (!routes) showHowto(false);
   $('allhands').hidden = name !== 'allhands';
   $('siglist').hidden = name !== 'signals';
-  $('f-all').hidden = !routes;
+  $('btn-help').hidden = !routes;   // the help is about the route list
+  markLevelChip();
   if ($('f-focus')) {
     $('f-focus').hidden = !routes
       || !state.board.routes.some((r) => r.real_data && r.real_data.focus);
@@ -1225,8 +1354,8 @@ function openPanelTab(name) {
   // other number on the page.
   $('panel-list-count').textContent = {
     routes: state.listSubtitle || '',
-    allhands: 'How often the cross-functional meeting sits now, and what each function can pull',
-    signals: 'What arrived, what the filter removed, and what read the rest',
+    allhands: 'When the cross-functional team meets, and what each function can pull',
+    signals: 'What came in, and what the filters kept',
   }[name];
   if (name === 'signals' && !signalsLoaded) loadSignals();
 }
@@ -1322,7 +1451,7 @@ function keyAccountsHTML() {
     <ul class="ah-items">${rows.map((k) => `
       <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0" title="${esc(k.route)}">
         <span class="ah-text"><b>${esc(k.customer)}</b> · ${k.lead_time_hours == null ? 'no deadline' : `decide in ${hours(k.lead_time_hours)}`}</span>
-        <span class="ah-detail">${esc(k.shipment_id)} · ${esc(siteName(k.site))} · ${esc(k.action || 'no option worth its cost')}</span>
+        <span class="ah-detail">${esc(k.action || 'no option worth its cost')} · order ${esc(k.shipment_id)} · ${esc(siteName(k.site))}</span>
       </li>`).join('')}</ul>
   </section>`;
 }
@@ -1374,26 +1503,23 @@ function signalsHTML(data) {
   const rec = m.recording && m.recording.available
     ? ` · replaying ${m.recording.entries} recorded answers` : '';
   return `
-    <p class="sig-model-line${m.status === 'connected' ? ' is-on' : ''}" title="${esc(m.detail)}">
-      <b>Model:</b> ${m.status === 'connected' ? esc(m.model) : 'none connected'}${rec}</p>
     <div class="sig-funnel">${funnel}</div>
     <div class="sig-rows">
       <p class="sig-head">${data.counts.events} kept · ${data.counts.dropped} dropped ·
-        ${data.counts.unpromoted} not trusted</p>
+        ${data.counts.unpromoted} not trusted yet</p>
       ${rows}
-    </div>`;
+    </div>
+    <details class="sig-tech">
+      <summary>How the signals were read</summary>
+      <p class="sig-model-line${m.status === 'connected' ? ' is-on' : ''}" title="${esc(m.detail)}">
+        AI model: ${m.status === 'connected' ? esc(m.model) : 'none connected, rules only'}${rec}</p>
+    </details>`;
 }
 
 function renderFilters() {
   const all = $('f-all');
   if (!all) return;
-  all.addEventListener('click', () => {
-    state.hidden.clear();
-    $('ladder').querySelectorAll('.rung').forEach((b) => b.classList.remove('is-off'));
-    refreshPaths();
-    renderTable();
-    syncMapFilters();
-  });
+  all.addEventListener('click', () => setLevel(null));
   const focus = $('f-focus');
   if (!focus) return;
   // No focus routes configured, no button: a filter that always empties the
@@ -1435,7 +1561,7 @@ function whyHTML(r) {
   const keys = (r.customers || []).filter((c) => c.priority === 'A' && c.at_risk > 0).map((c) => c.name);
   const best = (r.actions || [])[0];
   const events = (r.events || []).slice(0, 3).map((e) => `
-    <li><span class="why-kind">${esc(e.kind_label || e.kind || 'Event')}</span>${esc(e.title)}</li>`).join('');
+    <li><span class="why-kind" title="${esc(e.kind_meaning || '')}">${esc(e.kind_label || e.kind || 'Event')}</span>${esc(e.title)}</li>`).join('');
   return `
     <ul class="why">
       <li class="why-deadline">${ICON.clock}<span><b>${r.lead_time_hours == null ? 'No decision due' : `Decide within ${hours(r.lead_time_hours)}`}</b>
@@ -1458,7 +1584,8 @@ function routePageHref(routeId) {
 }
 
 function renderTable() {
-  const rows = visibleRoutes();
+  const rows = listRoutes();
+  const normalHidden = visibleRoutes().length - rows.length;
   const list = $('rlist');
   if (!list) return;
   // Redrawn in place: a filter click must not throw the planner back to the
@@ -1493,8 +1620,19 @@ function renderTable() {
       <button type="button" class="rli-open" data-go="${esc(r.route_id)}" title="Open route" aria-label="Open route">${ICON.open}</button>
       <div class="rli-more"><div><div class="rli-more-in">${whyHTML(r)}</div></div></div>
     </div>`;
-  }).join('') : `<p class="rlist-empty">No route ${state.site ? `from ${esc(siteName(state.site))} ` : ''}matches
-      these filters. Try <b>All</b> customers, or <b>All levels</b>.</p>`;
+  }).join('') : `<p class="rlist-empty">No route ${state.site ? `from ${esc(siteName(state.site))} ` : ''}needs
+      attention under these filters. Try <b>All</b> customers or clear the level filter.</p>`;
+  // Normal routes need nothing: counted, one click away, not in the way.
+  const normalCount = visibleRoutes().filter((r) => r.level === 'green').length;
+  if (!state.levelOnly && normalCount) {
+    list.insertAdjacentHTML('beforeend', `<button type="button" class="rlist-more" id="f-normal">
+      ${state.showNormal ? `Hide the ${normalCount} normal route${normalCount === 1 ? '' : 's'}`
+        : `Show ${normalCount} normal route${normalCount === 1 ? '' : 's'} <span class="muted">(no action needed)</span>`}</button>`);
+    $('f-normal').addEventListener('click', () => {
+      state.showNormal = !state.showNormal;
+      renderTable();
+    });
+  }
 
   list.querySelectorAll('.rli').forEach((card) => {
     const id = card.dataset.route;
@@ -1515,15 +1653,15 @@ function renderTable() {
 
   const mine = deskRoutes().length;
   state.listSubtitle =
-    `${rows.length} of ${mine} route${mine === 1 ? '' : 's'}${state.site ? ` from ${siteName(state.site)}` : ''} · ` +
-    'most urgent first · click a card for why';
+    `${rows.length} of ${mine} route${mine === 1 ? '' : 's'}${state.site ? ` from ${siteName(state.site)}` : ''}` +
+    (normalHidden > 0 ? ` · ${normalHidden} normal hidden` : '');
   const count = $('panel-list-count');
   const onRoutes = !$('rlist').hidden;
   if (count && onRoutes) count.textContent = state.listSubtitle;
 
   const f = state.board.funnel;
   $('ranked-foot').innerHTML =
-    `${f.raw_observations.toLocaleString('en-CH')} signals → ${f.after_resolution} events → ` +
+    `${num(f.raw_observations)} signals → ${f.after_resolution} events → ` +
     `${f.shipments_touched} of ${state.board.shipments_total} shipments hit`;
 }
 
@@ -1650,6 +1788,7 @@ async function sendAsk() {
 
   askBubble('you', esc(question));
   input.value = '';
+  $('ask-try').hidden = true;
   ASK.busy = true;
   const pending = askBubble('bot', '<span class="ask-wait">thinking…</span>');
 
@@ -1713,6 +1852,13 @@ document.addEventListener('click', (e) => {
 function initAsk() {
   $('btn-ask').addEventListener('click', () => {
     askPanel().hidden ? openAsk({ kind: 'board' }) : closeAsk();
+  });
+  // Three questions to start from, so the box is never a blank page.
+  $('ask-try').addEventListener('click', (e) => {
+    const b = e.target.closest('.ask-chip');
+    if (!b) return;
+    $('ask-input').value = b.textContent.trim();
+    sendAsk();
   });
   $('ask-close').addEventListener('click', closeAsk);
   $('ask-send').addEventListener('click', sendAsk);

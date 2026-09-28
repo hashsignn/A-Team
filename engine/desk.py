@@ -211,7 +211,9 @@ def meeting(verdict: ConveneVerdict, config: Config, clock: Clock) -> dict:
     at = next_meeting(posture, config, clock)
     regular = next_meeting("normal", config, clock)
     if posture == "convene":
-        change = "Convene rule crossed" + ("" if verdict.rule_agreed else " (rule not yet agreed)")
+        from engine.portfolio.convene import rule_state  # noqa: PLC0415
+
+        change = rule_state(verdict.rule_agreed)
     elif posture == "watch":
         change = "Half-way to the convene rule: meet sooner"
     else:

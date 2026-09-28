@@ -17,8 +17,8 @@ const LEVEL_COLOR = {
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const chf = (v) => v == null ? '—' : 'CHF ' + Math.round(v).toLocaleString('en-CH');
-const num = (v) => v == null ? '—' : Number(v).toLocaleString('en-CH');
+const chf = (v) => v == null ? '—' : 'CHF ' + Math.round(v).toLocaleString('en-US');
+const num = (v) => v == null ? '—' : Number(v).toLocaleString('en-US');
 
 function hours(h) {
   if (h == null) return '—';
@@ -286,7 +286,7 @@ function renderAppetite(a) {
   const agreed = conv.agreed_on
     ? `Agreed ${esc(conv.agreed_on)}${conv.agreed_by ? ' by ' + esc(conv.agreed_by) : ''}.`
     : '<b>Not yet agreed with the planning team.</b> Until it is, the board says '
-      + '"proposed convene rule" rather than "convene rule crossed". The whole '
+      + '"proposed all-hands rule crossed" rather than "all-hands rule crossed". The whole '
       + 'mechanism depends on the group having owned the threshold in calm '
       + 'conditions, so claiming agreement it does not have would break it.';
 
@@ -319,7 +319,7 @@ function renderAppetite(a) {
                 + 'absorbed disruptions off the decision list.')}
       </div>`) +
 
-    section('Convene rule',
+    section('All-hands rule',
       'Sika, answering Q6: <i>"The real problem is that we declare a crisis too '
       + 'late and lose on available options."</i> Authority is not the '
       + 'bottleneck; the decision to convene is. So the tool does not argue for a '
@@ -414,7 +414,7 @@ function renderResponse(r) {
 
   const teams = table(
     ['Team', 'What they decide', { label: 'Tier', num: true },
-     { label: 'Responds within', num: true }, 'In the convene group', 'Reach them on'],
+     { label: 'Responds within', num: true }, 'In the all-hands', 'Reach them on'],
     r.standing_teams.map((t) => `<tr>
       <td class="r-route">${esc(t.name)}</td>
       <td class="r-driver">${esc(t.role)}</td>
@@ -506,7 +506,7 @@ function renderResponse(r) {
 
     section('Escalation steps',
       'Exposure decides how far up a single route escalates. This is separate '
-      + 'from the convene rule, which looks at the whole book.', esclist) +
+      + 'from the all-hands rule, which looks at the whole book.', esclist) +
 
     section('Spend authority', null,
       `<div class="pstat-row">

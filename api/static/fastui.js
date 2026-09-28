@@ -21,7 +21,7 @@ const FastUI = (() => {
   const chf = (n) => {
     if (n === null || n === undefined) return '—';
     if (n === 0) return 'no extra cost';
-    return `CHF ${Math.round(n).toLocaleString('de-CH').replace(/,/g, '’')}`;
+    return `CHF ${Math.round(n).toLocaleString('en-US')}`;
   };
 
   /* Hours, said the way a person says them. "0.4 h" is a number pretending to

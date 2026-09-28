@@ -13,7 +13,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const chf = (v) => v == null ? '—' : 'CHF ' + Math.round(v).toLocaleString('en-CH');
+const chf = (v) => v == null ? '—' : 'CHF ' + Math.round(v).toLocaleString('en-US');
 
 const ROUTE_ID = decodeURIComponent(location.pathname.split('/route/')[1] || '');
 const state = { view: null, selected: null };
@@ -128,10 +128,10 @@ function selectVehicle(shipmentId, legIndex) {
     <div class="prog">
       <div class="prog-bar"><span style="width:${Math.min(100, pr.percent)}%"></span></div>
       <div class="prog-nums">
-        <b>${Math.round(pr.travelled_km).toLocaleString()} km</b> travelled
+        <b>${Math.round(pr.travelled_km).toLocaleString('en-US')} km</b> travelled
         <span class="muted">·</span>
-        <b>${Math.round(pr.remaining_km).toLocaleString()} km</b> to go
-        <span class="muted">of ${Math.round(pr.total_km).toLocaleString()} km (${pr.percent}%)</span>
+        <b>${Math.round(pr.remaining_km).toLocaleString('en-US')} km</b> to go
+        <span class="muted">of ${Math.round(pr.total_km).toLocaleString('en-US')} km (${pr.percent}%)</span>
       </div>
     </div>` : '';
 
@@ -242,7 +242,7 @@ function readings(values) {
 /* How the freight reaches its port, priced (engine/fast/precarriage.py).
  * One row per chain; the route is drawn on the chosen one. When the board
  * has a low-water derate at Kaub, the same chains at today's surcharge. */
-const CHF = (n) => `CHF ${Math.round(n).toLocaleString('en-CH')}`;
+const CHF = (n) => `CHF ${Math.round(n).toLocaleString('en-US')}`;
 
 function evidence(label, e) {
   if (!e || !(e.site || e.name)) return '';
@@ -288,7 +288,7 @@ function renderReal(v) {
   $('rt-real-note').textContent = `${d.real} of ${d.of} sources real at this as-of`;
 
   const volume = d.flow_documents != null
-    ? `<li><span class="muted">Sika export</span> <b>${Number(d.flow_documents).toLocaleString('en-CH')} documents</b>
+    ? `<li><span class="muted">Sika export</span> <b>${Number(d.flow_documents).toLocaleString('en-US')} documents</b>
         ${esc((d.flow || '').replace('_', ' → '))} <span class="muted">(this machine only)</span></li>`
     : '';
   const chosen = `<ul class="rt-facts">${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${volume}</ul>
@@ -351,8 +351,10 @@ function renderReal(v) {
         ${safeUrl(n.source) ? `<a class="muted" href="${esc(safeUrl(n.source))}" target="_blank" rel="noopener noreferrer">source</a>` : ''}
       </div>`;
     }).join('')}
-    <h3>Conditions at each place</h3>
-    ${conditions}
+    <details class="rt-cond-wrap">
+      <summary>Weather at each place <span class="muted">${places.length} place${places.length === 1 ? '' : 's'}</span></summary>
+      ${conditions}
+    </details>
     <p class="muted">Assumed: ${esc((d.assumed || []).join(' · '))}</p>`;
 }
 
@@ -432,7 +434,9 @@ async function boot() {
   $('rt-name').textContent = v.name;
   $('rt-chip').textContent = v.level_label || v.level;
   $('rt-chip').className = `level-chip level-${v.level}`;
-  $('rt-directive').textContent = v.directive || '';
+  // The level's rule is the chip's tooltip; the page states one deadline,
+  // the real one, in the first tile.
+  $('rt-chip').title = v.directive || '';
 
   statRow(v);
   renderConvoy(v);
@@ -441,7 +445,11 @@ async function boot() {
 
   const onward = new URLSearchParams({ route: ROUTE_ID });
   if (params.get('as_of')) onward.set('as_of', params.get('as_of'));
-  $('rt-next').href = `/ops?${onward}`;
+  const fastQ = new URLSearchParams();
+  if (params.get('as_of')) fastQ.set('as_of', params.get('as_of'));
+  $('rt-next').href = `/fast/${encodeURIComponent(ROUTE_ID)}?${fastQ}`;
+  $('rt-ops').href = `/ops?${onward}`;
+  $('rt-back').href = `/?${onward}`;
 
   // Drawn by charts.js, the same code the board uses. A second copy of this
   // arithmetic would drift, and the day the two disagree is the day a planner

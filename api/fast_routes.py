@@ -348,29 +348,29 @@ def signals(
     # what rule. A count with no rule beside it is a number nobody can argue
     # with, which is the same as a number nobody believes.
     stages = [
-        {"key": "raw", "label": "Arrived", "count": f.raw_observations,
+        {"key": "raw", "label": "Signals received", "count": f.raw_observations,
          "note": "Everything every connected source returned this run."},
-        {"key": "geographic", "label": "Near our freight",
+        {"key": "geographic", "label": "Near our routes",
          "count": f.after_geographic,
          "removed": f.raw_observations - f.after_geographic,
          "note": "Outside the bounding box of every node we touch. Geometry, "
                  "not judgement."},
-        {"key": "type", "label": "A kind that can hurt us",
+        {"key": "type", "label": "Could disrupt freight",
          "count": f.after_type,
          "removed": f.after_geographic - f.after_type,
          "note": "No risk vocabulary matched. A named variable family or it "
                  "does not pass."},
-        {"key": "temporal", "label": "While we are there",
+        {"key": "temporal", "label": "While our freight passes",
          "count": f.after_temporal,
          "removed": f.after_type - f.after_temporal,
          "note": "The window does not overlap any leg's transit through the "
                  "node."},
-        {"key": "resolution", "label": "Distinct events",
+        {"key": "resolution", "label": "Separate events",
          "count": f.after_resolution,
          "removed": f.after_temporal - f.after_resolution,
          "note": "Many reports, one event. Clustered by place, kind and "
                  "window."},
-        {"key": "reasoned", "label": "Read by a model", "count": f.reasoned,
+        {"key": "reasoned", "label": "Read by AI", "count": f.reasoned,
          "note": ("Only these cost anything. The three filters above are "
                   "arithmetic and run whether or not a model is installed.")},
     ]

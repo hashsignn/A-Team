@@ -43,12 +43,16 @@ const Charts = (() => {
     // bigger — the polygon gets room, the labels stay legible instead of
     // ballooning, and a ten-spoke chart stops being a smudge.
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    // A drawing scaled down to fit its pane would shrink its text with it:
+    // text is sized to read at ~12px on screen whatever the pane's width.
+    const shown = svg.getBoundingClientRect().width || W;
+    const f = Math.max(1, W / shown);
     const axes = radar.axes;
     const n = axes.length;
 
     if (!n) {
       svg.innerHTML = `<text x="${cx}" y="${cy}" text-anchor="middle"
-        fill="var(--muted)" font-size="12">No risk variables active on this route</text>`;
+        fill="var(--muted)" font-size="${12 * f}">No risk variables active on this route</text>`;
       if (legendEl) legendEl.innerHTML = '';
       return;
     }
@@ -85,10 +89,10 @@ const Charts = (() => {
       const ex = cx + Math.cos(a) * R, ey = cy + Math.sin(a) * R;
       parts.push(`<line x1="${cx}" y1="${cy}" x2="${ex}" y2="${ey}" stroke="var(--axis)" stroke-width="1"/>`);
 
-      const lx = cx + Math.cos(a) * (R + 22), ly = cy + Math.sin(a) * (R + 22);
+      const lx = cx + Math.cos(a) * (R + 14 * f), ly = cy + Math.sin(a) * (R + 14 * f);
       const anchor = Math.abs(Math.cos(a)) < 0.3 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
       parts.push(`<text x="${lx}" y="${ly}" text-anchor="${anchor}" dominant-baseline="middle"
-        fill="var(--text-secondary)" font-size="11">${escC(label)}</text>`);
+        fill="var(--text-secondary)" font-size="${12 * f}">${escC(label)}</text>`);
     });
 
     // bands, cumulative so the polygons nest instead of hiding one another
@@ -125,10 +129,10 @@ const Charts = (() => {
       // Nudge the value label off the spoke so it never sits under the axis
       // name, which collides whenever a value lands near the outer ring.
       const a = angle(i);
-      const ox = Math.cos(a) * 13, oy = Math.sin(a) * 13;
+      const ox = Math.cos(a) * 13 * f, oy = Math.sin(a) * 13 * f;
       parts.push(`<text x="${x - ox}" y="${y - oy}" text-anchor="middle"
-        dominant-baseline="middle"
-        fill="var(--text-primary)" font-size="10.5" font-family="var(--mono)">${v.toFixed(1)}d</text>`);
+        dominant-baseline="middle" font-weight="600"
+        fill="var(--text-primary)" font-size="${11.5 * f}">${v.toFixed(1)} d</text>`);
     });
 
     svg.innerHTML = parts.join('');
@@ -187,14 +191,9 @@ const Charts = (() => {
               >${pips}</span>
         <span class="gauge__val">${days > 0 ? `${days.toFixed(1)} d` : '—'}</span>`;
 
-      // A family contributing nothing has nothing to open. Rendering it as a
-      // button anyway would promise a panel that turns out to be empty, and
-      // a control that does nothing when pressed is worse than no control.
-      if (days <= 0) {
-        return `<div class="gauge gauge--quiet">${inner}
-                  <span class="gauge__chev" aria-hidden="true"></span>
-                </div>`;
-      }
+      // A family contributing nothing is not drawn: the chart above already
+      // shows it at zero, and the line below counts it.
+      if (days <= 0) return '';
 
       return `
         <div class="gauge-wrap">
@@ -366,7 +365,7 @@ const Charts = (() => {
       // problems, and the ramp alone cannot say which this is.
       const lost = n > s;
       const why = n
-        ? `${n} shipment(s) · CHF ${Math.round(chf).toLocaleString()} expected loss`
+        ? `${n} shipment(s) · CHF ${Math.round(chf).toLocaleString('en-US')} expected loss`
           + (lost ? ' · some options already closed' : '')
           + (isUnsourced ? ' · probability not sourceable' : '')
         : 'empty';

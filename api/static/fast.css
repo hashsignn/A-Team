@@ -501,3 +501,11 @@ details.fold .fold__body { padding: 0 15px 15px; font-size: 14.5px; }
 .qrow__sub, .act__why {
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 }
+
+/* Labels and headings in sentence case, like the board; status pills keep
+   their capitals. */
+.fact dt, .actions__head h3, .queue h3, .mini th, .plan__h {
+  text-transform: none; letter-spacing: 0;
+}
+.fact dt { font-size: 13px; color: var(--text-secondary); }
+.actions__head h3, .queue h3 { font-size: 15.5px; color: var(--text-primary); }

@@ -27,7 +27,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
 
 const chf = (n) => (n === null || n === undefined) ? '—'
   : n === 0 ? 'no extra cost'
-  : `CHF ${Math.round(n).toLocaleString('de-CH').replace(/,/g, '’')}`;
+  : `CHF ${Math.round(n).toLocaleString('en-US')}`;
 
 const hrs = (h) => (h === null || h === undefined) ? '—'
   : h < 1 ? 'under an hour' : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} days`;
@@ -53,7 +53,7 @@ async function load() {
   } catch (err) {
     $('console').innerHTML = `
       <p class="cons-loading">Could not open this lane: ${esc(err.message)}.
-      <a href="/">Back to the radar</a>.</p>`;
+      <a href="/">Back to the board</a>.</p>`;
   }
 }
 
@@ -61,12 +61,15 @@ function render() {
   const c = state.console;
   $('brand-sub').textContent = `${ROUTE} · as of ${AS_OF.slice(0, 16).replace('T', ' ')} UTC`;
   $('link-lane').href = `/route/${encodeURIComponent(ROUTE)}?${QS}`;
+  // The same two ways onward as the board, and back to it on this route.
+  $('link-fast').href = `/fast/${encodeURIComponent(ROUTE)}?${QS}`;
+  $('link-board').href = `/?route=${encodeURIComponent(ROUTE)}&${QS}`;
   renderRail(c);
 
   const stages = c.stages.map((s) => stageHTML(c, s)).join('');
   $('console').innerHTML = `
     <div class="cons-head">
-      <span class="level-chip" style="color:var(--lvl-${esc(c.level)})">${esc(c.level_label)}</span>
+      <span class="level-chip" style="color:var(--lvl-${esc(c.level)})" title="${esc(c.directive)}">${esc(c.level_label)}</span>
       <h2>${esc(c.route_name)}</h2>
       <p class="cause">${esc(c.reason)}</p>
     </div>
@@ -74,7 +77,6 @@ function render() {
     <p class="cons-freeform" title="The stages record what has been settled, not a sequence you have to walk.">Any order. Jump to a stage above, or act on one consignment from its row.</p>
 
     <dl class="cons-facts">
-      <div class="cons-fact"><dt>Directive</dt><dd style="font-size:15px">${esc(c.directive)}</dd></div>
       <div class="cons-fact"><dt>Action by</dt><dd>${hrs(c.lead_time_hours)}</dd></div>
       <div class="cons-fact"><dt>Exposure</dt><dd>${chf(c.exposure_chf)}</dd></div>
       <div class="cons-fact"><dt>At risk</dt><dd>${c.shipments_at_risk} / ${c.shipments}</dd></div>

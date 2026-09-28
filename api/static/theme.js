@@ -7,12 +7,13 @@
  */
 'use strict';
 
-const THEMES = ['light', 'blue', 'sika', 'dark'];
+// Three: a light one, a dark one, and Sika's own colours. (A fourth, "Blue",
+// was a light theme with a blue accent; a saved choice of it now opens Light.)
+const THEMES = ['light', 'dark', 'sika'];
 const THEME_LABEL = {
   light: 'Light',
-  blue: 'Blue',
-  sika: 'Sika',
   dark: 'Dark',
+  sika: 'Sika',
 };
 const THEME_KEY = 'scrr.theme';
 
@@ -35,8 +36,13 @@ function applyTheme(name) {
   const theme = THEMES.includes(name) ? name : 'light';
   document.documentElement.setAttribute('data-theme', theme);
   storeTheme(theme);
-  document.querySelectorAll('.theme-btn').forEach((b) =>
-    b.classList.toggle('is-on', b.dataset.theme === theme));
+  document.querySelectorAll('.theme-btn').forEach((b) => {
+    b.classList.toggle('is-on', b.dataset.theme === theme);
+    b.setAttribute('aria-checked', String(b.dataset.theme === theme));
+  });
+  document.querySelectorAll('.theme-swatch[data-current]').forEach((sw) => {
+    sw.className = `theme-swatch theme-swatch--${theme}`;
+  });
   // Anything that cached a CSS colour at startup re-reads it here. The globe
   // is the only such thing today, but the event is the contract, not the
   // caller: a listener is how a new consumer opts in without this module
@@ -45,17 +51,41 @@ function applyTheme(name) {
   return theme;
 }
 
+/* One small button that opens a menu, instead of a row of swatches in the
+ * header. Each item keeps class .theme-btn and data-theme, so anything that
+ * already knew the swatches still finds them. */
 function mountThemePicker(host) {
   if (!host) return;
-  host.innerHTML = THEMES.map((name) => `
-    <button type="button" class="theme-btn" data-theme="${name}"
-            title="${THEME_LABEL[name]} theme" aria-label="${THEME_LABEL[name]} theme">
-      <span class="theme-swatch theme-swatch--${name}"></span>
-    </button>`).join('');
-  host.addEventListener('click', (event) => {
-    const button = event.target.closest('.theme-btn');
-    if (button) applyTheme(button.dataset.theme);
+  host.classList.add('theme-menu');
+  host.innerHTML = `
+    <button type="button" class="theme-toggle" aria-haspopup="true" aria-expanded="false"
+            title="Colour theme" aria-label="Colour theme">
+      <span class="theme-swatch" data-current></span>
+    </button>
+    <div class="theme-list" role="menu" hidden>
+      ${THEMES.map((name) => `
+        <button type="button" class="theme-btn" role="menuitemradio" data-theme="${name}">
+          <span class="theme-swatch theme-swatch--${name}"></span>${THEME_LABEL[name]}
+        </button>`).join('')}
+    </div>`;
+  const toggle = host.querySelector('.theme-toggle');
+  const list = host.querySelector('.theme-list');
+  const setOpen = (open) => {
+    list.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+  };
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(list.hidden);
   });
+  list.addEventListener('click', (event) => {
+    const button = event.target.closest('.theme-btn');
+    if (!button) return;
+    applyTheme(button.dataset.theme);
+    setOpen(false);
+  });
+  document.addEventListener('click', (event) => { if (!host.contains(event.target)) setOpen(false); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setOpen(false); });
 }
 
 // Applied at parse time, before the page script reads any colour.

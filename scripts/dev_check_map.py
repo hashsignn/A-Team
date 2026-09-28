@@ -174,10 +174,23 @@ def main() -> int:
               f"clicked {target['id']} on the map — Action Hub opened")
         check(page.locator("#hub").is_visible(), "[hub] not visible after a click")
         hub_text = page.locator("#hub").inner_text()
-        for needle, what in (("TEU", "capacity"), ("ORIGINAL ETA", "original ETA"),
-                             ("REVISED ETA", "revised ETA"), ("LIVE GPS", "GPS"),
+        for needle, what in (("TEU", "capacity"), ("PLANNED ARRIVAL", "original ETA"),
+                             ("EXPECTED NOW", "revised ETA"), ("POSITION (", "position"),
                              ("LAST SYNC", "last sync"), ("STATUS LOG", "status log")):
             check(needle in hub_text.upper(), f"[hub] {what} missing from the card")
+        # What to do comes first on the card: the ways round before the
+        # vehicle's own details.
+        order = page.evaluate("""(() => [...document.querySelectorAll('#hub-body [data-sec]')]
+            .map(e => e.dataset.sec))()""")
+        check("routes" in order and "vehicle" in order and order.index("routes") < order.index("vehicle"),
+              f"[hub] the recovery routes are not above the vehicle details: {order}",
+              "hub: recovery routes first, the vehicle's details below")
+        # One click on a vehicle opens its route in the panel too, so the map
+        # and the panel describe the same thing.
+        lane = page.evaluate("MapAgent.getState().assets.byId[MapAgent.getState().selection.id].lane_id")
+        check(page.evaluate("state.selected") == lane and page.locator("#panel-body").is_visible(),
+              f"[sync] the panel did not open the vehicle's route {lane}",
+              f"the panel opened the vehicle's route ({lane})")
         backdrop = page.evaluate("getComputedStyle(document.getElementById('hub')).backdropFilter")
         check("blur(10px)" in backdrop, f"[hub] no glass: backdrop-filter is {backdrop!r}",
               "glass card: backdrop-filter blur(10px)")
@@ -361,9 +374,11 @@ def main() -> int:
               "closing removes the card, charts, routes, split and partners")
 
         # ---- themes repaint the basemap -----------------------------------
+        page.locator(".theme-toggle").click()
         page.locator('.theme-btn[data-theme="dark"]').click()
         page.wait_for_timeout(900)
         dark = page.evaluate("window.__fleetmap.getPaintProperty('bg', 'background-color')")
+        page.locator(".theme-toggle").click()
         page.locator('.theme-btn[data-theme="light"]').click()
         page.wait_for_timeout(900)
         light = page.evaluate("window.__fleetmap.getPaintProperty('bg', 'background-color')")

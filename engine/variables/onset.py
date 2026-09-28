@@ -28,10 +28,18 @@ from engine.schemas import RiskVariable
 from engine.variables.modality import Reading
 
 LABELS = {
-    "sudden": "Sudden impact",
-    "scheduled": "Scheduled",
-    "building": "Building up",
-    "warning": "Warning sign",
+    "sudden": "Sudden",
+    "scheduled": "Planned",
+    "building": "Developing",
+    "warning": "Early warning",
+}
+
+# What each kind means, for the tooltip beside the label.
+MEANING = {
+    "sudden": "Happened without warning: a closure, a strike, an accident.",
+    "scheduled": "Announced in advance: roadworks, a planned closure.",
+    "building": "Builds up over days: a falling river, a storm on its way.",
+    "warning": "A sign it may happen: carriers moving orders, a strike ballot.",
 }
 
 

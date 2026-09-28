@@ -2626,3 +2626,243 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 .stat-v { white-space: nowrap; font-size: clamp(18px, 1.55vw, 23px); }
+
+/* ===============================================================
+   REVIEW FIXES, 28 SEP: one place to act, a calmer header, the
+   all-hands in sight, the list of what is affected, laptop and phone.
+   =============================================================== */
+
+/* ---- header: two rows, the nav grouped at the right ---- */
+.topbar--board { display: block; padding: 12px 24px 11px; }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap; }
+.topbar-row--2 { margin-top: 10px; }
+.topnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topbar-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.ctl { min-height: 34px; }
+.ctl--mini { min-height: 32px; }
+
+/* The all-hands chip: how often the team meets now, and when next. */
+.meet-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px;
+  font: inherit; font-size: 13.5px; color: var(--text-secondary);
+  padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1);
+}
+.meet-chip b { color: var(--text-primary); font-weight: 650; margin-right: 2px; }
+.meet-chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--lvl-green); flex: none; }
+.meet-chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.meet-chip--red { border-color: color-mix(in srgb, var(--lvl-red) 45%, var(--border)); background: color-mix(in srgb, var(--lvl-red) 7%, var(--surface-1)); }
+.meet-chip--red i { background: var(--lvl-red); animation: crit-pulse 1.25s ease-in-out infinite; }
+.meet-chip--yellow i { background: var(--lvl-yellow); }
+.meet-chip[hidden] { display: none; }
+
+/* The as-of, folded into one button that shows the instant. */
+.asof-pop { position: relative; }
+.asof-pop > summary { list-style: none; cursor: pointer; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.asof-pop > summary::-webkit-details-marker { display: none; }
+.asof-pop[open] > summary { border-color: var(--accent); color: var(--text-primary); }
+.asof-pop .asof {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 95;
+  display: flex; flex-direction: column; align-items: stretch; gap: 9px;
+  min-width: 260px; padding: 13px; border-radius: 12px;
+  background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-2);
+}
+.asof-pop .asof label { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text-secondary); }
+.asof-row { display: flex; align-items: center; gap: 8px; }
+.asof-row input { flex: 1; }
+.asof-row .ctl { flex: 1; justify-content: center; }
+
+/* The theme: one button, a small menu. */
+.theme-menu { position: relative; display: inline-flex; }
+.theme-toggle {
+  width: 36px; height: 36px; padding: 0; cursor: pointer; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-1);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.theme-toggle:hover { border-color: var(--border-strong); }
+.theme-toggle .theme-swatch { width: 16px; height: 16px; }
+.theme-list {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 96;
+  display: grid; gap: 2px; min-width: 150px; padding: 6px; border-radius: 12px;
+  background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-2);
+}
+.theme-list[hidden] { display: none; }
+.theme-list .theme-btn {
+  width: auto; height: auto; min-height: 36px; justify-content: flex-start; gap: 10px;
+  padding: 7px 10px; border: 0; border-radius: 8px; background: transparent;
+  font: inherit; font-size: 14px; color: var(--text-primary);
+}
+.theme-list .theme-btn:hover { background: var(--surface-2); transform: none; }
+.theme-list .theme-btn.is-on { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 650; border: 0; }
+
+/* The ladder: a click shows only that level. */
+.rung.is-on { border-color: var(--text-primary); box-shadow: 0 0 0 1px var(--text-primary); background: var(--surface-2); }
+.rung.is-off { opacity: .45; }
+
+/* ---- the list head: tabs, then one line of state and toggles ---- */
+.panel-list-head { display: block; padding: 16px 20px 10px; }
+.plh-sub { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; margin-top: 6px; flex-wrap: wrap; }
+.panel-list-head .plh-sub .muted { margin: 0; }
+.plh-ctl { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin-left: auto; }
+.chip-clear {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px;
+  font: inherit; font-size: 13px; font-weight: 650; padding: 4px 11px; border-radius: 999px;
+  border: 1px solid var(--accent); color: var(--accent); cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.chip-clear[hidden] { display: none; }
+.ctl--toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+.ctl--toggle[aria-pressed="true"]::before { content: "✓"; font-weight: 800; }
+#btn-help { margin-left: 0; width: 32px; }
+.ptab-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 5px; vertical-align: 2px; animation: crit-pulse 1.25s ease-in-out infinite; }
+.ptab-dot[hidden] { display: none; }
+.deskrow { padding: 8px 20px; }
+#f-site { max-width: 190px; min-height: 32px; }
+.seg button { min-height: 30px; padding: 4px 10px; }
+
+/* The help: in the flow (never over the first card), three short steps
+   and where each kind of action happens. */
+.howto {
+  position: static; margin: 10px 16px 4px; padding: 12px 14px; box-shadow: none;
+  border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);
+}
+.howto-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 8px; padding: 0; font-size: 14px; }
+.howto-steps li { margin: 0; }
+.howto-steps b {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px;
+  border-radius: 50%; background: var(--accent); color: var(--accent-contrast); font-size: 12px;
+}
+.howto-where { font-size: 13.5px; color: var(--text-secondary); margin: 0 0 8px; line-height: 1.5; }
+
+/* Normal routes: counted, one click away. */
+.rlist-more {
+  display: block; width: 100%; margin: 2px 0 10px; padding: 12px 14px; cursor: pointer;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+  background: transparent; font: inherit; font-size: 14px; color: var(--text-secondary); text-align: center;
+}
+.rlist-more:hover { border-color: var(--accent); color: var(--text-primary); }
+.rli-real { font-family: var(--sans); text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* ---- one route: a compact head, then where to act, then the tabs ---- */
+.panel-head { padding: 14px 20px 10px; }
+.ph-top { display: flex; align-items: center; gap: 10px; }
+.panel-head #d-back { margin: 0; }
+.panel-head .d-page { position: static; margin-left: auto; }
+.panel-head h2 { font-size: 18px; margin: 10px 0 6px; line-height: 1.3; }
+.panel-head .alloc-line { padding: 0; gap: 3px 12px; font-size: 13.5px; }
+.stat { padding: 10px 16px; }
+.stat-k { margin-bottom: 1px; }
+.stat-sub { margin-top: 1px; }
+.d-next { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--border); }
+.d-next[hidden] { display: none; }
+.d-next .ctl { min-height: 38px; font-size: 14px; font-weight: 600; }
+.d-next .ctl--primary svg { color: currentColor; }
+.rtabs { position: sticky; top: 0; z-index: 4; }
+
+/* The option that closes first says so; urgency, not just the customer,
+   orders the list. */
+.act.is-now { border-left-color: var(--lvl-red); }
+.act.is-now .act-when { color: var(--lvl-red); font-weight: 700; }
+.act.is-soon .act-when { color: var(--lvl-yellow); font-weight: 650; }
+.act-when b { font-family: var(--sans); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; }
+.act-meta b { color: var(--text-primary); font-weight: 600; }
+.synthetic-note { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+
+/* ---- the globe's all-hands strip: one line and a way in ---- */
+.posture { align-items: center; pointer-events: auto; gap: 10px; }
+.posture-text b { color: var(--text-primary); font-weight: 650; }
+.posture-go { margin-left: 4px; }
+
+/* ---- Ask: over the map, so the options stay in view ---- */
+.globe-wrap > .ask-panel {
+  position: absolute; left: 16px; top: 16px; right: auto; bottom: auto;
+  width: 400px; max-width: calc(100% - 32px); max-height: calc(100% - 32px); z-index: 60;
+}
+.ask-try { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 15px 10px; }
+.ask-try[hidden] { display: none; }
+.ask-chip {
+  font: inherit; font-size: 13px; text-align: left; padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+}
+.ask-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+
+/* ---- signals: the technical line folded away ---- */
+.sig-tech { margin: 6px 20px 14px; font-size: 13px; color: var(--muted); }
+.sig-tech summary { cursor: pointer; min-height: 30px; display: flex; align-items: center; }
+.sig-tech .sig-model-line { margin: 4px 0 0; }
+
+/* ---- laptop widths ---- */
+@media (max-width: 1400px) {
+  .topbar--board { padding: 10px 18px; }
+  .rung { padding: 5px 9px 5px 8px; }
+  .meet-chip { font-size: 13px; padding: 5px 11px; }
+}
+
+/* ---- tablet and phone: stacked, nothing wider than the screen ---- */
+@media (max-width: 1100px) {
+  .globe-wrap { height: 52vh; min-height: 320px; }
+}
+@media (max-width: 720px) {
+  .topbar--board { padding: 10px 12px; }
+  .brand h1 { font-size: 16px; }
+  .brand-sub { font-size: 12px; }
+  .topnav { width: 100%; }
+  .topnav .ctl { flex: 1 1 auto; justify-content: center; }
+  .ladder { width: 100%; gap: 5px; }
+  .rung { flex: 1 1 auto; justify-content: center; padding: 5px 7px; }
+  .rung-when { display: none; }
+  .topbar-side { width: 100%; margin-left: 0; }
+  .meet-chip { flex: 1 1 auto; }
+  .asof-pop .asof { right: auto; left: 0; }
+  .globe-wrap { height: 46vh; }
+  .panel-list-head, .deskrow { padding-left: 14px; padding-right: 14px; }
+  .deskrow .desk-fld, .deskrow .seg { width: 100%; }
+  .seg button { flex: 1; }
+  #f-site { max-width: none; width: 100%; }
+  .globe-wrap > .ask-panel { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-width: none; max-height: 70vh; }
+  .d-next .ctl { flex: 1 1 auto; justify-content: center; }
+}
+/* The header's menus (as-of, theme) open over the stage below it. */
+.topbar { position: relative; z-index: 80; }
+.ask-log:empty { display: none; }
+.hub-id { font-size: 12.5px; font-weight: 500; color: var(--muted); font-family: var(--code); letter-spacing: 0; }
+
+/* ---- the route page: sentence case, real links, weather folded ---- */
+#rt-real h3 { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text-primary); margin: 14px 0 8px; }
+.rt-real-list a {
+  color: var(--accent); text-decoration: none; font-weight: 650;
+  display: inline-block; padding: 3px 0;
+}
+.rt-real-list a:hover, .rt-real-list a:focus-visible { text-decoration: underline; }
+.rt-note a, .rt-note summary { display: inline-block; padding: 4px 0; color: var(--accent); cursor: pointer; }
+.rt-cond-wrap { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 0 14px; }
+.rt-cond-wrap > summary {
+  cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 600; color: var(--text-primary);
+}
+.rt-cond-wrap[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.rt-cond-wrap .rt-cond { margin-bottom: 12px; }
+.rt-next-alt { text-align: center; margin: 10px 0 0; font-size: 14px; color: var(--text-secondary); }
+.rt-next-alt a { color: var(--accent); font-weight: 600; display: inline-block; padding: 6px 2px; }
+.evm-radar svg { overflow: visible; }
+.rt-radar-h { text-transform: none; letter-spacing: 0; }
+/* Laptop widths: the filters stay on one row, the tabs on one line. */
+.rtab { white-space: nowrap; }
+@media (max-width: 1400px) {
+  #f-site { max-width: 150px; }
+  .rtab { font-size: 13.5px; padding-left: 8px; padding-right: 8px; }
+  .panel-list-head { padding: 14px 18px 8px; }
+  .deskrow { padding: 7px 18px; gap: 8px; }
+}
+
+#rt-real a { color: var(--accent); text-decoration: none; }
+#rt-real a:hover { text-decoration: underline; }
+.rli-chf { white-space: nowrap; }
+@media (max-width: 720px) {
+  .stat-row { grid-template-columns: repeat(3, 1fr); }
+  .stat, .stat:nth-child(2) { padding: 8px 10px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: 0; }
+  .stat-v { font-size: 17px; }
+  .rtabs { overflow-x: auto; }
+  .rtab { flex: 1 0 auto; font-size: 13px; }
+}

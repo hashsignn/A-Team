@@ -22,7 +22,9 @@
      the theme, all of which are properties of the BOARD rather than of
      whichever view you happen to be reading, and re-rendering them per view
      would make switching feel like a page load. -->
-<header class="topbar">
+<header class="topbar topbar--board">
+  <!-- Row 1: who this is, and everywhere else to go, grouped at the right. -->
+  <div class="topbar-row">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
       <div>
@@ -31,42 +33,56 @@
       </div>
     </div>
 
-    <!-- The as-of instant. Nothing in engine/ reads the wall clock, so this
-         is the only "now" there is: pin it and the whole board is
-         reproducible. A past instant is a hindcast through the identical
-         code path. -->
-    <form class="asof" id="asof-form">
-      <label for="asof-input">As of</label>
-      <input type="datetime-local" id="asof-input" step="3600" required>
-      <span class="asof-tz">UTC</span>
-      <button type="submit" class="ctl" id="asof-apply">Apply</button>
-      <button type="button" class="ctl ctl--ghost" id="asof-now">Default</button>
-    </form>
+    <nav class="topnav" aria-label="Pages and tools">
+      <button type="button" class="ctl" id="btn-ask" aria-label="Assistant">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M15 9.5a2 2 0 0 1-2 2H7l-3.5 2.6V11.5H3a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+                fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        Ask
+      </button>
+      <!-- The delivery-first surface: every route that needs a decision, with
+           Do it buttons and an undo window. -->
+      <a class="ctl" id="link-fast" href="/fast" title="Every route that needs a decision, with Do it buttons">Act fast</a>
+      <a class="ctl" id="link-profile" href="/profile" title="Lanes, cutoffs and who gets called">Risk profile</a>
+      <div class="themes" id="themes"></div>
+    </nav>
+  </div>
 
-    <!-- The five-level ladder. Every rung is a DEADLINE, not a damage band,
-         so the directive is shown beside the colour — a colour alone never
-         carries the meaning. -->
+  <!-- Row 2: the ladder, the meeting it drives, and the instant it is for. -->
+  <div class="topbar-row topbar-row--2">
+    <!-- The five-level ladder. Every rung is a DEADLINE, not a damage band.
+         A click shows only that level; a second click shows them all. -->
     <nav class="ladder" id="ladder" aria-label="Alert levels"></nav>
 
-    <!-- The profile is the config, rendered readable: which lanes this desk
-         owns, which 45 variables it watches, where the ladder cutoffs sit and
-         who gets drawn in. The cutoffs are editable, which is the surface Q3
-         asked for — "will also be able to play with the assumptions". -->
-    <button type="button" class="ctl" id="btn-ask" aria-label="Assistant">
-      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-        <path d="M15 9.5a2 2 0 0 1-2 2H7l-3.5 2.6V11.5H3a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
-              fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-      </svg>
-      Ask
-    </button>
-    <!-- The delivery-first surface. Linked rather than replacing this one:
-         the analytical board still answers "why", and this answers "what do I
-         press". A planner in an incident wants the second. -->
-    <a class="ctl" id="link-fast" href="/fast">Act fast</a>
-    <a class="ctl" id="link-profile" href="/profile">Risk profile</a>
+    <div class="topbar-side">
+      <!-- The all-hands, always in sight: how often it meets now and when it
+           next sits. A click opens its tab. -->
+      <button type="button" class="meet-chip" id="meet-chip" hidden></button>
 
-    <!-- Four themes. The swatches preview the theme they switch to. -->
-    <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+      <!-- The as-of instant. Nothing in engine/ reads the wall clock, so this
+           is the only "now" there is: pin it and the whole board is
+           reproducible. Folded into one button: it is for replaying a
+           recording, not something a planner changes every minute. -->
+      <details class="asof-pop" id="asof-pop">
+        <summary class="ctl" id="asof-label" title="The instant this board is for">
+          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span id="asof-text">…</span>
+        </summary>
+        <form class="asof" id="asof-form">
+          <label for="asof-input">Show the board as of</label>
+          <div class="asof-row">
+            <input type="datetime-local" id="asof-input" step="3600" required>
+            <span class="asof-tz">UTC</span>
+          </div>
+          <div class="asof-row">
+            <button type="submit" class="ctl ctl--primary" id="asof-apply">Apply</button>
+            <button type="button" class="ctl" id="asof-now">Latest</button>
+          </div>
+        </form>
+      </details>
+    </div>
+  </div>
 </header>
 
 <!-- ============================================================
@@ -129,6 +145,30 @@
       <div class="map-note only-map" id="map-note" hidden></div>
       <div class="map-tip only-map" id="map-tip" hidden></div>
       <div class="map-busy only-map" id="map-busy" hidden>Loading assets…</div>
+
+      <!-- THE ASSISTANT. Over the map, not over the options: a planner asks
+           with the list still in view. Every answer is marked as generated;
+           the numbers on this page were computed by the engine. -->
+      <aside class="ask-panel" id="ask-panel" hidden aria-label="Assistant">
+        <div class="ask-head">
+          <div>
+            <h3>Ask</h3>
+            <p class="ask-scope" id="ask-scope"></p>
+          </div>
+          <button type="button" class="mx-close" id="ask-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="ask-log" id="ask-log" aria-live="polite"></div>
+        <div class="ask-try" id="ask-try">
+          <button type="button" class="ask-chip">Which route needs a decision first, and why?</button>
+          <button type="button" class="ask-chip">Which key accounts are at risk?</button>
+          <button type="button" class="ask-chip">What happens if nobody acts on the Rhine?</button>
+        </div>
+        <div class="ask-compose">
+          <textarea id="ask-input" rows="2" placeholder="Ask about the board…"></textarea>
+          <button type="button" class="ctl ctl--primary" id="ask-send">Send</button>
+        </div>
+        <p class="ask-foot">Answers use only what is on this board.</p>
+      </aside>
     </div>
 
     <!-- ---------- right panel ----------
@@ -148,36 +188,36 @@
       <!-- STATE 1 — every affected route, ranked -->
       <div class="panel-list" id="panel-list">
         <div class="panel-list-head">
-          <div>
-            <nav class="ptabs" id="ptabs" role="tablist">
-              <button type="button" class="ptab is-on" data-ptab="routes" role="tab">
-                Affected routes
-              </button>
-              <!-- The filter layer, which was one line of small print under a
-                   table. Its argument — arithmetic does the bulk, a model
-                   reads the survivors — was invisible, so the cost claim
-                   behind it could not be checked from the screen. -->
-              <!-- The cross-functional meeting and what each function in it can
-                   pull (engine/desk.py) — a tab, so it costs the list nothing. -->
-              <button type="button" class="ptab" data-ptab="allhands" role="tab">
-                All-hands
-              </button>
-              <button type="button" class="ptab" data-ptab="signals" role="tab">
-                Signals
-              </button>
-            </nav>
+          <nav class="ptabs" id="ptabs" role="tablist">
+            <button type="button" class="ptab is-on" data-ptab="routes" role="tab">
+              Affected routes
+            </button>
+            <!-- The cross-functional meeting and what each function in it can
+                 pull (engine/desk.py). The header chip opens it too. -->
+            <button type="button" class="ptab" data-ptab="allhands" role="tab">
+              All-hands <span class="ptab-dot" id="ptab-meet" hidden></span>
+            </button>
+            <!-- What arrived, what the filter removed, and what read the rest. -->
+            <button type="button" class="ptab" data-ptab="signals" role="tab">
+              Signals
+            </button>
+          </nav>
+          <div class="plh-sub">
             <p class="muted" id="panel-list-count"></p>
-          </div>
-          <div class="plh-ctl">
-            <button type="button" class="ctl ctl--mini" id="f-focus" aria-pressed="false" hidden
-                    title="Only the five routes held to real data">Focus routes</button>
-            <button type="button" class="ctl ctl--mini" id="f-all">All levels</button>
+            <div class="plh-ctl">
+              <!-- A ladder level picked: says which, and clears in one click. -->
+              <button type="button" class="chip-clear" id="f-all" hidden></button>
+              <button type="button" class="ctl ctl--mini ctl--toggle" id="f-focus" aria-pressed="false" hidden
+                      title="Only the five routes held to real data">Focus routes</button>
+              <button type="button" class="ctl ctl--mini ctl--ghost" id="btn-help" aria-pressed="false"
+                      title="How to read this board" aria-label="How to read this board">?</button>
+            </div>
           </div>
         </div>
         <!-- WHOSE ROUTES. Planners own sites, not routes, and serve key
-             accounts first (Sika review). One slim row: it narrows the list,
-             the ladder counts, the map and the globe together, and is kept in
-             the URL so a planner's own view is a link. -->
+             accounts first (Sika review). It narrows the list, the ladder
+             counts, the map and the globe together, and is kept in the URL so
+             a planner's own view is a link. -->
         <div class="deskrow" id="deskrow">
           <select id="f-site" aria-label="Site of responsibility" title="The site you plan for">
             <option value="">All sites</option>
@@ -189,23 +229,19 @@
               <button type="button" data-cust="AB" title="Key accounts and standard customers">Key + standard</button>
             </div>
           </div>
-          <!-- How the board is read, in three lines: a card over the list,
-               opened here and closed by the planner — never on its own. -->
-          <button type="button" class="ctl ctl--mini ctl--ghost" id="btn-help" aria-pressed="false"
-                  title="How to read this board" aria-label="How to read this board">?</button>
         </div>
+        <!-- How the board is read. In the flow, not over the list, and only
+             when asked for. -->
         <div class="howto" id="howto" hidden>
-          <ol>
-            <li><b>Pick your site and customers</b> in the row above. The list, the ladder
-              counts, the map and the globe all narrow to them.</li>
-            <li><b>Pick a route.</b> Its colour says how soon somebody must decide, not how
-              bad the news is.</li>
-            <li><b>Act.</b> <i>Act &amp; escalate</i> lists the options worth more than they
-              cost, key accounts first. <i>Customers &amp; shipments</i> shows who the route
-              serves; <i>Plan recovery</i> there opens the ways round on the map.</li>
+          <ol class="howto-steps">
+            <li><b>1</b> Pick your site and customers</li>
+            <li><b>2</b> Click a card to see why</li>
+            <li><b>3</b> The arrow opens its options</li>
           </ol>
-          <p class="muted">Click a vehicle on the map to open its Action Hub.</p>
-          <button type="button" class="ctl ctl--mini" id="howto-close">Close</button>
+          <p class="howto-where"><b>Where to act:</b> this panel decides ·
+            <i>Act fast</i> does it, with an undo window · <i>Step by step</i> is the
+            checklist · a vehicle on the map opens its Action Hub.</p>
+          <button type="button" class="ctl ctl--mini" id="howto-close">Got it</button>
         </div>
         <div class="rlist" id="rlist" role="list"></div>
         <div class="rlist" id="allhands" hidden></div>
@@ -217,26 +253,38 @@
       <div class="panel-body" id="panel-body" hidden>
 
         <div class="panel-head">
-          <button type="button" class="ctl ctl--ghost ctl--mini" id="d-back">
-            &larr; All routes
-          </button>
-          <span class="level-chip" id="d-chip"></span>
-          <!-- The route's own page (matrix, charts, every consignment): a
-               small icon, not a sentence. -->
-          <a class="icon-btn d-page" id="link-route" href="#" title="Route page: matrix and charts" aria-label="Route page">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M6 13V8M10 13V4M14 13v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          </a>
+          <div class="ph-top">
+            <button type="button" class="ctl ctl--ghost ctl--mini" id="d-back">
+              &larr; All routes
+            </button>
+            <!-- The level; its rule ("act within 6 h") is the tooltip, so the
+                 panel says one deadline, the real one, below. -->
+            <span class="level-chip" id="d-chip"></span>
+            <!-- The route's own page (matrix, charts, every consignment). -->
+            <a class="icon-btn d-page" id="link-route" href="#" title="Route page: matrix and charts" aria-label="Route page">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M6 13V8M10 13V4M14 13v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </a>
+          </div>
           <h2 id="d-name"></h2>
-          <p class="directive" id="d-directive"></p>
-          <p class="reason" id="d-reason"></p>
+          <!-- Who the route belongs to, in one line: the site it ships from,
+               the port it leaves by, the customers it serves. -->
+          <p class="alloc-line" id="d-alloc"></p>
         </div>
 
         <div class="stat-row" id="d-stats"></div>
 
-        <!-- Who the route belongs to, in one line: the site it ships from, the
-             port it leaves by, the customers it serves. The full list is its
-             own tab, so the actions stay where they always were. -->
-        <p class="alloc-line" id="d-alloc"></p>
+        <!-- WHERE TO ACT. This panel decides; these are the two ways onward,
+             named the same everywhere (the header, the Action Hub, the help). -->
+        <div class="d-next" id="d-next">
+          <a class="ctl ctl--primary" id="link-act" href="/fast"
+             title="This route's options with Do it buttons and an undo window">
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M6 4l10 6-10 6z" fill="currentColor"/></svg>
+            Act fast on this route</a>
+          <a class="ctl" id="link-ops" href="/ops"
+             title="Detect, confirm, act, close out: the checklist for this route">
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M4 5h2M4 10h2M4 15h2M9 5h7M9 10h7M9 15h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Step by step</a>
+        </div>
 
 
         <!-- Two tabs, not three. Escalation used to be its own tab, which
@@ -346,30 +394,6 @@
 
 <script src="/vendor/globe.gl.min.js?v=__ASSETV__"></script>
 <script src="/vendor/topojson-client.min.js?v=__ASSETV__"></script>
-<!-- ============================================================
-     THE ASSISTANT
-
-     Answers are grounded in the board and nothing else. Every answer is
-     visibly marked as generated: the numbers on this page were computed by
-     the engine and can be reproduced from the command line, an answer here
-     was written by a model. Those are different kinds of claim.
-     ============================================================ -->
-<aside class="ask-panel" id="ask-panel" hidden aria-label="Assistant">
-  <div class="ask-head">
-    <div>
-      <h3>Ask</h3>
-      <p class="ask-scope" id="ask-scope"></p>
-    </div>
-    <button type="button" class="mx-close" id="ask-close" aria-label="Close">&times;</button>
-  </div>
-  <div class="ask-log" id="ask-log" aria-live="polite"></div>
-  <div class="ask-compose">
-    <textarea id="ask-input" rows="2" placeholder="Ask about the board…"></textarea>
-    <button type="button" class="ctl ctl--primary" id="ask-send">Send</button>
-  </div>
-  <p class="ask-foot">Grounded in the current board. It will say so rather than
-    guess when the board does not carry the answer.</p>
-</aside>
 
 <!-- ============================================================
      THE ACTION HUB — a floating, draggable glass card over the map.

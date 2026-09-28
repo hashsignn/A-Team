@@ -17,6 +17,9 @@ function routeId() {
 }
 
 async function load() {
+  // Back to the board on this route, at the same instant.
+  const back = el('back-board');
+  if (back) back.href = `/?route=${encodeURIComponent(routeId())}&as_of=${encodeURIComponent(FastUI.AS_OF)}`;
   try {
     state.row = await FastUI.get(`/api/v2/route/${encodeURIComponent(routeId())}`);
     render();

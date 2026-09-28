@@ -353,8 +353,8 @@ threshold **the group pre-agreed in calm conditions** has been crossed:
 That moves the decision from a judgement one person owns to a rule the group
 already owns. It costs about forty lines of YAML and it is the whole mechanism.
 
-Until the group has actually agreed it, the board says *"proposed convene rule
-would be crossed (not yet agreed with the team)"* — and the risk profile page
+Until the group has actually agreed it, the board says *"proposed all-hands
+rule crossed (not yet agreed)"* — and the risk profile page
 refuses to record an agreement date that was left blank, because claiming an
 agreement it does not have is the one way to break the mechanism outright.
 

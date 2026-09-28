@@ -33,6 +33,7 @@ check and put back after, whatever happens.
 
 from __future__ import annotations
 
+import re
 import sys
 import urllib.request
 from collections import Counter
@@ -137,6 +138,7 @@ def main() -> int:
             _board(page, check)
             _route_page(page, check)
             _desk(page, check)
+            _review(page, check)
             _profile(page, check, expecting_refusal)
             _themes_and_unsourced(page, check)
             _assistant(page, check)
@@ -265,16 +267,18 @@ def _board(page, check) -> None:
     page.screenshot(path=str(OUT / "stage-selected.png"))
 
     # --- the as-of control re-runs the board ---------------------------
-    before = page.locator("#brand-sub").inner_text()
+    # Folded into one button that shows the instant; it opens a small form.
+    before = page.locator("#asof-text").inner_text()
+    page.locator("#asof-label").click()
     page.locator("#asof-input").fill("2026-09-19T12:00")
     page.locator("#asof-apply").click()
     try:
         page.wait_for_function(
-            "(b) => document.getElementById('brand-sub').innerText !== b", arg=before,
+            "(b) => document.getElementById('asof-text').innerText !== b", arg=before,
             timeout=60_000)
     except Exception:  # noqa: BLE001 — reported below as the failure it is
         pass
-    after = page.locator("#brand-sub").inner_text()
+    after = page.locator("#asof-text").inner_text() + " · " + page.locator("#brand-sub").inner_text()
     if check("could not load" not in after and "failed to load" not in after,
              f"[as-of] reload failed: {after}") and check(
                  before != after, "[as-of] applying a new instant did not change the board"):
@@ -311,6 +315,7 @@ def _desk(page, check) -> None:
         const rungs = [...document.querySelectorAll('#ladder .rung-count')].map(e => Number(e.textContent) || 0);
         return { n: ids.length, all: ids.every(id => of(id) === state.site),
                  ladder: rungs.reduce((a, b) => a + b, 0), mine: deskRoutes().length,
+                 visible: visibleRoutes().length,
                  lanes: (MapAgent.getState().filters.lanes || []).length,
                  url: location.search };
     })()""")
@@ -318,7 +323,7 @@ def _desk(page, check) -> None:
           f"site {busiest}: {got['n']} routes, every one ships from it")
     check(got["ladder"] == got["mine"], f"[desk] ladder counts {got['ladder']} routes, the desk has {got['mine']}",
           "ladder counts only this site's routes")
-    check(got["lanes"] == got["n"], f"[desk] map shows {got['lanes']} lanes for {got['n']} routes",
+    check(got["lanes"] == got["visible"], f"[desk] map shows {got['lanes']} lanes for {got['visible']} routes",
           "the map narrows to the same routes")
     check(f"site={busiest}" in got["url"], f"[desk] the site is not in the URL: {got['url']}",
           "the site is in the URL, so a planner's view is a link")
@@ -426,7 +431,7 @@ def _open_card(page, check, index: int, what: str) -> None:
 def _response(page, check) -> None:
     """The response workspace on a route that has options, if one does."""
     route_id = page.evaluate("""(() => {
-        const open = state.board.routes.filter((r) => !state.hidden.has(r.level));
+        const open = state.board.routes.filter((r) => !state.levelOnly || r.level === state.levelOnly);
         const acting = open.find((r) => (r.actions || []).length);
         return (acting || open[0]).route_id; })()""")
     if page.locator("#panel-body").is_visible():
@@ -522,6 +527,122 @@ def _route_page(page, check) -> None:
           "[matrix] the route page drew no matrix and said nothing",
           f"matrix: {cells} cells drawn" if cells else "matrix: this route has no event with one")
     page.screenshot(path=str(OUT / "route.png"), full_page=True)
+
+
+# =====================================================================
+# THE REVIEW OF 28 SEPTEMBER: one place to act, the urgent option first,
+# one meeting time, affected routes only, a ladder that shows one level
+# =====================================================================
+def _review(page, check) -> None:
+    _open_board(page)
+    # Normal routes need nothing: out of the list, counted, one click away.
+    got = page.evaluate("""(() => {
+        const cards = [...document.querySelectorAll('#rlist .rli')];
+        return { green: cards.filter(c => c.classList.contains('level-green')).length,
+                 cards: cards.length, normal: visibleRoutes().filter(r => r.level === 'green').length,
+                 more: !!document.getElementById('f-normal') };
+    })()""")
+    check(got["green"] == 0 and (got["more"] or not got["normal"]),
+          f"[list] normal routes in the affected list by default: {got}",
+          f"list: {got['cards']} affected routes, {got['normal']} normal ones one click away")
+    if got["more"]:
+        page.click("#f-normal")
+        page.wait_for_timeout(400)
+        shown = page.locator("#rlist .rli.level-green").count()
+        check(shown == got["normal"], f"[list] showing normal routes gave {shown} of {got['normal']}",
+              "the normal routes come back on one click")
+        page.click("#f-normal")
+        page.wait_for_timeout(300)
+
+    # A ladder click shows only that level, and a second click shows all.
+    page.locator('#ladder .rung[data-level="red"]').click()
+    page.wait_for_timeout(500)
+    only = page.evaluate("""(() => ({
+        levels: [...new Set([...document.querySelectorAll('#rlist .rli')].map(c => [...c.classList].find(k => k.startsWith('level-'))))],
+        chip: !document.getElementById('f-all').hidden,
+        lanes: (MapAgent.getState().filters.lanes || []).length,
+        red: deskRoutes().filter(r => r.level === 'red').length }))()""")
+    check(only["levels"] in ([], ["level-red"]) and only["chip"] and only["lanes"] == only["red"],
+          f"[ladder] clicking Critical did not show only Critical: {only}",
+          f"ladder: Critical alone on the list and the map ({only['red']} routes), with a clear chip")
+    page.click("#f-all")
+    page.wait_for_timeout(400)
+    check(page.evaluate("state.levelOnly === null && document.getElementById('f-all').hidden"),
+          "[ladder] the clear chip did not bring every level back", "the chip clears the level filter")
+
+    # The all-hands is in the header, and it opens its tab.
+    chip = page.locator("#meet-chip")
+    if check(chip.is_visible(), "[all-hands] no meeting chip in the header"):
+        text = chip.inner_text()
+        chip.click()
+        page.wait_for_timeout(500)
+        check(page.locator("#allhands").is_visible(), "[all-hands] the header chip did not open the tab",
+              f"header chip: {text.strip()[:60]!r} opens the All-hands tab")
+    # One meeting time everywhere: the rule's sentence names the same slot.
+    same = page.evaluate("""(() => {
+        const h = state.board.all_hands, words = state.board.posture.headline || '';
+        const day = h.next_label.split(',')[0];
+        return { posture: h.posture, day, ok: h.posture !== 'convene' || words.includes(day) };
+    })()""")
+    check(same["ok"], f"[all-hands] the headline and the tab disagree on the next meeting: {same}",
+          f"one meeting time everywhere ({same['day']})")
+    page.click(".ptab[data-ptab='routes']")
+    page.wait_for_timeout(300)
+
+    # The route panel: the option that closes first is listed first, and the
+    # two ways onward are named the same as everywhere else.
+    rid = page.evaluate("""(() => (state.board.routes.find(r => r.level === 'red' && r.actions.length > 1)
+        || state.board.routes.find(r => r.actions.length) || {}).route_id)()""")
+    if rid:
+        page.evaluate("(id) => select(id, { fly: false })", rid)
+        # The panel fetches its summary; let it land before navigating away.
+        page.wait_for_function("!document.getElementById('send-body').value.startsWith('loading')",
+                               timeout=30_000)
+        page.wait_for_timeout(300)
+        order = page.evaluate("""(id) => {
+            const r = state.board.routes.find(x => x.route_id === id);
+            const lead = r.actions.map(a => a.lead_time_hours == null ? 1e9 : a.lead_time_hours);
+            return { first: lead[0], min: Math.min(...lead),
+                     tag: document.querySelector('#r-actions .act .act-when').innerText,
+                     act: document.getElementById('link-act').getAttribute('href'),
+                     ops: document.getElementById('link-ops').getAttribute('href') };
+        }""", rid)
+        check(order["first"] <= 6 or order["first"] == order["min"] or order["min"] > 6,
+              f"[options] the soonest option is not first: {order}",
+              f"options: the one closing in {round(order['first'])} h is first ({order['tag'][:28]!r})")
+        check(order["act"].startswith(f"/fast/{rid}") and order["ops"].startswith("/ops?route="),
+              f"[options] the onward links are wrong: {order}",
+              "Act fast on this route and Step by step are linked from the panel")
+        # The way back from those pages lands on this route.
+        page.goto(f"{BASE}/?route={rid}", wait_until="load", timeout=90_000)
+        page.wait_for_function("typeof state !== 'undefined' && state.board && state.selected", timeout=60_000)
+        check(page.evaluate("state.selected") == rid and page.locator("#panel-body").is_visible(),
+              "[links] /?route= did not open the route", "?route= opens the board on that route")
+
+    # The as-of and the theme are small menus, and nothing sits over the list.
+    page.locator("#asof-label").click()
+    check(page.locator("#asof-input").is_visible(), "[header] the as-of did not open",
+          "as-of folds into one button that opens its form")
+    page.mouse.click(5, 5)
+    page.locator(".theme-toggle").click()
+    check(page.locator(".theme-list .theme-btn").count() == 3, "[header] the theme menu is not three themes",
+          "theme: one button, three themes")
+    page.mouse.click(5, 5)
+
+    # No em dash between words, and one number format.
+    text = page.evaluate("document.body.innerText")
+    grouped = re.findall(r"\d[’']\d{3}", text)
+    check(not grouped, f"[format] a number still uses an apostrophe: {grouped[:3]}",
+          "one number format (CHF 204,523)")
+
+    # The phone: no sideways scrolling.
+    kept = page.viewport_size
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_timeout(700)
+    wide = page.evaluate("document.documentElement.scrollWidth")
+    check(wide <= 392, f"[phone] the page is {wide}px wide on a 390px phone", "phone: nothing wider than the screen")
+    page.set_viewport_size(kept)
+    page.wait_for_timeout(300)
 
 
 # =====================================================================
@@ -662,7 +783,8 @@ def _themes_and_unsourced(page, check) -> None:
         page.wait_for_function("document.querySelectorAll('#rt-matrix .mx-cell').length > 0",
                                timeout=30_000)
 
-    for theme in ("light", "blue", "sika", "dark"):
+    for theme in ("light", "sika", "dark"):
+        page.locator(".theme-toggle").click()
         page.locator(f'.theme-btn[data-theme="{theme}"]').click()
         page.wait_for_timeout(900)
         check(page.evaluate("document.documentElement.getAttribute('data-theme')") == theme,
@@ -683,7 +805,8 @@ def _themes_and_unsourced(page, check) -> None:
         check(page.locator("#rt-matrix .mx-cell.has").count() > 0,
               f"[matrix] no occupied cell after switching to {theme}")
         page.screenshot(path=str(OUT / f"theme-{theme}.png"), full_page=True)
-    print("  ok   themes: 4 applied, accent distinct from the ladder, matrix intact in each")
+    print("  ok   themes: 3 applied from one menu, accent distinct from the ladder, matrix intact in each")
+    page.locator(".theme-toggle").click()
     page.locator('.theme-btn[data-theme="light"]').click()
 
 

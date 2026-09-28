@@ -12,11 +12,11 @@
 <body class="rt-body">
 
 <header class="topbar topbar--sub">
-  <a class="ctl ctl--ghost" href="/">&larr; All routes</a>
+  <!-- Back to the board, on this route. -->
+  <a class="ctl ctl--ghost" id="rt-back" href="/">&larr; Board</a>
   <div class="rt-head">
     <span class="level-chip" id="rt-chip"></span>
     <h1 id="rt-name">…</h1>
-    <p class="directive" id="rt-directive"></p>
   </div>
   <nav class="themes" id="themes" aria-label="Colour theme"></nav>
 </header>
@@ -139,17 +139,18 @@
     </section>
   </div>
 
-  <!-- The only thing to do from here, and it is unmissable. -->
+  <!-- Where to act from here: the same two ways onward as on the board. -->
   <a class="rt-next" id="rt-next" href="#">
     <span>
-      <b>See the alternatives</b>
-      <em id="rt-next-note">what can still be changed, and what each costs</em>
+      <b>Act fast on this route</b>
+      <em id="rt-next-note">the options with Do it buttons and an undo window</em>
     </span>
     <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
       <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   </a>
+  <p class="rt-next-alt"><a id="rt-ops" href="#">Or go step by step</a>: detect, confirm, act, close out.</p>
 </main>
 
 <script src="/charts.js?v=__ASSETV__"></script>
