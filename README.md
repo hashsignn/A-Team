@@ -1,4 +1,4 @@
-# Supply Chain Risk Radar
+# Horizon
 
 **Update and restart in Codespaces.** Stop the server with **Ctrl+C**, then paste:
 

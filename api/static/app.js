@@ -1,4 +1,4 @@
-/* Supply Chain Risk Radar — globe, radar, ranked routes.
+/* Horizon — globe, radar, ranked routes.
  *
  * No build step, no CDN. globe.gl and topojson-client are vendored under
  * /vendor, the country geometry under /geo. The page renders with the network
@@ -463,7 +463,7 @@ async function reload(asOf) {
     if (window.MapAgent) window.MapAgent.loadAssets({ as_of: asOf, shipments: params.shipments });
   } catch (err) {
     console.error(err);
-    $('brand-sub').textContent = `could not load that instant: ${err.message}`;
+    showBrandError(`could not load that instant: ${err.message}`);
   } finally {
     stage.classList.remove('is-loading');
     $('asof-apply').disabled = false;
@@ -471,12 +471,17 @@ async function reload(asOf) {
   }
 }
 
+/* The line under the name says something only when loading failed. */
+function showBrandError(text) {
+  const sub = $('brand-sub');
+  sub.textContent = text || '';
+  sub.hidden = !text;
+}
+
 /* Everything that depends on the board, in one place, so boot and reload
  * cannot drift apart. */
 function applyBoard(board) {
-  $('brand-sub').textContent =
-    `${board.shipments_total} shipments (synthetic) · ` +
-    `${board.variables_total} risk variables · ${board.routes.length} routes`;
+  showBrandError(null);
   $('asof-text').textContent = board.as_of_label;
   // Every deadline clock on the board counts down from the board's moment.
   if (window.DeadlineClock) DeadlineClock.start(board.as_of);
@@ -2325,7 +2330,7 @@ function initHowto() {
 
 boot().catch((err) => {
   console.error(err);
-  $('brand-sub').textContent = 'failed to load: ' + err.message;
+  showBrandError('failed to load: ' + err.message);
 });
 
 // ===============================================================

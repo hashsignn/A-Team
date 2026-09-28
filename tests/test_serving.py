@@ -23,7 +23,7 @@ import pytest
 from api.main import _asset_version, _page
 
 STATIC = Path(__file__).resolve().parent.parent / "api" / "static"
-PAGES = ("index.html", "profile.html", "fast.html", "fast-route.html")
+PAGES = ("index.html", "profile.html", "tree.html", "route.html", "driver.html")
 
 
 # =====================================================================
@@ -179,3 +179,45 @@ def test_the_profile_page_carries_its_controls():
     html = _page("profile.html").body.decode()
     for marker in ('id="themes"', 'theme.js', 'id="prof-rail"', 'id="savebar"'):
         assert marker in html, marker
+
+
+# =====================================================================
+# Retired pages still land somewhere useful
+# =====================================================================
+
+
+def _request(path: str, query: str = ""):
+    from starlette.requests import Request  # noqa: PLC0415
+
+    return Request({"type": "http", "method": "GET", "path": path,
+                    "query_string": query.encode(), "headers": []})
+
+
+def test_the_retired_checklist_and_act_fast_pages_redirect():
+    """The decision tree replaced the checklist (/ops) and Act fast (/fast).
+    An old link or bookmark goes to the tree for its route, or the board."""
+    from api.main import fast_page, fast_route_page, ops_page  # noqa: PLC0415
+
+    to_tree = ops_page(_request("/ops", "route=LANE_ASIA_08&as_of=2026-09-18"))
+    assert to_tree.status_code == 307
+    assert to_tree.headers["location"] == "/tree?route=LANE_ASIA_08&as_of=2026-09-18"
+    assert ops_page(_request("/ops")).headers["location"] == "/"
+    assert fast_page(_request("/fast", "as_of=2026-09-18")).headers["location"] == "/?as_of=2026-09-18"
+    lane = fast_route_page("LANE_RHINE_01", _request("/fast/LANE_RHINE_01", "as_of=2026-09-18"))
+    assert lane.headers["location"] == "/tree?as_of=2026-09-18&route=LANE_RHINE_01"
+    for gone in ("ops.html", "fast.html", "fast-route.html"):
+        assert not (STATIC / gone).exists(), gone
+
+
+def test_the_logo_falls_back_to_the_horizon_mark(tmp_path, monkeypatch):
+    """Sika's logo is theirs to supply (config/brand/logo.*); without it the
+    header gets the neutral mark, never a broken image."""
+    import api.main as main  # noqa: PLC0415
+
+    monkeypatch.setattr(main, "CUSTOMER_DIR", tmp_path)
+    assert str(main.brand_logo().path) == str(STATIC / "horizon-mark.svg")
+    (tmp_path / "brand").mkdir()
+    (tmp_path / "brand" / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    served = main.brand_logo()
+    assert str(served.path) == str(tmp_path / "brand" / "logo.png")
+    assert served.media_type == "image/png"

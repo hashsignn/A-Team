@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="Horizon">
+  <!-- The neutral Horizon mark: a sun on the horizon. Shown until the team
+       puts Sika's own logo at config/brand/logo.svg (or .png). -->
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc700"/>
+      <stop offset="1" stop-color="#f08a00"/>
+    </linearGradient>
+  </defs>
+  <rect width="40" height="40" rx="9" fill="#10233f"/>
+  <path d="M9 25a11 11 0 0 1 22 0z" fill="url(#sun)"/>
+  <path d="M6 25.5h28" stroke="#e8eef8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M10 30h20M14 34h12" stroke="#7f93b3" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

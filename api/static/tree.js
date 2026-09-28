@@ -987,7 +987,6 @@ function header(d) {
   const back = new URLSearchParams(qs());
   back.set('route', d.route_id);
   $('tr-back').href = `/?${back}`;
-  $('tr-ops').href = `/ops?${back}`;
 }
 
 $('tr-pick').addEventListener('change', (e) => {

@@ -43,10 +43,12 @@ MARKERS = {
     # cries wolf is worse than no check: it sends people to chase a git pull
     # that cannot help them. It now names what is actually on each page.
     "Globe and affected routes on one page": ("api/static/index.html", 'id="panel-list"'),
-    "Front page links to the fast board": ("api/static/index.html", 'href="/fast"'),
-    "Fast dashboard page":            ("api/static/fast.html", "What needs a decision"),
-    "One-click execute":              ("api/static/fast.js", "/api/v2/act"),
-    "Undo window with a countdown":   ("api/static/fast.js", "to change your mind"),
+    # The Act fast pages and the checklist were retired: the Action decision
+    # tree does what they did (execute, undo) in one window.
+    "Action decision tree":           ("api/static/tree.html", 'id="tr-levels"'),
+    "One-click execute":              ("api/static/tree.js", "/api/v2/act"),
+    "Undo window":                    ("api/static/tree.js", "/api/v2/undo"),
+    "Horizon name and logo slot":     ("api/static/index.html", "/brand/logo"),
     "Delivery-first ranking":         ("engine/fast/options.py", "restores_delivery"),
     "Profitability veto":             ("engine/fast/margin.py", "margin_floor_chf"),
     "Generated reroutes":             ("engine/fast/contingency.py", "fastest_path"),

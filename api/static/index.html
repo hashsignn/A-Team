@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="radar-default-as-of" content="__DEFAULT_AS_OF__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Supply Chain Risk Radar</title>
+<title>Horizon</title>
 <link rel="stylesheet" href="/styles.css?v=__ASSETV__">
 <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=__ASSETV__">
 <link rel="stylesheet" href="/map.css?v=__ASSETV__">
@@ -25,11 +25,14 @@
 <header class="topbar topbar--board">
   <!-- Row 1: who this is, and everywhere else to go, grouped at the right. -->
   <div class="topbar-row">
+    <!-- Sika's logo and the product name. The logo is config/brand/logo.*
+         (gitignored, like all of Sika's own material); without it the
+         server sends a neutral Horizon mark. See GET /brand/logo. -->
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
+      <img class="brand-logo" src="/brand/logo?v=__ASSETV__" alt="" height="30">
       <div>
-        <h1>Supply Chain Risk Radar</h1>
-        <p class="brand-sub" id="brand-sub">loading…</p>
+        <h1>Horizon</h1>
+        <p class="brand-sub" id="brand-sub" hidden></p>
       </div>
     </div>
 

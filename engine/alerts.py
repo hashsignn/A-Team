@@ -192,7 +192,7 @@ def compose(board: dict, settings: Settings, routes: list[dict],
     reads the same on every phone."""
     if not routes and not warnings:
         return None
-    lines = [f"Supply Chain Risk Radar, {board.get('as_of_label', board.get('as_of', ''))}", ""]
+    lines = [f"Horizon, {board.get('as_of_label', board.get('as_of', ''))}", ""]
     if test:
         lines += ["This is a test: alerts reach you like this.", ""]
     for level in ("red", "yellow"):

@@ -91,7 +91,7 @@ class _Pack(FPDF):
         self.cell(
             0, 4,
             latin(
-                f"Supply Chain Risk Radar  ·  as of {self.as_of_label}  ·  "
+                f"Horizon  ·  as of {self.as_of_label}  ·  "
                 f"page {self.page_no()}  ·  ADVISORY: the planner decides  ·  "
                 "figures from synthetic data"
             ),

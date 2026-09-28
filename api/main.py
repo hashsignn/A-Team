@@ -18,16 +18,23 @@ import os
 import secrets
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import Body, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 from api import fast_routes
 from engine import alerts as alerts_mod
 from engine.act import flow as flow_mod
 from engine.clock import Clock
-from engine.config import load_config
+from engine.config import CUSTOMER_DIR, load_config
 from engine.export import cargo as cargo_mod
 from engine.export import profile as profile_mod
 from engine.export import report as report_mod
@@ -52,7 +59,7 @@ PINNED_AS_OF = "2026-09-18T06:00:00+00:00"
 DEFAULT_AS_OF = recorded_as_of() or PINNED_AS_OF
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="Supply Chain Risk Radar", docs_url="/api/docs")
+app = FastAPI(title="Horizon", docs_url="/api/docs")
 
 # In-process fan-out for the live stream. Bounded on purpose: this is a
 # notification channel, not the record. The record is the append-only log on
@@ -1011,10 +1018,19 @@ def profile_page() -> Response:
     return _page("profile.html")
 
 
+# The checklist (/ops) and the Act fast pages (/fast) are retired: the
+# Action decision tree does everything they did, in one place. Their
+# addresses still land somewhere useful, so an old link or bookmark does not
+# 404: a route goes to its tree, anything else to the board.
+def _retired(target: str, request: Request) -> RedirectResponse:
+    query = request.url.query
+    return RedirectResponse(f"{target}?{query}" if query else target, status_code=307)
+
+
 @app.get("/ops")
 @app.head("/ops")
-def ops_page() -> Response:
-    return _page("ops.html")
+def ops_page(request: Request) -> RedirectResponse:
+    return _retired("/tree" if request.query_params.get("route") else "/", request)
 
 
 # The Action decision tree: every option for one route as a tree, in its
@@ -1039,18 +1055,36 @@ def driver_page() -> Response:
     return _page("driver.html")
 
 
-# Kept as an alias of "/" so links, bookmarks and the screenshots in
-# docs/pitch keep working after the front page moved.
 @app.get("/fast")
 @app.head("/fast")
-def fast_page() -> Response:
-    return _page("fast.html")
+def fast_page(request: Request) -> RedirectResponse:
+    return _retired("/", request)
 
 
 @app.get("/fast/{route_id}")
 @app.head("/fast/{route_id}")
-def fast_route_page(route_id: str) -> Response:
-    return _page("fast-route.html")
+def fast_route_page(route_id: str, request: Request) -> RedirectResponse:
+    query = dict(request.query_params) | {"route": route_id}
+    return RedirectResponse(f"/tree?{urlencode(query)}", status_code=307)
+
+
+# The logo in the header. Sika's own logo is theirs to supply: it lives in
+# config/brand/ (gitignored, like the rest of their material), and until it
+# is there a neutral Horizon mark is sent instead, so the header never shows
+# a broken image.
+BRAND_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
+               ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+
+
+@app.get("/brand/logo")
+@app.head("/brand/logo")
+def brand_logo() -> Response:
+    for suffix, media in BRAND_TYPES.items():
+        path = CUSTOMER_DIR / "brand" / f"logo{suffix}"
+        if path.is_file():
+            return FileResponse(path, media_type=media, headers={"Cache-Control": "no-cache"})
+    return FileResponse(STATIC / "horizon-mark.svg", media_type="image/svg+xml",
+                        headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")

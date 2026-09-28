@@ -1,4 +1,4 @@
-/* Supply Chain Risk Radar — themed operations surface.
+/* Horizon — themed operations surface.
  *
  * THE FIVE LEVEL COLOURS ARE RESERVED. They are the client's own scheme and
  * they mean one thing only: how soon a decision is needed. They are never
@@ -28,10 +28,13 @@
  * -------------------------------------------
  * The White rung ("Bias — monitor closely") cannot be drawn white on a white
  * page: it would be invisible, and an invisible level reads as no level at
- * all. On the three light themes it becomes a neutral slate, which keeps it
- * the quietest visible rung — its position in the ordering — while the label
- * beside it keeps carrying the actual meaning. Green and Yellow are darkened
- * for the same reason: the dark-theme values fail contrast on white.
+ * all. It was a neutral slate on the light themes, and the team found it
+ * hard to see against a grey map, so it is violet there now (fuchsia on the
+ * blue theme, whose Watch rung is violet); the label beside it keeps
+ * carrying the meaning. Alert is yellow, not orange (team, 2026-09-28): a
+ * mustard yellow on light pages, which still clears 3:1 on white, and a
+ * bright yellow on the dark theme. Green is darkened for the same reason:
+ * the dark-theme values fail contrast on white.
  */
 
 :root,
@@ -56,9 +59,9 @@
 
   /* ---- the ladder. reserved. tuned for contrast on white. ---- */
   --lvl-green:  #15803d;
-  --lvl-white:  #64748b;   /* slate, not white — see the note above */
+  --lvl-white:  #7c3aed;   /* violet, not white or grey — see the note above */
   --lvl-blue:   #1d4ed8;
-  --lvl-yellow: #b45309;
+  --lvl-yellow: #b58900;   /* yellow, not orange (team, 2026-09-28) */
   --lvl-red:    #dc2626;
 
   /* ---- radar bands: ordinal, one hue, light -> dark on a light page ---- */
@@ -111,9 +114,9 @@
   --accent-contrast:#ffffff;
 
   --lvl-green:  #15803d;
-  --lvl-white:  #5b7089;
+  --lvl-white:  #c026d3;   /* fuchsia: the blue rung is violet on this theme */
   --lvl-blue:   #5b21b6;   /* violet-ward, so it cannot be read as chrome */
-  --lvl-yellow: #b45309;
+  --lvl-yellow: #b58900;
   --lvl-red:    #d01f1f;
 
   --band-minor:    #a8c4f5;
@@ -177,9 +180,9 @@
   --accent-contrast:#ffc700;
 
   --lvl-green:  #17703a;
-  --lvl-white:  #7a7a6e;
+  --lvl-white:  #7c3aed;
   --lvl-blue:   #1d4ed8;
-  --lvl-yellow: #a8620a;
+  --lvl-yellow: #b58900;
   --lvl-red:    #c2001f;
 
   --band-minor:    #ffe8a3;
@@ -232,7 +235,7 @@
   --lvl-green:  #21c45d;
   --lvl-white:  #e6ecf8;
   --lvl-blue:   #3d8bfd;
-  --lvl-yellow: #f5b52b;
+  --lvl-yellow: #facc15;
   --lvl-red:    #ef4444;
 
   --band-minor:    #6d5bd0;
@@ -316,6 +319,14 @@ p { margin: 0; }
 
 .brand { display: flex; align-items: center; gap: 13px; }
 .brand h1 { font-size: 17px; }
+/* Sika's logo (config/brand/logo.*) or the neutral Horizon mark, then the
+   product name after a hairline. */
+.brand-logo {
+  display: block; flex: none;
+  height: 32px; width: auto; max-width: 150px; object-fit: contain;
+}
+.brand-logo + div { padding-left: 13px; border-left: 1px solid var(--border); }
+.brand h1 { letter-spacing: .01em; }
 .brand-sub { font-size: 13px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
 
 .brand-mark {
@@ -663,7 +674,7 @@ p { margin: 0; }
   padding: 2px 7px; border-radius: 4px; white-space: nowrap;
   background: var(--surface-3); color: var(--text-secondary);
 }
-.pill--unsourced { color: var(--lvl-yellow); border: 1px solid rgba(245,181,43,.35); }
+.pill--unsourced { color: var(--lvl-yellow); border: 1px solid color-mix(in srgb, var(--lvl-yellow) 35%, transparent); }
 
 .act-sentence { font-size: 14px; line-height: 1.5; }
 .act-meta { font-size: 12px; color: var(--muted); margin-top: 7px; }
@@ -936,7 +947,7 @@ a.ctl { text-decoration: none; }
   background: var(--surface-3); color: var(--text-secondary);
 }
 .tag--ok   { background: rgba(33, 196, 93, .16);  color: var(--lvl-green); }
-.tag--warn { background: rgba(245, 181, 43, .16); color: var(--lvl-yellow); }
+.tag--warn { background: color-mix(in srgb, var(--lvl-yellow) 16%, transparent); color: var(--lvl-yellow); }
 .tag--off  { background: var(--surface-2);        color: var(--muted); }
 
 /* ---- ladder rungs, read-only ---- */

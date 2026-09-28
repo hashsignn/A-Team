@@ -451,7 +451,7 @@ async function boot() {
   const v = await res.json();
   state.view = v;
 
-  document.title = `${v.name} · Risk Radar`;
+  document.title = `${v.name} · Horizon`;
   $('rt-name').textContent = v.name;
   $('rt-chip').textContent = v.level_label || v.level;
   $('rt-chip').className = `level-chip level-${v.level}`;
@@ -467,7 +467,6 @@ async function boot() {
   const onward = new URLSearchParams({ route: ROUTE_ID });
   if (params.get('as_of')) onward.set('as_of', params.get('as_of'));
   $('rt-next').href = `/tree?${onward}`;
-  $('rt-ops').href = `/ops?${onward}`;
   $('rt-back').href = `/?${onward}`;
 
   // Drawn by charts.js, the same code the board uses. A second copy of this
