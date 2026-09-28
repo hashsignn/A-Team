@@ -57,6 +57,15 @@ focus_routes:
       name: Rotterdam
       basis: "The largest North Sea port, with a rail shuttle from Kornwestheim."
       source: https://www.railfreight.com/business/2018/01/05/hupac-launches-rotterdam-stuttgart-shuttle/
+    destination:
+      site: "Sika Corporation, Lyndhurst NJ: Sika USA head office"
+      lat: 40.812
+      lon: -74.124
+      source: https://usa.sika.com/en/careers/locations.html
+      basis: >-
+        The export names the receiving company (Sika USA) by country only.
+        Lyndhurst is its head office, the company that imports; which of its 30
+        US sites takes these goods is not in the export.
 
   - lane: LANE_ASIA_08
     sika_flow: CH_CN
@@ -78,6 +87,14 @@ focus_routes:
         Swiss exports usually transit through North Sea ports, secondarily
         through Mediterranean ones; Rotterdam is the Rhine's port.
       source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
+    destination:
+      site: "Sika (China) Ltd., Suzhou: head office, plant and technology centre"
+      lat: 31.318
+      lon: 120.718
+      source: https://www.sika.com/en/media/media-releases/archive/2023/new-technology-center-in-china.html
+      basis: >-
+        No. 28 Jing Dong Road, Suzhou Industrial Park, about 100 km from the
+        port of Shanghai. Sika China's head office and one of its plants.
 
   - lane: LANE_US_01
     sika_flow: CH_US
@@ -98,6 +115,15 @@ focus_routes:
         Swiss exports usually transit through North Sea ports; Antwerp has a
         direct rail link to Basel and Zurich.
       source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
+    destination:
+      site: "Sika Corporation, Lyndhurst NJ: Sika USA head office"
+      lat: 40.812
+      lon: -74.124
+      source: https://usa.sika.com/en/careers/locations.html
+      basis: >-
+        The export names the receiving company (Sika USA) by country only.
+        Lyndhurst is its head office, 15 km from Port Newark; which of its 30
+        US sites takes these goods is not in the export.
 
   - lane: LANE_MX_01
     sika_flow: CH_MX
@@ -118,6 +144,14 @@ focus_routes:
         Swiss exports usually transit through North Sea ports; Antwerp has a
         direct rail link to Basel and Zurich.
       source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
+    destination:
+      site: "Sika Mexicana, Corregidora (Querétaro): head office and plant"
+      lat: 20.545
+      lon: -100.448
+      source: https://mex.sika.com/es/contacto-sika-mexico/ubicacion.html
+      basis: >-
+        Carretera Libre a Celaya km 8.5, Corregidora. About 550 km inland
+        from Veracruz by road or rail.
 
   - lane: LANE_IN_01
     sika_flow: CH_IN
@@ -138,6 +172,14 @@ focus_routes:
         Mediterranean ports are the secondary gateway for Swiss exports, and
         the shorter sailing to India through Suez.
       source: https://cuvillier.de/uploads/preview/public_file/12318/9783736973831-Leseprobe.pdf
+    destination:
+      site: "Sika India, Navi Mumbai: registered office and plant"
+      lat: 19.035
+      lon: 73.020
+      source: https://ind.sika.com/en/about-us/sika-locations-in-india.html
+      basis: >-
+        MIDC Industrial Area, Shiravane, Nerul, Navi Mumbai: about 20 km from
+        Nhava Sheva (JNPT), the port this route arrives at.
 
 # Where sea state is read for a place whose own coordinates are on land.
 # The wave model has no value on a quay, a canal or an upper bay, so a port is

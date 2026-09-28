@@ -357,6 +357,14 @@ def test_a_route_off_the_list_claims_nothing_and_a_listed_one_counts_honestly(co
         assert d["real"] == 0, d["sources"]
     assert any(s["key"] == "watergauge_kaub" for s in by_id["LANE_ASIA_08"]["real_data"]["sources"])
     assert not any(s["key"] == "watergauge_kaub" for s in by_id["LANE_US_01"]["real_data"]["sources"])
+    # Every focus route names who receives it, with a source, so the map can
+    # mark the whole journey from the plant to the receiving company.
+    for lane_id in FIVE:
+        dest = by_id[lane_id]["real_data"]["destination"]
+        assert dest["site"] and dest["source"].startswith("http")
+        assert -90 <= dest["lat"] <= 90 and -180 <= dest["lon"] <= 180
+        stops = by_id[lane_id]["stops"]
+        assert len(stops) >= 2 and all({"id", "name", "kind", "lat", "lon"} <= set(s) for s in stops)
     json.dumps(board)                       # a date object anywhere fails this
 
 

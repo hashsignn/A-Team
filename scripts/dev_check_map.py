@@ -191,6 +191,15 @@ def main() -> int:
         check(page.evaluate("state.selected") == lane and page.locator("#panel-body").is_visible(),
               f"[sync] the panel did not open the vehicle's route {lane}",
               f"the panel opened the vehicle's route ({lane})")
+        # The same click marks the journey: where it starts, where it changes
+        # mode, the ports, and who receives it.
+        marks = page.evaluate("""(() => ({ route: (window.MapJourney.get() || {}).route_id,
+            origin: document.querySelectorAll('.jm--origin').length,
+            dest: document.querySelectorAll('.jm--dest').length,
+            all: document.querySelectorAll('.jm').length }))()""")
+        check(marks["route"] == lane and marks["origin"] == 1 and marks["dest"] == 1 and marks["all"] >= 3,
+              f"[journey] the route's sites are not marked: {marks}",
+              f"journey marked: {marks['all']} points from origin to destination")
         backdrop = page.evaluate("getComputedStyle(document.getElementById('hub')).backdropFilter")
         check("blur(10px)" in backdrop, f"[hub] no glass: backdrop-filter is {backdrop!r}",
               "glass card: backdrop-filter blur(10px)")
@@ -372,6 +381,10 @@ def main() -> int:
                        "badges": 0, "pins": 0, "chart": False},
               f"[close] something survived closing the hub: {gone}",
               "closing removes the card, charts, routes, split and partners")
+        page.locator("#d-back").click()
+        page.wait_for_timeout(300)
+        left = page.evaluate("document.querySelectorAll('.jm').length")
+        check(left == 0, f"[journey] {left} marker(s) left after Back", "Back clears the journey")
 
         # ---- themes repaint the basemap -----------------------------------
         page.locator(".theme-toggle").click()

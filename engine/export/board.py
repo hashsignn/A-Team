@@ -195,6 +195,9 @@ def _build_route(
         # pointing at Antwerp, not by reading a table of lanes and working out
         # which ones call there.
         "node_ids": _lane_node_ids(lane),
+        # Every stop with where it is, so a selected route can be marked on
+        # the map end to end: the site, each change of mode, the ports.
+        "stops": _stops(_lane_node_ids(lane), context),
         "level": verdict.level.value,
         "level_label": verdict.label,
         "directive": verdict.directive,
@@ -328,6 +331,7 @@ def _real_data(lane: dict, context: RunContext) -> dict:
         "focus": True,
         "origin": dict(route.origin),
         "port": dict(route.port),
+        "destination": dict(route.destination),
         "precarriage": _precarriage(lane, context),
         "flow": route.sika_flow,
         # Read from the gitignored flow file on this machine, or None.
@@ -856,6 +860,18 @@ def _urgency_band(hours: float | None, config) -> int:
         return 3
     level = _level_for_hours(hours, config)
     return {Level.RED: 0, Level.YELLOW: 1}.get(level, 2)
+
+
+def _stops(node_ids: list[str], context: RunContext) -> list[dict]:
+    out = []
+    for node_id in node_ids:
+        try:
+            node = context.network.node(node_id)
+        except KeyError:
+            continue
+        out.append({"id": node.id, "name": node.name, "kind": node.kind.value,
+                    "country": node.country, "lat": node.lat, "lon": node.lon})
+    return out
 
 
 def _nodes(context: RunContext) -> list[dict]:

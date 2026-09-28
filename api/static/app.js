@@ -939,6 +939,14 @@ function select(routeId, { fly, fit, ship, fromMap } = {}) {
   renderResponse(r);
   markTableRow(routeId);
   linkOps(routeId);
+  // Mark the journey on the map: where it starts, where it changes mode,
+  // the ports and the Sika company that receives it.
+  withAgent(() => {
+    if (!window.MapJourney) return;
+    const spec = journeySpec(r);
+    if (spec) spec.fit = !fromMap;
+    window.MapJourney.show(spec);
+  });
   // Highlight the lane on the 2D map too. Framed only when the pick came
   // from the list (`fit`) and the lane is off screen; a click on the map
   // itself never moves it — the planner is already looking there.
@@ -950,6 +958,66 @@ function select(routeId, { fly, fit, ship, fromMap } = {}) {
     if (mid) state.globe.pointOfView({ lat: mid[0], lng: mid[1], altitude: 2.1 }, 1100);
   }
   holdRotation();
+}
+
+/* THE JOURNEY, for the map: one point per place that matters.
+ *
+ *   origin    the Sika site it starts from (the real plant on a focus route)
+ *   transfer  where the freight changes mode (truck → barge at Basel)
+ *   port      a sea port where it is loaded or arrives
+ *   via       a choke point or gauge it passes (Suez, Kaub)
+ *   dest      the Sika company that receives it, where known (focus routes),
+ *             joined to the arrival port by a dashed on-carriage line
+ * Hover a point for the operators that run it and where the fact came from. */
+const MODE_WORD = { road: 'truck', rail: 'rail', barge: 'barge', sea: 'ship', air: 'air' };
+
+function journeySpec(r) {
+  const stops = Object.fromEntries((r.stops || []).map((x) => [x.id, x]));
+  const legs = r.legs || [];
+  if (!legs.length || !stops[legs[0].from]) return null;
+  const d = r.real_data || {};
+  const word = (m) => MODE_WORD[m] || m;
+  const short = (t) => String(t || '').split(':')[0].trim();
+  const operatorsAt = (name) => {
+    const key = String(name).split(/[ (]/)[0].toLowerCase();
+    return (d.operators || []).filter((o) => String(o.legs || '').toLowerCase().includes(key)).map((o) => o.name);
+  };
+  const points = [];
+  const push = (stop, role, label, title) => points.push({ lat: stop.lat, lon: stop.lon, role, label, title });
+
+  const o = stops[legs[0].from];
+  const originLabel = d.origin && d.origin.site ? short(d.origin.site) : `${o.name} (Sika ${o.kind === 'plant' ? 'plant' : 'site'})`;
+  push(o, 'origin', originLabel,
+    `Starts here, leaves by ${word(legs[0].mode)}.${d.origin && d.origin.basis ? `\n${d.origin.basis}` : ''}`);
+
+  legs.forEach((leg, i) => {
+    const stop = stops[leg.to];
+    if (!stop) return;
+    const next = legs[i + 1];
+    const ops = operatorsAt(stop.name);
+    const who = ops.length ? `\nRun by: ${ops.join(', ')}` : '';
+    if (!next) {
+      push(stop, stop.kind === 'seaport' ? 'port' : 'transfer', `${stop.name}: arrives by ${word(leg.mode)}`,
+        `Where this route ends.${who}`);
+    } else if (next.mode !== leg.mode) {
+      const loading = d.port && d.port.name && stop.name.startsWith(d.port.name);
+      push(stop, stop.kind === 'seaport' ? 'port' : 'transfer', `${stop.name}: ${word(leg.mode)} → ${word(next.mode)}`,
+        `${loading ? 'Port of loading. ' : ''}Changes from ${word(leg.mode)} to ${word(next.mode)}.${who}`
+        + `${loading && d.port.basis ? `\n${d.port.basis}` : ''}`);
+    } else {
+      push(stop, 'via', stop.name, `Passes ${stop.name} by ${word(leg.mode)}.`);
+    }
+  });
+
+  const dest = d.destination;
+  const last = stops[legs[legs.length - 1].to];
+  const onward = [];
+  if (dest && dest.lat != null && dest.lon != null && last) {
+    points.push({ lat: dest.lat, lon: dest.lon, role: 'dest', label: short(dest.site),
+      title: `Receives the goods.${dest.basis ? `\n${dest.basis}` : ''}` });
+    onward.push([[last.lon, last.lat], [dest.lon, dest.lat]]);
+  }
+  return { route_id: r.route_id, points, onward };
 }
 
 /* Carry the route AND the as-of across to the operational pages.
@@ -991,7 +1059,7 @@ function renderDetail(r) {
   $('d-stats').innerHTML = `
     <div class="stat">
       <div class="stat-k">Action by</div>
-      <div class="stat-v" style="color:${c}">${r.lead_time_hours == null ? 'no deadline' : hours(r.lead_time_hours)}</div>
+      <div class="stat-v" style="${r.lead_time_hours == null ? '' : `color:${c}`}">${r.lead_time_hours == null ? 'no deadline' : hours(r.lead_time_hours)}</div>
       <div class="stat-sub">${r.lead_time_hours == null ? 'nothing closes' : 'first option closes'}</div>
     </div>
     <div class="stat">
@@ -1287,7 +1355,11 @@ async function primeCompose(r) {
 
 function initResponseTabs() {
   const back = $('d-back');
-  if (back) back.addEventListener('click', showRouteList);
+  // Back to the overview: the journey markers go with the route.
+  if (back) back.addEventListener('click', () => {
+    showRouteList();
+    if (window.MapJourney) window.MapJourney.clear();
+  });
 
   document.querySelectorAll('.rtab').forEach((tab) => {
     tab.addEventListener('click', () => {

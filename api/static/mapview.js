@@ -898,6 +898,7 @@
       map.setPaintProperty('asset-halo', 'circle-stroke-color', tokenOf('--accent'));
       map.setPaintProperty('radius-fill', 'fill-color', tokenOf('--accent'));
       map.setPaintProperty('radius-line', 'line-color', tokenOf('--accent'));
+      if (map.getLayer('journey-on')) map.setPaintProperty('journey-on', 'line-color', tokenOf('--accent'));
       view.clusters.forEach((m) => { m._key = ''; });
       render(store.getState(), null, { force: true });
     });
@@ -917,9 +918,99 @@
     // once the board arrives — so a single measurement at startup is stale.
     if (topbar && root.ResizeObserver) new root.ResizeObserver(measure).observe(topbar);
 
+    // ---------------------------------------------------------------
+    // The journey of the selected route: marked only while one is open
+    // ---------------------------------------------------------------
+    /* The Sika site it starts from, every place the freight changes mode,
+     * the ports and choke points it passes, and the Sika company that
+     * receives it. Drawn when a route or a vehicle is opened, gone when it
+     * is closed: the overview stays a map of freight, not of labels.
+     * The spec comes from the board (app.js), which knows the stops. */
+    const journey = { spec: null, markers: [] };
+    const JICON = {
+      origin: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 17V9l4 2.5V9l4 2.5V6h3v-3h2v3h3v11z" fill="currentColor"/></svg>',
+      port: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="4.5" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 6.5v10M6 10h8M3.5 12a6.5 6.5 0 0 0 13 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+      transfer: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h12l-3-3M17 13H5l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      via: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l7 7-7 7-7-7z" fill="currentColor"/></svg>',
+      dest: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 18V3M5 3h10l-2.5 3.5L15 10H5" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+    };
+    const JPRIORITY = { origin: 0, dest: 1, port: 2, transfer: 3, via: 4 };
+
+    function clearJourney() {
+      journey.markers.forEach((m) => m.remove());
+      journey.markers = [];
+      const src = view.map && view.map.getSource('journey-on');
+      if (src) src.setData({ type: 'FeatureCollection', features: [] });
+    }
+
+    function drawJourney() {
+      clearJourney();
+      const map = view.map;
+      const spec = journey.spec;
+      if (!view.ready || !map || !spec) return;
+      if (!map.getSource('journey-on')) {
+        map.addSource('journey-on', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ id: 'journey-on', type: 'line', source: 'journey-on',
+          paint: { 'line-color': tokenOf('--accent'), 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 } });
+      }
+      map.getSource('journey-on').setData({ type: 'FeatureCollection', features: (spec.onward || []).map((l) =>
+        ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l } })) });
+      spec.points.forEach((p) => {
+        const node = document.createElement('div');
+        node.className = `jm jm--${p.role}`;
+        node.innerHTML = `<span class="jm-dot">${JICON[p.role] || JICON.via}</span><span class="jm-label">${esc(p.label)}</span>`;
+        node.title = p.title || p.label;
+        node.dataset.prio = String(JPRIORITY[p.role] ?? 5);
+        journey.markers.push(new root.maplibregl.Marker({ element: node, anchor: 'left', offset: [-11, 0] })
+          .setLngLat([p.lon, p.lat]).addTo(map));
+      });
+      declutter();
+    }
+
+    /* Labels that would sit on top of one another: the more important one
+     * keeps its words, the other keeps its dot (hover shows the name). */
+    function declutter() {
+      const placed = [];
+      journey.markers.map((m) => m.getElement())
+        .sort((a, b) => Number(a.dataset.prio) - Number(b.dataset.prio))
+        .forEach((el) => {
+          el.classList.remove('jm--quiet');
+          const r = el.querySelector('.jm-label').getBoundingClientRect();
+          const hit = placed.some((q) => r.left < q.right && r.right > q.left && r.top < q.bottom && r.bottom > q.top);
+          if (hit) el.classList.add('jm--quiet');
+          else placed.push(r);
+        });
+    }
+
+    /* A newly opened route is framed whole, start to receiving site. A
+     * vehicle's card frames its own recovery routes, so it asks not to. */
+    function frameJourney(spec) {
+      if (!view.ready || !spec || !spec.fit || !spec.points.length) return;
+      const b = new root.maplibregl.LngLatBounds();
+      spec.points.forEach((p) => b.extend([p.lon, p.lat]));
+      view.map.fitBounds(b, { padding: { top: 90, bottom: 60, left: 70, right: 200 }, maxZoom: 6, duration: 800 });
+    }
+
+    root.MapJourney = {
+      show(spec) {
+        const fresh = !journey.spec || !spec || journey.spec.route_id !== spec.route_id;
+        journey.spec = spec;
+        drawJourney();
+        if (fresh) frameJourney(spec);
+      },
+      clear() { journey.spec = null; clearJourney(); },
+      get() { return journey.spec; },
+    };
+
     build();
     store.subscribe((state, prev) => render(state, prev));
     render(store.getState(), null, { force: true });
+    const whenReady = setInterval(() => {
+      if (!view.ready) return;
+      clearInterval(whenReady);
+      if (journey.spec) { drawJourney(); frameJourney(journey.spec); }
+      view.map.on('moveend', () => { if (journey.markers.length) declutter(); });
+    }, 200);
     return view;
   }
 

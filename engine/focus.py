@@ -62,6 +62,9 @@ class FocusRoute:
     # source it was chosen from: the export names neither.
     origin: dict = field(default_factory=dict)
     port: dict = field(default_factory=dict)
+    # The Sika company that receives the goods at the far end, found the
+    # same way (the export names it by country code only).
+    destination: dict = field(default_factory=dict)
 
 
 def _plain(entry: dict) -> dict:
@@ -109,6 +112,8 @@ def focus_routes(config: Config) -> dict[str, FocusRoute]:
             notes=tuple(n for n in notes if lane_id in (n.get("routes") or [])),
             origin=_plain(entry["origin"]) if isinstance(entry.get("origin"), dict) else {},
             port=_plain(entry["port"]) if isinstance(entry.get("port"), dict) else {},
+            destination=(_plain(entry["destination"])
+                         if isinstance(entry.get("destination"), dict) else {}),
         )
     return out
 
