@@ -467,6 +467,9 @@
 
 /* ---- the journey of the selected route ---- */
 .jm { display: flex; align-items: center; gap: 6px; pointer-events: auto; cursor: default; }
+/* The picked journey reads above the vehicle clusters around it. */
+.maplibregl-marker.jm { z-index: 2; }
+.maplibregl-marker.jm:hover { z-index: 5; }
 .jm-dot {
   width: 22px; height: 22px; border-radius: 50%; flex: none;
   display: grid; place-items: center; color: #fff;
@@ -488,4 +491,5 @@
 .jm--via .jm-label { font-weight: 500; color: var(--text-secondary); }
 /* A label that would sit on another keeps its dot; hover shows the name. */
 .jm--quiet .jm-label { display: none; }
+.jm--flip .jm-label { position: absolute; right: calc(100% + 6px); }
 .jm:hover .jm-label { display: block; position: relative; z-index: 2; }

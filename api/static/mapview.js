@@ -974,8 +974,11 @@
       journey.markers.map((m) => m.getElement())
         .sort((a, b) => Number(a.dataset.prio) - Number(b.dataset.prio))
         .forEach((el) => {
-          el.classList.remove('jm--quiet');
-          const r = el.querySelector('.jm-label').getBoundingClientRect();
+          el.classList.remove('jm--quiet', 'jm--flip');
+          const edge = view.map.getContainer().getBoundingClientRect().right - 8;
+          let r = el.querySelector('.jm-label').getBoundingClientRect();
+          // A label running off the right edge reads to the left of its dot.
+          if (r.right > edge) { el.classList.add('jm--flip'); r = el.querySelector('.jm-label').getBoundingClientRect(); }
           const hit = placed.some((q) => r.left < q.right && r.right > q.left && r.top < q.bottom && r.bottom > q.top);
           if (hit) el.classList.add('jm--quiet');
           else placed.push(r);
