@@ -218,3 +218,24 @@ test('a lane is framed only when asked, and each ask is a new request', async ()
   await agent.focusLane('L1', undefined, { fit: true });
   assert.ok(agent.getState().fitLane.seq > first.seq);
 });
+
+test('an opened route stands alone until it is closed', async () => {
+  const { agent } = setup();
+  await agent.loadAssets();
+  const all = select.visibleAssets(agent.getState()).length;
+  assert.ok(all > 1);
+  await agent.focusLane('L1', undefined, { isolate: true });
+  let st = agent.getState();
+  assert.deepEqual(select.visibleLanes(st).map((l) => l.route_id), ['L1']);
+  assert.ok(select.visibleAssets(st).every((a) => a.lane_id === 'L1'));
+  // Highlighting a lane (a card unfolding) does not hide the others.
+  await agent.focusLane('L2');
+  st = agent.getState();
+  assert.equal(st.isolated, false);
+  assert.equal(select.visibleLanes(st).length, 2);
+  await agent.focusLane('L1', undefined, { isolate: true });
+  await agent.focusLane(null);
+  st = agent.getState();
+  assert.equal(select.visibleLanes(st).length, 2);
+  assert.equal(select.visibleAssets(st).length, all);
+});

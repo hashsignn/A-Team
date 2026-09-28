@@ -200,6 +200,12 @@ def main() -> int:
         check(marks["route"] == lane and marks["origin"] == 1 and marks["dest"] == 1 and marks["all"] >= 3,
               f"[journey] the route's sites are not marked: {marks}",
               f"journey marked: {marks['all']} points from origin to destination")
+        alone = page.evaluate("""(() => { const s = MapAgent.getState(), sel = MapStore.select;
+            return { lanes: sel.visibleLanes(s).map(l => l.route_id),
+                     other: sel.visibleAssets(s).filter(a => a.lane_id !== s.focusLane).length }; })()""")
+        check(alone["lanes"] == [lane] and alone["other"] == 0,
+              f"[focus] other routes still on the map: {alone}",
+              "an open route stands alone: no other lane, no other vehicle")
         backdrop = page.evaluate("getComputedStyle(document.getElementById('hub')).backdropFilter")
         check("blur(10px)" in backdrop, f"[hub] no glass: backdrop-filter is {backdrop!r}",
               "glass card: backdrop-filter blur(10px)")
@@ -385,6 +391,8 @@ def main() -> int:
         page.wait_for_timeout(300)
         left = page.evaluate("document.querySelectorAll('.jm').length")
         check(left == 0, f"[journey] {left} marker(s) left after Back", "Back clears the journey")
+        back = page.evaluate("MapStore.select.visibleLanes(MapAgent.getState()).length")
+        check(back > 1, f"[focus] only {back} lane(s) after Back", f"Back brings every route back ({back} lanes)")
 
         # ---- themes repaint the basemap -----------------------------------
         page.locator(".theme-toggle").click()

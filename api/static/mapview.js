@@ -611,8 +611,10 @@
 
       if (force || !prev || state.assets.meta !== prev.assets.meta) ensureBasemap(state.assets.meta);
 
+      const isolation = !prev || state.isolated !== prev.isolated
+        || (state.isolated && state.focusLane !== prev.focusLane);
       if (force || !prev || state.assets.lanes !== prev.assets.lanes || state.focusLane !== prev.focusLane
-          || state.filters.lanes !== prev.filters.lanes) {
+          || state.filters.lanes !== prev.filters.lanes || isolation) {
         map.getSource('lanes').setData(fc(select.visibleLanes(state).map((l) =>
           line(l.path, { id: l.route_id, focus: l.route_id === state.focusLane }))));
         map.setPaintProperty('lanes', 'line-width', ['case', ['get', 'focus'], 3.2, 1.1]);
@@ -620,7 +622,7 @@
       }
 
       if (force || !prev || state.assets.items !== prev.assets.items
-          || state.filters !== prev.filters || state.selection.id !== prev.selection.id) {
+          || state.filters !== prev.filters || state.selection.id !== prev.selection.id || isolation) {
         map.getSource('assets').setData(fc(select.visibleAssets(state).map((a) => ({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [a.lon, a.lat] },

@@ -61,6 +61,8 @@ const LEVEL_WHEN = {
 const state = {
   board: null,
   selected: null,
+  // True while a route is open: the map and the globe draw only that route.
+  isolate: false,
   // A ladder click shows ONLY that level; a second click shows them all.
   levelOnly: null,
   // Normal routes need nothing, so the list of affected routes leaves them
@@ -418,7 +420,7 @@ function applyBoard(board) {
  */
 function laneMarkers() {
   if (!state.board) return [];
-  return visibleRoutes()
+  return drawnRoutes()
     .map((r) => {
       const m = r.marker || {};
       if (m.lat == null || !m.affected) return null;
@@ -672,8 +674,15 @@ function sizeGlobe() {
  * single muddy line. That is the "don't cluster everything" requirement:
  * the clutter is spatial, so the fix is spatial.
  */
-function pathData() {
+/* What the map and the globe draw: the visible routes, or only the open
+ * one while a route is open. */
+function drawnRoutes() {
   const routes = visibleRoutes();
+  return state.isolate && state.selected ? routes.filter((r) => r.route_id === state.selected) : routes;
+}
+
+function pathData() {
+  const routes = drawnRoutes();
   return routes.map((r, i) => {
     const pts = [];
     r.legs.forEach((leg) => {
@@ -924,6 +933,9 @@ function select(routeId, { fly, fit, ship, fromMap } = {}) {
   if (!r) return;
   state.selected = routeId;
   state.shipFocus = ship || null;
+  // An open route stands alone on the map and the globe; closing it brings
+  // every other route back (showRouteList).
+  state.isolate = true;
   // One route in view at a time: a vehicle card for a different route is
   // closed, so the map and the panel never describe two things.
   if (!fromMap) {
@@ -950,7 +962,7 @@ function select(routeId, { fly, fit, ship, fromMap } = {}) {
   // Highlight the lane on the 2D map too. Framed only when the pick came
   // from the list (`fit`) and the lane is off screen; a click on the map
   // itself never moves it — the planner is already looking there.
-  withAgent((agent) => agent.focusLane(routeId, undefined, { fit: !!fit }));
+  withAgent((agent) => agent.focusLane(routeId, undefined, { fit: !!fit, isolate: true }));
 
   if (fly && state.globe && r.legs.length) {
     const pts = r.legs.flatMap((l) => l.path);
@@ -1361,10 +1373,7 @@ async function primeCompose(r) {
 function initResponseTabs() {
   const back = $('d-back');
   // Back to the overview: the journey markers go with the route.
-  if (back) back.addEventListener('click', () => {
-    showRouteList();
-    if (window.MapJourney) window.MapJourney.clear();
-  });
+  if (back) back.addEventListener('click', () => showRouteList());
 
   document.querySelectorAll('.rtab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -1758,6 +1767,13 @@ function showRouteList() {
   $('panel-body').hidden = true;
   $('panel-list').hidden = false;
   $('panel').scrollTop = 0;
+  // Closing a route brings every other route back, and its journey goes.
+  if (state.isolate) {
+    state.isolate = false;
+    refreshPaths();
+    withAgent((agent) => agent.focusLane(null));
+  }
+  if (window.MapJourney) window.MapJourney.clear();
 }
 
 /* How the board works, in three lines — a card over the list, opened and

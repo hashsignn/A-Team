@@ -70,6 +70,9 @@
         lanes: null, priorities: null,
       },
       focusLane: null,
+      // An opened route stands alone: every other lane and its vehicles
+      // leave the map until the route is closed.
+      isolated: false,
       // A request to frame a lane, made by an explicit pick in the list.
       // A click ON the map never frames: the planner is already looking.
       fitLane: { id: null, seq: 0 },
@@ -145,8 +148,10 @@
       case T.LANE_FOCUS: {
         const fit = a.fit && a.routeId
           ? { id: a.routeId, seq: state.fitLane.seq + 1 } : state.fitLane;
-        if ((a.routeId || null) === state.focusLane && fit === state.fitLane) return state;
-        return { ...state, focusLane: a.routeId || null, fitLane: fit };
+        const isolated = !!(a.isolate && a.routeId);
+        if ((a.routeId || null) === state.focusLane && fit === state.fitLane
+            && isolated === state.isolated) return state;
+        return { ...state, focusLane: a.routeId || null, fitLane: fit, isolated };
       }
 
       case T.ASSET_SELECT: {
@@ -304,7 +309,8 @@
 
   const select = {
     visibleAssets(s) {
-      const lanes = s.filters.lanes ? new Set(s.filters.lanes) : null;
+      const lanes = s.isolated && s.focusLane ? new Set([s.focusLane])
+        : s.filters.lanes ? new Set(s.filters.lanes) : null;
       const tiers = s.filters.priorities ? new Set(s.filters.priorities) : null;
       return s.assets.items.filter((a) =>
         (PHASES_ALWAYS.has(a.phase) || (s.filters.showBooked && a.phase === 'booked'))
@@ -313,6 +319,7 @@
         && (!tiers || tiers.has(a.customer_priority || 'B')));
     },
     visibleLanes(s) {
+      if (s.isolated && s.focusLane) return s.assets.lanes.filter((l) => l.route_id === s.focusLane);
       if (!s.filters.lanes) return s.assets.lanes;
       const lanes = new Set(s.filters.lanes);
       return s.assets.lanes.filter((l) => lanes.has(l.route_id));
