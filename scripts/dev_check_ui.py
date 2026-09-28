@@ -375,10 +375,16 @@ def _desk(page, check) -> None:
     keys = page.evaluate("state.board.key_accounts.length")
     days = page.locator("#allhands .ah2-day").count()
     check(rows == 4 + (1 if keys else 0) and days == 14
-          and page.locator("#allhands .ah2-bar").count() == 3
+          and page.locator("#allhands .ah2-tile").count() == 3
           and all(f in text for f in ("Supply Chain", "Procurement", "Manufacturing", "Controlling")),
           f"[all-hands] {rows} row(s), {days} day(s)",
-          "all-hands: when (two-week strip), why (3 limit bars), the room (4 functions)")
+          "all-hands: when (two-week strip), why (3 limit tiles), the room (4 functions)")
+    # Each limit says its number and its limit in words, never "10 / 4",
+    # which reads as "10 out of 4".
+    tiles = page.locator("#allhands .ah2-tile").all_inner_texts()
+    check(all("limit" in t and " / " not in t for t in tiles),
+          f"[all-hands] a limit tile does not say its limit plainly: {tiles}",
+          "limit tiles: today's number, 'limit N', and how far past it in words")
     if keys:
         page.locator("#allhands .ah-keys-card > summary").click()
         check(page.locator("#allhands .ah-keys-card li:visible").count() == keys,

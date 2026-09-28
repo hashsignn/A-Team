@@ -240,9 +240,9 @@ def rule_checks(verdict: ConveneVerdict, config: Config) -> list[dict]:
     so the room reads a table, not three sentences."""
     limits = (config.scoring.get("convene_rule") or {}).get("thresholds") or {}
     rows = [
-        ("Expected loss", verdict.exposure_chf, limits.get("exposure_chf"), "chf"),
-        ("Customers exposed", verdict.contracts_exposed, limits.get("contracts_exposed"), "n"),
-        (f"Decisions in {float((config.scoring.get('alert_levels') or {}).get('yellow_hours', 36)):g} h",
+        ("Exposure, all routes", verdict.exposure_chf, limits.get("exposure_chf"), "chf"),
+        ("Customers at risk", verdict.contracts_exposed, limits.get("contracts_exposed"), "n"),
+        (f"Decisions due in {float((config.scoring.get('alert_levels') or {}).get('yellow_hours', 36)):g} h",
          verdict.shipments_needing_decision,
          limits.get("shipments_needing_decision"), "n"),
     ]

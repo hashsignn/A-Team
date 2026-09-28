@@ -1586,15 +1586,29 @@ function renderAllHands() {
       title="${esc(label)}${meets ? ': all-hands' : ''}"><i>${'SMTWTFS'[wd]}</i></span>`;
   }).join('');
 
-  // Each limit as a bar: the tick is the limit, past it is crossed.
+  // Each limit as a tile: today's number, big; the limit under it in words;
+  // how far past it, said plainly. The bar is drawn to its own scale: the
+  // fill is today's number, the dark mark is the limit.
   const checks = (h.checks || []);
   const crossed = checks.filter((x) => x.crossed).length;
+  const times = (x) => {
+    if (!x.limit) return 'no limit set';
+    const r = x.value / x.limit;
+    if (x.crossed) return r >= 1.05 ? `${r.toFixed(1)}× the limit` : 'at the limit';
+    return `${Math.round(r * 100)}% of the limit`;
+  };
   const bars = checks.map((x) => {
-    const ratio = x.limit ? Math.min(x.value / x.limit, 2) : 0;
-    return `<div class="ah2-bar${x.crossed ? ' is-crossed' : ''}" title="${esc(x.label)}: ${fmt(x)} against a limit of ${lim(x)}">
-      <span class="ah2-bl">${esc(x.label)}</span>
-      <span class="ah2-track"><span class="ah2-fill" style="width:${(ratio / 2) * 100}%"></span><span class="ah2-tick"></span></span>
-      <span class="ah2-bv"><b>${fmt(x)}</b> <span class="muted">/ ${lim(x)}</span></span>
+    const top = Math.max(x.value, x.limit || 0) * 1.15 || 1;
+    const fill = Math.min(100, (x.value / top) * 100);
+    const mark = x.limit ? (x.limit / top) * 100 : null;
+    return `<div class="ah2-tile${x.crossed ? ' is-crossed' : ''}"
+        title="${esc(x.label)}: ${fmt(x)} today. The meeting goes daily at ${lim(x)}.">
+      <span class="ah2-tl">${esc(x.label)}</span>
+      <b class="ah2-tv">${fmt(x)}</b>
+      <span class="ah2-track"><span class="ah2-fill" style="width:${fill}%"></span>${
+        mark == null ? '' : `<span class="ah2-tick" style="left:${mark}%"></span>`}</span>
+      <span class="ah2-tlim"><i class="ah2-tick-key" aria-hidden="true"></i>limit ${lim(x)}</span>
+      <span class="ah2-tover">${x.crossed ? '▲ ' : ''}${times(x)}</span>
     </div>`;
   }).join('');
 
@@ -1634,7 +1648,9 @@ function renderAllHands() {
       <div class="ah2-cal" aria-label="The next two weeks">${cells}</div>
       <div class="ah2-rule"><i></i>${esc(h.change)}</div>
     </div>
-    ${bars ? `<section class="ah2-sec"><div class="ah2-title">Why: ${crossed} of ${checks.length} limits crossed</div>${bars}</section>` : ''}
+    ${bars ? `<section class="ah2-sec"><div class="ah2-title">Why ${esc(h.cadence_label)}
+      <span class="muted">· any one limit crossed makes it daily · ${crossed} of ${checks.length} crossed now</span></div>
+      <div class="ah2-tiles">${bars}</div></section>` : ''}
     <section class="ah2-sec"><div class="ah2-title">In the room <span class="muted">· click a row for its list</span></div>${keyAccountsHTML()}${rows}</section>
     <p class="ah-foot">Proposals only. Nothing is booked or approved.</p>`;
   host.querySelectorAll('li[data-route]').forEach((li) => {
