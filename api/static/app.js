@@ -1056,11 +1056,16 @@ function renderDetail(r) {
 
   $('d-name').textContent = r.name;
 
+  // Critical with money at stake and no option left is not "no deadline":
+  // the one thing left is telling the customer, and that is due now.
+  const stuck = r.lead_time_hours == null && r.level === 'red' && r.exposure_chf > 0 && !r.actions.length;
+  const by = r.lead_time_hours != null ? [hours(r.lead_time_hours), 'first option closes', true]
+    : stuck ? ['now', 'tell the customer', true] : ['no deadline', 'nothing closes', false];
   $('d-stats').innerHTML = `
     <div class="stat">
       <div class="stat-k">Action by</div>
-      <div class="stat-v" style="${r.lead_time_hours == null ? '' : `color:${c}`}">${r.lead_time_hours == null ? 'no deadline' : hours(r.lead_time_hours)}</div>
-      <div class="stat-sub">${r.lead_time_hours == null ? 'nothing closes' : 'first option closes'}</div>
+      <div class="stat-v" style="${by[2] ? `color:${c}` : ''}">${by[0]}</div>
+      <div class="stat-sub">${by[1]}</div>
     </div>
     <div class="stat">
       <div class="stat-k">Exposure</div>
