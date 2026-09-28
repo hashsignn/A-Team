@@ -1,5 +1,15 @@
 # Supply Chain Risk Radar
 
+**Update and restart in Codespaces.** Stop the server with **Ctrl+C**, then paste:
+
+```bash
+git fetch origin && git checkout claude/elegant-clarke-711wkt && git pull origin claude/elegant-clarke-711wkt && .venv/bin/python run.py serve --host 0.0.0.0
+```
+
+Open the **Ports** tab, click **port 8000**, and press **Ctrl+Shift+R** (Mac: Cmd+Shift+R)
+so the browser loads the new version. If `git pull` complains about local changes,
+run `git stash` once and paste the line again.
+
 > A supply chain planner at Sika is tracking 50–200 active shipments across
 > road, rail and sea. The world produces thousands of external events a day.
 > Almost none of them matter. **Tell the planner which ones do, early enough to
