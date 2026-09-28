@@ -82,7 +82,7 @@ def margin_rate(config: Config, product_family: str) -> tuple[float, str]:
     if isinstance(entry, (int, float)):
         return float(entry), "assumed"
 
-    return FALLBACK_MARGIN_RATE, "fallback — fast.yaml missing or incomplete"
+    return FALLBACK_MARGIN_RATE, "fallback: fast.yaml missing or incomplete"
 
 
 def floor_chf(config: Config) -> float:
@@ -142,7 +142,7 @@ def evaluate(
         shortfall = round(floor - margin, 2)
         reason = (
             f"would leave CHF {margin:,.0f} against a floor of CHF {floor:,.0f} "
-            f"— CHF {shortfall:,.0f} short"
+            f"(CHF {shortfall:,.0f} short)"
         )
 
     return Margin(

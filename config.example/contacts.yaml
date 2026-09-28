@@ -14,7 +14,7 @@
 internal:
   - id: FN_SUPPLY_CHAIN
     function: Supply Chain
-    role: Lane owner — first responder
+    role: Lane owner, first responder
     tier: 1
     response_sla_hours: 2
     convene_member: true

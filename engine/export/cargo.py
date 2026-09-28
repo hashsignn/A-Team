@@ -333,7 +333,7 @@ def report_template(shipment_id: str) -> dict:
         ],
         "socket": (
             "Not connected. Submitting this would be the first TIER-1 "
-            "OBSERVED source in the system — better than anything currently "
+            "OBSERVED source in the system, better than anything currently "
             "wired, because it is someone looking at the freight rather than "
             "a feed describing the region. It needs a store and an auth "
             "decision, both out of scope for the prototype."

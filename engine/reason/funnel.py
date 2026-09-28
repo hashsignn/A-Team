@@ -301,7 +301,7 @@ def report(cost: FunnelCost, status: llm.BackendStatus | None = None) -> dict:
         "backend": status.backend.value if status.available else "none",
         "note": (
             "Triage removes only. A 'relevant' verdict buys a full read and "
-            "nothing more — extraction and the deterministic challenger run in "
+            "nothing more: extraction and the deterministic challenger run in "
             "full, and no triage output reaches the board."
         ),
     }

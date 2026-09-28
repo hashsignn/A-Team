@@ -228,6 +228,24 @@ def _board(page, check) -> None:
           "cards ranked by level, most urgent first")
     page.screenshot(path=str(OUT / "stage.png"))
 
+    # --- the count is on the card, and Critical blinks -------------------
+    counts = page.locator("#rlist .rli .rli-count").count()
+    check(counts == n, f"[routes] {counts} of {n} cards show the shipments-at-risk count",
+          "every card shows its a/b shipments count")
+    red = page.locator("#rlist .rli.level-red .level-chip")
+    if red.count():
+        blink = red.first.evaluate("(e) => getComputedStyle(e, '::before').animationName")
+        check(blink == "crit-pulse", f"[routes] the Critical dot does not blink ({blink!r})",
+              "Critical cards carry a blinking dot")
+
+    # --- no em dash between words in what the board says -----------------
+    dashed = page.evaluate(r"""(() => {
+        const text = document.body.innerText + '\n' +
+          [...document.querySelectorAll('[title]')].map((e) => e.title).join('\n');
+        return (text.match(/\S — \S.{0,40}/g) || []).slice(0, 3); })()""")
+    check(not dashed, f"[text] em dashes still in the board text: {dashed}",
+          "no em dash between words on the board")
+
     # --- clicking a card opens that route in the panel ----------------
     target = min(3, n - 1)
     _open_card(page, check, target, "first open")
@@ -366,12 +384,28 @@ def _desk(page, check) -> None:
 
 
 def _open_card(page, check, index: int, what: str) -> None:
-    """Click the index-th card and confirm the panel opened on THAT route."""
+    """Unfold the index-th card, open it with its arrow, and confirm the
+    panel opened on THAT route."""
     card = _cards(page).nth(index)
     route_id = card.get_attribute("data-route")
     name = card.locator(".rli-name").inner_text().strip()
     card.scroll_into_view_if_needed()
-    card.click()
+    # A click on the card unfolds WHY in place; it must not leave the list.
+    main = card.locator(".rli-main")
+    if "is-open" in (card.get_attribute("class") or ""):
+        main.click()
+        page.wait_for_timeout(300)
+    main.click()
+    page.wait_for_timeout(450)
+    reasons = card.locator(".why > li").count()
+    check("is-open" in (card.get_attribute("class") or "") and reasons >= 2
+          and main.get_attribute("aria-expanded") == "true"
+          and page.locator("#panel-body").is_hidden(),
+          f"[route] clicking the card for {name!r} did not unfold its reasons in place "
+          f"({reasons} bullet(s))",
+          f"click ({what}): the card unfolds {reasons} reasons in place")
+    # The arrow opens the route itself.
+    card.locator(".rli-open").click()
     try:
         page.wait_for_function(
             "(n) => !document.getElementById('panel-body').hidden"
@@ -400,7 +434,7 @@ def _response(page, check) -> None:
         page.wait_for_timeout(300)
     card = page.locator(f'#rlist .rli[data-route="{route_id}"]')
     card.scroll_into_view_if_needed()
-    card.click()
+    card.locator(".rli-open").click()
     page.wait_for_timeout(800)
 
     check(page.locator("#d-name").inner_text().strip() not in ("", "—"),

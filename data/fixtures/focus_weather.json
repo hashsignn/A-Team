@@ -1,6 +1,6 @@
 {
  "_fixture_note": "RECORDED FROM THE LIVE SOURCE by scripts/record_fixture.py. Real response, real content, frozen at the time below so the demo replays identically.",
- "label": "RECORDED FROM OPEN-METEO — daily weather, 61 days observed and 7 forecast",
+ "label": "RECORDED FROM OPEN-METEO: daily weather, 61 days observed and 7 forecast",
  "source_url": "https://api.open-meteo.com/v1/forecast?latitude=48.783%2C51.950%2C36.920%2C46.850%2C47.564%2C50.085%2C30.000%2C2.500%2C31.360%2C51.260%2C40.670%2C19.190%2C44.402%2C18.950&longitude=9.183%2C4.140%2C-76.330%2C7.190%2C7.596%2C7.765%2C32.550%2C101.000%2C121.620%2C4.400%2C-74.040%2C-96.140%2C8.920%2C72.950&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Csnowfall_sum%2Cwind_speed_10m_max%2Cwind_gusts_10m_max&wind_speed_unit=ms&past_days=61&forecast_days=7&timezone=UTC",
  "places": [
   {

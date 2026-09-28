@@ -95,9 +95,9 @@ actionability_bands:
 # -------------------------------------------------------------------
 matrix:
   impact_bands:
-    - {id: A, label: ">100k", min_chf: 100000, action: "ESCALATE — reroute now"}
-    - {id: B, label: "10-100k", min_chf: 10000, action: "CONTINGENCY — reserve carrier"}
-    - {id: C, label: "1-10k", min_chf: 1000, action: "MITIGATE — buffer / minor"}
+    - {id: A, label: ">100k", min_chf: 100000, action: "ESCALATE: reroute now"}
+    - {id: B, label: "10-100k", min_chf: 10000, action: "CONTINGENCY: reserve carrier"}
+    - {id: C, label: "1-10k", min_chf: 1000, action: "MITIGATE: buffer / minor"}
     - {id: D, label: "<1k", min_chf: 0, action: "MONITOR"}
   probability_bands:
     - {id: P1, label: "0-0.25", max_p: 0.25}

@@ -268,7 +268,7 @@
       ['selectAsset', 'Open the Action Hub for an asset; for yellow/red also calculates recovery routes and queries partners.', { id: 'shipment id, e.g. SYN-0001' }],
       ['clearSelection', 'Close the Action Hub; routes, split and partners disappear with it.', {}],
       ['calculateRoutes', 'Recalculate recovery routes for the selected (or given) asset.', { id: 'shipment id, optional', weights: '{time,cost,risk}, optional', force: 'compute even for a green asset' }],
-      ['rankRoutes', 'Re-rank recovery routes on new Time / Cost / Risk weights.', { weights: '{time, cost, risk} — any non-negative numbers, normalised' }],
+      ['rankRoutes', 'Re-rank recovery routes on new Time / Cost / Risk weights.', { weights: '{time, cost, risk}: any non-negative numbers, normalised' }],
       ['highlightRoute', 'Highlight one route on the map (null clears).', { routeId: 'candidate id or ORIGINAL' }],
       ['chooseRoute', 'Mark a recovery route as the chosen one (the split target by default).', { routeId: 'candidate id' }],
       ['toggleSplit', 'Turn load-splitting on (evaluates the suggested split) or off.', { enabled: 'boolean' }],
@@ -287,7 +287,7 @@
         description,
         parameters: params,
         returns: 'Promise of the resulting state slice',
-        meta: 'optional last argument {actor, summary} — journalled',
+        meta: 'optional last argument {actor, summary}, journalled',
       }));
     }
 
@@ -314,7 +314,7 @@
         detail = typeof body.detail === 'string' ? body.detail
           : (Array.isArray(body.detail) ? body.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : '');
       } catch { /* not JSON */ }
-      throw new Error(`${res.status}${detail ? ` — ${detail}` : ''}`);
+      throw new Error(`${res.status}${detail ? `: ${detail}` : ''}`);
     }
     return res.json();
   }

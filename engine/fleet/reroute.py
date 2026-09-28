@@ -166,7 +166,7 @@ def recovery(board: dict, context: RunContext, shipment_id: str,
     }
 
     if not payload["eligible"]:
-        payload["note"] = "Nominal — on schedule, so no recovery route is drawn."
+        payload["note"] = "Nominal: on schedule, so no recovery route is drawn."
         return payload
     if not ahead:
         payload["note"] = (

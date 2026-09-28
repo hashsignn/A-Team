@@ -244,8 +244,8 @@ const Charts = (() => {
           <p class="why-none">Assessed as exposed, with no event raising it
              right now.</p>`}
         <p class="why__kind">${v.sourceable
-          ? 'Measured — an instrument reports this; the level can be read today.'
-          : 'Reported — no instrument publishes this; it is known only when somebody reports it.'
+          ? 'Measured: an instrument reports this, so the level can be read today.'
+          : 'Reported: no instrument publishes this, so it is known only when somebody reports it.'
         }</p>
       </li>`).join('')}</ul>`;
   }
@@ -389,7 +389,7 @@ const Charts = (() => {
             ${unsourced.length ? `<th class="mx-unsourced-h"
                 title="Nobody publishes a likelihood for these. A strike ballot
 has no percentage attached; a gauge reading does. Rather than invent one and
-put it on the axis, they are held here — the impact is known, the odds are
+put it on the axis, they are held here: the impact is known, the odds are
 not.">${escC(grid.unsourced_band.label)}</th>` : ''}
           </tr>
         </thead>

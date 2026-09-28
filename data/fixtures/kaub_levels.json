@@ -3,7 +3,7 @@
  "station": "KAUB",
  "river": "Rhine",
  "unit": "cm",
- "label": "RECORDED FROM PEGELONLINE — observed readings",
+ "label": "RECORDED FROM PEGELONLINE: observed readings",
  "is_real_data": true,
  "source_url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/KAUB/W/measurements.json?start=P30D",
  "covers": {

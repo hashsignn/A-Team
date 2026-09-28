@@ -263,7 +263,7 @@ def report() -> dict:
             "shown as a recording, not as a live read."
             if total else
             "No recorded answers. With no model installed the deterministic "
-            "router runs alone — which is a supported state, not a degraded "
+            "router runs alone, which is a supported state, not a degraded "
             "one."
         ),
     }

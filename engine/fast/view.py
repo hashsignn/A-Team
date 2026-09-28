@@ -422,7 +422,7 @@ def _sentence(summaries: list[dict], holding: int) -> str:
         when = "with no deadline computed"
     elif hours < 1:
         # "inside 0 h" reads like a rounding error rather than an emergency.
-        when = "now — the first option has already expired"
+        when = "now: the first option has already expired"
     else:
         when = f"inside {hours:.0f} h"
 
@@ -512,7 +512,7 @@ def options_for_shipment(context: RunContext, shipment_id: str) -> dict | None:
             o.as_dict() for r in rankings for o in r.expired
         ][:4],
         "sentence": (
-            f"{best.label} — resolved in {best.hours_to_resolve:.0f} h, "
+            f"{best.label}: resolved in {best.hours_to_resolve:.0f} h, "
             + ("arrives on the agreed date." if best.on_time
                else f"still {best.days_late_after:.1f} day(s) late.")
             if best else
@@ -765,7 +765,7 @@ def _replacement_note(
         else f"is running at {derate[biggest.name] * 100:.0f}% of normal"
     )
     return (
-        f"One {biggest.name} unit carries {biggest.tonnes_per_unit:,.0f} t — "
+        f"One {biggest.name} unit carries {biggest.tonnes_per_unit:,.0f} t, as much as "
         f"{road.units_to_replace(biggest.tonnes_per_unit)} trucks. "
         f"{biggest.name.capitalize()} {state}, and the {tonnes:,.0f} t "
         f"displaced here needs {road.units_to_replace(tonnes)} trucks if it "

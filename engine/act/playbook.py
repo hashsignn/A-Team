@@ -76,7 +76,7 @@ TEMPLATES: tuple[ActionTemplate, ...] = (
         cost_fraction_of_value=0.02,
         description=(
             "Sail at reduced draught and book a second sailing for the balance. "
-            "Cheaper than a rail switch, but it splits the consignment — which "
+            "Cheaper than a rail switch, but it splits the consignment, which "
             "fails OTIF on 'in full' even when the first part arrives on time."
         ),
     ),
@@ -124,7 +124,7 @@ TEMPLATES: tuple[ActionTemplate, ...] = (
         cost_fraction_of_value=0.0,
         description=(
             "Ask the carrier to prioritise this booking. The lever belongs to "
-            "them, not to us — which is exactly why it is cheap, fast, and "
+            "them, not to us, which is exactly why it is cheap, fast, and "
             "usually only worth a fraction of the delay."
         ),
     ),
@@ -212,7 +212,7 @@ def options_for(
                     feasible=False,
                     reason=(
                         f"no minimum action time configured for "
-                        f"'{template.action_type}' — cannot say whether this is "
+                        f"'{template.action_type}', so cannot say whether this is "
                         "still open"
                     ),
                 )
@@ -311,7 +311,7 @@ def _contacts_for(
     def add(fn_id: str) -> None:
         entry = by_id.get(fn_id)
         if entry and entry["function"] not in names:
-            names.append(f"{entry['function']} — {entry['role']}")
+            names.append(f"{entry['function']}: {entry['role']}")
 
     add("FN_SUPPLY_CHAIN")
 

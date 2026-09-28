@@ -101,7 +101,7 @@ class PathwayVerdict:
             harm = "scrapped" if self.irreversible else "degraded"
             return f"Cargo risk: the goods can be {harm} whether or not they arrive on time."
         if bool(self.delay):
-            return "Delay only — nothing in this consignment is harmed by the event."
+            return "Delay only. Nothing in this consignment is harmed by the event."
         return "Does not reach this shipment."
 
 
@@ -300,7 +300,7 @@ def evaluate(
     if not pathway.carries_damage():
         damage = GateDecision(
             False,
-            f"{_variable_name(config, variable_id)} cannot harm goods — it "
+            f"{_variable_name(config, variable_id)} cannot harm goods. It "
             f"only delays them.",
         )
         if cargo.get("damage_conditions"):
@@ -388,7 +388,7 @@ def evaluate(
                 damage=GateDecision(
                     False,
                     f"{asset['label']} holds the load for {autonomy:.0f} h and "
-                    f"the expected delay is {stopped:.0f} h. Protected — but "
+                    f"the expected delay is {stopped:.0f} h. Protected, but "
                     f"this is a countdown, not immunity.",
                     clash_rule="conditioned_asset_protects_vulnerable_cargo",
                 ),

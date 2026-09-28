@@ -609,13 +609,13 @@ def model_status() -> JSONResponse:
     payload["stages"] = {
         "triage": {
             "model": llm_mod.TRIAGE_MODEL if status.available else None,
-            "job": "one yes/no per headline — could this affect freight?",
+            "job": "one yes/no per headline: could this affect freight?",
             "may": "remove an item from the queue, and nothing else",
         },
         "extract": {
             "model": llm_mod.EXTRACT_MODEL if status.available else None,
             "job": "read one survivor and return structured JSON",
-            "may": "claim what happened, where and for how long — never score it",
+            "may": "claim what happened, where and for how long, never score it",
         },
     }
     payload["funnel"] = funnel_mod.report(funnel_mod.FunnelCost(), status)["note"]

@@ -97,7 +97,7 @@ def cost_of_lateness(
             reroute_flexible=bool(spec.get("reroute_flexible", False)),
             explanation=(
                 f"{late_hours:.1f} h late is inside {spec['label']}'s "
-                f"{free:.1f} h tolerance — nothing is owed."
+                f"{free:.1f} h tolerance. Nothing is owed."
             ),
         )
 
@@ -115,14 +115,14 @@ def cost_of_lateness(
         why = (
             f"{spec['label']}: CHF {cliff:,.0f} the moment the window is "
             f"missed, then CHF {per_day:,.0f}/day. {chargeable:.1f} h "
-            f"chargeable — CHF {cost:,.0f}."
+            f"chargeable: CHF {cost:,.0f}."
         )
     else:
         per_day = float(spec.get("per_day_chf", 0.0))
         cost = per_day * (chargeable / 24.0)
         why = (
             f"{spec['label']}: CHF {per_day:,.0f}/day beyond {free:.1f} h of "
-            f"tolerance. {chargeable:.1f} h chargeable — CHF {cost:,.0f}."
+            f"tolerance. {chargeable:.1f} h chargeable: CHF {cost:,.0f}."
         )
 
     return ChannelCost(

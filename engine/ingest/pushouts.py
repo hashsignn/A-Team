@@ -271,14 +271,15 @@ def observation(pattern: dict, config: Config, clock: Clock) -> dict:
         "probability": None,
         "probability_basis": (
             f"a warning sign: {pattern['orders']} orders pushed out by one carrier at "
-            f"{pattern['node_name']} in {days:.0f} days, and no announcement — whether it "
+            f"{pattern['node_name']} in {days:.0f} days, and no announcement. Whether it "
             "becomes a disruption is not known, so every figure here is IF it does"
         ),
         "modes": modes or None,
         "verbatim_quote": quote,
         "title": (
-            f"{pattern['carrier_name']} pushed out {pattern['orders']} orders at "
-            f"{pattern['node_name']} in {days:.0f} days — no official notice yet"
+            f"{pattern['carrier_name'].replace(' (synthetic stand-in)', '')} pushed out "
+            f"{pattern['orders']} orders at {pattern['node_name']} in {days:.0f} days, "
+            "no official notice yet"
         ),
         "source": "carrier booking changes" + (" (synthetic)" if pattern["synthetic"] else ""),
         "source_tier": 2,
@@ -314,7 +315,7 @@ def assess(shipments: list[Shipment], config: Config, clock: Clock,
         notices = synthetic_notices(shipments, config, clock)
         status = FeedStatus.FIXTURE
         detail = (f"{len(notices)} SYNTHETIC booking change(s), generated from the synthetic "
-                  "book — put a carrier export at config/carrier_notices.csv to read real ones")
+                  "book; put a carrier export at config/carrier_notices.csv to read real ones")
     patterns, singles = detect(notices, config, clock)
     report = FeedReport(
         key="carrier_pushouts",

@@ -216,7 +216,7 @@ def load(points: list[WatchPoint]) -> tuple[Recording | None, str]:
         return None, f"left out of this recording ({why})"
     weather = load_fixture(WEATHER_FIXTURE)
     if weather is None:
-        return None, ("not recorded yet — run scripts/record_fixture.py "
+        return None, ("not recorded yet. Run scripts/record_fixture.py "
                       f"{KEY} on a machine with a network")
     marine = load_fixture(MARINE_FIXTURE)
     try:
@@ -363,7 +363,7 @@ def _observation(rule: dict, point: WatchPoint, run: list[date],
         "threshold_source": rule.get("source", "assumed"),
         "verbatim_quote": quote,
         "title": (f"{rule.get('says', reading).capitalize()} at {point.name}"
-                  f" — {peak:.0f} {unit}, {span}"
+                  f": {peak:.0f} {unit}, {span}"
                   + (" (forecast)" if forecast else "")),
         "source": "open_meteo",
         "source_tier": 1,
@@ -427,7 +427,7 @@ def assess_weather(config: Config, clock: Clock) -> tuple[list[dict], FeedReport
     if recording is None:
         return [], FeedReport(
             key=KEY, label=LABEL, status=FeedStatus.ABSENT,
-            detail=f"{len(points)} place(s) on the focus routes — {why}",
+            detail=f"{len(points)} place(s) on the focus routes: {why}",
             unlocks_if_connected=(
                 "Storms, crane-stopping wind, high seas, flooding rain, snow and "
                 "heat at every place on the focus routes: 60 days observed and "
@@ -442,7 +442,7 @@ def assess_weather(config: Config, clock: Clock) -> tuple[list[dict], FeedReport
     detail = (f"{places} of {len(points)} place(s) from {recording.origin}; "
               f"{len(observations)} over a threshold at this as-of")
     if not at_recording:
-        detail += (f" — a replay: observed days up to {last_observed:%Y-%m-%d} "
+        detail += (f". A replay: observed days up to {last_observed:%Y-%m-%d} "
                    "only, no forecast (the one issued then was not recorded)")
     report = FeedReport(
         key=KEY, label=LABEL, status=FeedStatus.FIXTURE, detail=detail,

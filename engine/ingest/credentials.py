@@ -156,7 +156,7 @@ def issue(name: str, carrier: str | None, now: datetime,
     """Create a driver and return (record, token). The token is shown ONCE."""
     clean = (name or "").strip()[:_NAME_MAX]
     if not clean:
-        raise CredentialError("a driver needs a name — it is stamped on their reports")
+        raise CredentialError("a driver needs a name: it is stamped on their reports")
 
     path = store or DEFAULT_STORE
     records = load(path)

@@ -108,7 +108,7 @@ def _autobahn(road: str) -> SourceSpec:
     """
     return SourceSpec(
         key=f"autobahn_{road.lower()}",
-        label=f"Autobahn {road} — closures (BASt)",
+        label=f"Autobahn {road}: closures (BASt)",
         nature=Nature.REPORT,
         source_tier=1,
         url=f"https://verkehr.autobahn.de/o/autobahn/{road}/services/closure",
@@ -152,7 +152,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     # =================================================================
     SourceSpec(
         key="gdelt_doc",
-        label="GDELT — global news index",
+        label="GDELT: global news index",
         nature=Nature.REPORT,
         source_tier=2,
         url="https://api.gdeltproject.org/api/v2/doc/doc",
@@ -198,13 +198,13 @@ CATALOG: tuple[SourceSpec, ...] = (
         builtin=True,
         notes=(
             "Free, no key. Updates every 15 minutes across 100+ countries. "
-            "Returns headlines, not article bodies — the funnel reads the "
+            "Returns headlines, not article bodies. The funnel reads the "
             "headline and the source domain, which is what tier 2 means here."
         ),
     ),
     SourceSpec(
         key="wikipedia_events",
-        label="Wikipedia — Current events (curated, daily)",
+        label="Wikipedia: Current events (curated, daily)",
         nature=Nature.REPORT,
         source_tier=2,
         url="https://en.wikipedia.org/w/api.php",
@@ -236,8 +236,8 @@ CATALOG: tuple[SourceSpec, ...] = (
             days=1.0,
         ),
         unlocks_if_connected=(
-            "The day's significant events as editors judged them — a strait "
-            "threatened, sanctions announced, a national strike called — each "
+            "The day's significant events as editors judged them (a strait "
+            "threatened, sanctions announced, a national strike called), each "
             "citing its outlet. A second news archive, so the board's news "
             "does not depend on GDELT answering."
         ),
@@ -260,7 +260,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         key="gdacs",
-        label="GDACS — global disaster alerts (EU JRC)",
+        label="GDACS: global disaster alerts (EU JRC)",
         nature=Nature.REPORT,
         source_tier=1,
         # SEARCH, not MAP: MAP answers with what is current and nothing else,
@@ -296,7 +296,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         key="reliefweb",
-        label="ReliefWeb — situation reports (UN OCHA)",
+        label="ReliefWeb: situation reports (UN OCHA)",
         nature=Nature.REPORT,
         source_tier=2,
         url="https://api.reliefweb.int/v2/reports",
@@ -319,7 +319,7 @@ CATALOG: tuple[SourceSpec, ...] = (
             "sort[]": "date:desc",
         },
         unlocks_if_connected=(
-            "Ground-truth situation reports where wire coverage is thin — the "
+            "Ground-truth situation reports where wire coverage is thin: the "
             "corroborating tier-2 account that promotes a tier-3 rumour."
         ),
         fields=FieldMap(
@@ -341,7 +341,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         key="cisa_kev",
-        label="CISA KEV — actively exploited vulnerabilities",
+        label="CISA KEV: actively exploited vulnerabilities",
         nature=Nature.REPORT,
         source_tier=1,
         url="https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
@@ -379,7 +379,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     # =================================================================
     SourceSpec(
         key="usgs_quakes",
-        label="USGS — earthquakes M4.5+",
+        label="USGS: earthquakes M4.5+",
         nature=Nature.INSTRUMENT,
         source_tier=1,
         # The event query service rather than the 24-hour summary file: the
@@ -417,12 +417,12 @@ CATALOG: tuple[SourceSpec, ...] = (
         builtin=True,
         notes=(
             "Free, no key. Magnitude maps to a band by table "
-            "(thresholds.yaml → earthquake_magnitude) — no model needed."
+            "(thresholds.yaml → earthquake_magnitude). No model needed."
         ),
     ),
     SourceSpec(
         key="open_meteo_marine",
-        label="Open-Meteo — marine wave height",
+        label="Open-Meteo: marine wave height",
         nature=Nature.INSTRUMENT,
         source_tier=1,
         url="https://marine-api.open-meteo.com/v1/marine",
@@ -449,7 +449,7 @@ CATALOG: tuple[SourceSpec, ...] = (
             "shock feed: this is the class of risk an API already forecasts."
         ),
         fields=FieldMap(
-            headline="const:Marine forecast — Rotterdam approach",
+            headline="const:Marine forecast: Rotterdam approach",
             body="const:Significant wave height, hourly, five days.",
             published="current.time",
             lat="latitude",
@@ -458,7 +458,7 @@ CATALOG: tuple[SourceSpec, ...] = (
         ),
         builtin=True,
         notes=(
-            "Free, no key, includes an ERA5 archive back to 1940 — the archive "
+            "Free, no key, includes an ERA5 archive back to 1940. The archive "
             "is what makes a real hindcast possible."
         ),
     ),
@@ -468,7 +468,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     # =================================================================
     SourceSpec(
         key="entsoe_outages",
-        label="ENTSO-E — generation and grid outages",
+        label="ENTSO-E: generation and grid outages",
         nature=Nature.REPORT,
         source_tier=1,
         url="https://web-api.tp.entsoe.eu/api",
@@ -478,7 +478,7 @@ CATALOG: tuple[SourceSpec, ...] = (
         families=("infrastructure",),
         auth=Auth(kind="query", env="ENTSOE_TOKEN", name="securityToken"),
         unlocks_if_connected=(
-            "Planned and forced outages across the European grid — the earliest "
+            "Planned and forced outages across the European grid: the earliest "
             "signal that a supplier plant is about to stop producing."
         ),
         fields=FieldMap(headline="const:ENTSO-E outage"),
@@ -487,7 +487,7 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         key="opensanctions",
-        label="OpenSanctions — consolidated sanctions lists",
+        label="OpenSanctions: consolidated sanctions lists",
         nature=Nature.REPORT,
         source_tier=1,
         url="https://api.opensanctions.org/search/default",

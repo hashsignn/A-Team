@@ -40,13 +40,13 @@ function glyph(mode) {
 // ---------------------------------------------------------------
 function statRow(v) {
   const cells = [
-    ['ACTION BY', v.lead_time_hours == null ? '—'
+    ['Action by', v.lead_time_hours == null ? '—'
       : (v.lead_time_hours < 48 ? `${Math.round(v.lead_time_hours)} h`
          : `${Math.round(v.lead_time_hours / 24)} days`),
       'until the first option closes'],
-    ['EXPOSURE', chf(v.exposure_chf), `${v.shipments_affected} of ${v.shipments_total} consignments`],
-    ['ALREADY HIT', String(v.totals.affected), 'no option left'],
-    ['NEED A DECISION', String(v.totals.at_risk), 'still time to change them'],
+    ['Exposure', chf(v.exposure_chf), `${v.shipments_affected} of ${v.shipments_total} consignments`],
+    ['Already hit', String(v.totals.affected), 'no option left'],
+    ['Need a decision', String(v.totals.at_risk), 'still time to change them'],
   ];
   $('rt-stats').innerHTML = cells.map(([label, value, note]) => `
     <div class="rt-stat">
@@ -197,9 +197,9 @@ function selectVehicle(shipmentId, legIndex) {
           }).join('')}</div>` : ''}
           ${r.lat != null ? `<div class="rep-line"><b>Fix:</b> ${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}${r.accuracy_m ? ` ±${Math.round(r.accuracy_m)} m` : ''}</div>` : ''}
         </div>`).join('')}</div>`
-    : `<p class="socket" title="A first-hand confirmation is what releases a re-route.">No field report yet — file one at <a href="/driver">/driver</a>.</p>`;
+    : `<p class="socket" title="A first-hand confirmation is what releases a re-route.">No field report yet. File one at <a href="/driver">/driver</a>.</p>`;
 
-  $('rt-vehicle-title').textContent = `${veh.shipment_id} — ${WORD[veh.status]}`;
+  $('rt-vehicle-title').textContent = `${veh.shipment_id} · ${WORD[veh.status]}`;
   $('rt-vehicle').innerHTML = `
     ${journey}
     ${where}
@@ -428,7 +428,7 @@ async function boot() {
   const v = await res.json();
   state.view = v;
 
-  document.title = `${v.name} — Risk Radar`;
+  document.title = `${v.name} · Risk Radar`;
   $('rt-name').textContent = v.name;
   $('rt-chip').textContent = v.level_label || v.level;
   $('rt-chip').className = `level-chip level-${v.level}`;

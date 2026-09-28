@@ -692,7 +692,7 @@ def _assign(
         over = deferred_tonnes - defer_cap_tonnes
         limits.append(
             f"{deferred_tonnes:,.0f} t cannot be moved inside "
-            f"{horizon_hours:,.0f} h — {over:,.0f} t beyond what may be deferred"
+            f"{horizon_hours:,.0f} h: {over:,.0f} t beyond what may be deferred"
         )
     for missing in sorted(no_equipment):
         limits.append(
@@ -705,11 +705,11 @@ def _assign(
         if available and math.ceil(used.get(name, 0.0)) >= available:
             derated = share.get(name, 1.0)
             note = (
-                f" — and it is running at {derated * 100:.0f}% of normal"
+                f", and it is running at {derated * 100:.0f}% of normal"
                 if derated < 1.0 else ""
             )
             limits.append(
-                f"{name} is at its ceiling — {available:,.0f} "
+                f"{name} is at its ceiling: {available:,.0f} "
                 f"{unit_name(name, available)} is all this corridor has "
                 f"inside {horizon_hours:,.0f} h{note}"
             )
@@ -825,7 +825,7 @@ def plans(
             "consolidate",
             "Freight first, trucks for the rest",
             "Fill the high-capacity modes before touching the road market. "
-            "Fewest external units, lowest cost per tonne — and the slowest "
+            "Fewest external units, lowest cost per tonne, and the slowest "
             "to start, which is the price of it.",
             displaced, capacities, horizon,
             blocked=blocked, share=share,
@@ -848,7 +848,7 @@ def plans(
             "balanced",
             "Cheapest mix that still holds the date",
             "Per consignment, the cheapest mode that still makes ITS date. "
-            "Not the cheapest plan and not the fastest — the cheapest one "
+            "Not the cheapest plan and not the fastest: the cheapest one "
             "that does not cost a delivery.",
             displaced, capacities, horizon,
             blocked=blocked, share=share,
@@ -971,7 +971,7 @@ def _restore_deferred(
         short = True
         limits += (
             f"{deferred_t:,.0f} t cannot be moved inside "
-            f"{plan.horizon_hours:,.0f} h — "
+            f"{plan.horizon_hours:,.0f} h: "
             f"{deferred_t - cap_tonnes:,.0f} t beyond what may be deferred",
         )
 

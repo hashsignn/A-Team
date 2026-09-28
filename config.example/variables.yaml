@@ -121,7 +121,7 @@ variables:
       River level below the threshold at which vessels must reduce loaded
       draught. Barges sail part-loaded, so the same tonnage needs more
       sailings and low-water surcharges apply. This is a CAPACITY DERATE,
-      not a stoppage — traffic continues at reduced payload.
+      not a stoppage: traffic continues at reduced payload.
     modes_affected: [barge]
     typical_lead_time_hours: 240
     typical_duration_days: 14
@@ -308,7 +308,7 @@ variables:
     family: geopolitical
     name: Regulatory change
     description: >
-      New or changed regulation affecting movement of the cargo — chemical
+      New or changed regulation affecting movement of the cargo: chemical
       classification, packaging, documentation, emissions rules.
     modes_affected: [sea, road, rail, barge]
     typical_lead_time_hours: 2160
@@ -433,7 +433,7 @@ variables:
     name: Rail engineering works
     description: >
       Planned possession or line closure. Known far in advance and therefore
-      cheap to plan around — if anyone notices it.
+      cheap to plan around, if anyone notices it.
     modes_affected: [rail]
     typical_lead_time_hours: 1440
     typical_duration_days: 7
@@ -622,8 +622,8 @@ variables:
     name: Carrier pushing out orders
     description: >
       One carrier moving several bookings later at the same place within a
-      few days — rolled containers, cancelled train paths, postponed barge
-      departures — with no announced cause. How disruptions usually reach
+      few days (rolled containers, cancelled train paths, postponed barge
+      departures) with no announced cause. How disruptions usually reach
       the desk before anyone declares one (Sika). A sign, not a stoppage:
       raised from the carrier's own booking changes (engine/ingest/pushouts.py).
     modes_affected: [sea, barge, rail, road]

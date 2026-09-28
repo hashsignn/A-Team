@@ -205,7 +205,7 @@ def build(board: dict, context, route: dict) -> dict:
             {"label": a["crew"]["role"], "value": a["crew"]["name"]
                 + ("" if a["crew"].get("verified") else " (synthetic roster)")},
             {"label": "Position", "value": f"{detail['position']['lat']:.3f}, "
-                f"{detail['position']['lon']:.3f} — {detail['position']['source']}"},
+                f"{detail['position']['lon']:.3f} · {detail['position']['source']}"},
             {"label": "Leg", "value": f"{detail['leg']['from_name']} → {detail['leg']['to_name']}"},
             {"label": "Due", "value": _when(detail["logistics"]["committed"])},
         ]
@@ -229,7 +229,7 @@ def build(board: dict, context, route: dict) -> dict:
     top = candidates[:3]
     route_lines = [
         {"label": c.get("badge") or f"#{c['rank']}",
-         "value": f"{c['label']} — {c['delta']['text']}"
+         "value": f"{c['label']}: {c['delta']['text']}"
                   + (f", CO₂e {c['delta']['co2e_pct']:+.0f}%"
                      if c["delta"].get("co2e_pct") is not None else "")}
         for c in top
@@ -238,7 +238,7 @@ def build(board: dict, context, route: dict) -> dict:
 
     reroute = Path(
         "reroute", "Reroute the shipment",
-        "Move the freight onto a different route — sea, rail or road — "
+        "Move the freight onto a different route (sea, rail or road) "
         "around the disruption.",
         [
             Block("reroute.inventory", "reroute", "Check inventory and stock cover",
@@ -317,7 +317,7 @@ def build(board: dict, context, route: dict) -> dict:
                   info=[{"label": "Suggestion",
                          "value": (split_plan or {}).get("suggestion_reason") or "—"}]),
             Block("split.book", "split", "Book the fast route for them",
-                  "Road is priced per truck — that is what makes a partial move pay.",
+                  "Road is priced per truck. That is what makes a partial move pay.",
                   procurement, procurement.get("sla_hours") or respond,
                   info=_split_info(split_plan)),
             Block("split.approve", "split", "Obtain approval", approval_note,
@@ -428,7 +428,7 @@ def _approver(config, candidates: list[dict], controlling: dict, manager: dict
     return manager, (
         "Within the delegated limit"
         + (f" of {_chf(float(limit))}" if limit is not None else "")
-        + " — the lane owner approves.")
+        + ". The lane owner approves.")
 
 
 def _port_options(context, route: dict, candidates: list[dict], disruption: dict) -> dict:
@@ -444,7 +444,7 @@ def _port_options(context, route: dict, candidates: list[dict], disruption: dict
                        if leg["new"] and leg["mode"] == "sea"), None) or \
             next((leg["to"]["id"] for leg in best["legs"] if leg["new"]), None)
         name = nodes[alt_id].name if alt_id in nodes else best["label"]
-        info = [{"label": c.get("badge") or f"#{c['rank']}", "value": f"{c['label']} — {c['delta']['text']}"}
+        info = [{"label": c.get("badge") or f"#{c['rank']}", "value": f"{c['label']}: {c['delta']['text']}"}
                 for c in swaps[:3]]
         if alt_id in local and local[alt_id]:
             v = local[alt_id][0]
@@ -554,7 +554,7 @@ def evaluate(graph: dict, completed: set[str] | None = None,
         (s for s in (current or {}).get("steps", []) if s["state"] == ACTIVE), None)
     caution = None
     if chosen and not root_done:
-        caution = ("The situation on site has not been confirmed yet. You can act — "
+        caution = ("The situation on site has not been confirmed yet. You can act, "
                    "but you are acting on the feeds alone.")
 
     return {

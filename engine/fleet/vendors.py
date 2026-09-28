@@ -125,7 +125,7 @@ def partners(context: RunContext) -> list[dict]:
             "adr_certified": None,
             "reefer": None,
             "contact": {"phone": None, "email": None, "portal": o.get("website")},
-            "source": "focus.yaml — checked against a public page",
+            "source": "focus.yaml, checked against a public page",
             "checked_against": o.get("source"),
             "checked": o.get("checked"),
             "note": o.get("note"),
@@ -216,15 +216,15 @@ def _serviceable(p: dict, route: dict, shipment, teu: int) -> dict:
     if shipment.dangerous_goods and needs & {"road", "rail"}:
         if p["adr_certified"] is False:
             legal = False
-            reasons.append("not ADR-certified — cannot carry this dangerous-goods load")
+            reasons.append("not ADR-certified: cannot carry this dangerous-goods load")
         elif p["adr_certified"] is None:
-            reasons.append("ADR certification unknown — confirm before booking")
+            reasons.append("ADR certification unknown: confirm before booking")
     if shipment.temperature_controlled:
         if p["reefer"] is False:
             legal = False
             reasons.append("no reefer equipment for temperature-controlled cargo")
         elif p["reefer"] is None:
-            reasons.append("reefer capability unknown — confirm before booking")
+            reasons.append("reefer capability unknown: confirm before booking")
 
     capacity = "unknown"
     cap = p.get("capacity")
@@ -235,7 +235,7 @@ def _serviceable(p: dict, route: dict, shipment, teu: int) -> dict:
         if capacity != "full" and physical:
             reasons.append(f"{available} available, {needed} {cap.get('unit', 'units')} needed")
     elif physical:
-        reasons.append("capacity not on file — call to confirm")
+        reasons.append("capacity not on file: call to confirm")
 
     return {
         "route_id": route["id"],

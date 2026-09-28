@@ -84,7 +84,7 @@ function render() {
         <div class="act-list" id="acts">
           ${options.length
             ? options.map((o, i) => FastUI.optionHTML(o, i === 0)).join('')
-            : '<p class="note-row">No option makes the date and pays — tell the customer and re-agree the date.</p>'}
+            : '<p class="note-row">No option makes the date and pays. Tell the customer and re-agree the date.</p>'}
         </div>
         <div id="undo"></div>
       </div>
@@ -133,7 +133,7 @@ function foldsHTML(row) {
              </table>`
           : '<p class="note-row">Nothing was discarded on cost.</p>'}
         ${row.expired
-          ? `<p class="note-row">${row.expired} expired — not enough notice left.</p>` : ''}
+          ? `<p class="note-row">${row.expired} expired: not enough notice left.</p>` : ''}
       </div>
     </details>
 
@@ -162,7 +162,7 @@ function foldsHTML(row) {
                    <strong>${FastUI.esc(i.headline)}</strong>
                    <div class="when">${FastUI.esc(i.at)}</div>
                    <div>${FastUI.esc(i.detail || '')}</div></li>`).join('')}</ul>`
-          : '<p class="note-row">No field report yet — file one at <a href="/driver">/driver</a>.</p>'}
+          : '<p class="note-row">No field report yet. File one at <a href="/driver">/driver</a>.</p>'}
       </div>
     </details>`;
 }

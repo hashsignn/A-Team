@@ -97,7 +97,7 @@ function headlineHTML(row) {
         <h3>What to do</h3>
         <span class="hint">${hasOwn
           ? 'One click runs it. You get 15 minutes to pull it back.'
-          : 'Nothing here is ours to execute — these are calls to make.'}</span>
+          : 'Nothing here is ours to execute. These are calls to make.'}</span>
       </div>
       <div class="act-list" id="acts">
         ${options.length
@@ -296,7 +296,7 @@ function startUndoCountdown() {
         bar.innerHTML = `
           <div class="undo">
             <strong>Running.</strong>
-            <span>The window to pull this back has closed — it is a call to
+            <span>The window to pull this back has closed. It is a call to
             the carrier now, not a click.</span>
           </div>`;
       }
@@ -348,10 +348,10 @@ document.addEventListener('toggle', async (event) => {
            <tr><th>Channel</th><th>Message</th></tr>
            ${data.messages.slice(-12).reverse().map((m) => `
              <tr><td>${FastUI.esc(m.channel)}</td>
-                 <td>${FastUI.esc(m.body.action || m.body.type)} —
+                 <td>${FastUI.esc(m.body.action || m.body.type)} ·
                      ${FastUI.esc(m.body.shipment_id || '')}</td></tr>`).join('')}
          </table>
-         <p class="note-row">Recorded, not sent — the channel is not wired.</p>`
+         <p class="note-row">Recorded, not sent: the channel is not wired.</p>`
       : '<p class="note-row">Nothing recorded.</p>';
   } catch {
     box.innerHTML = '<p class="note-row">Could not read the outbox.</p>';

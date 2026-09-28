@@ -89,7 +89,7 @@ class Flows:
                 "The lane mix and the month-by-month volume come from Sika's "
                 "own order history instead of from a weighting we chose. "
                 "Consignment value and promised dates stay declared either "
-                "way — they are not in the export."
+                "way. They are not in the export."
             ),
         }
 
@@ -101,7 +101,7 @@ def load(path: Path | None = None) -> Flows:
         return Flows(
             available=False,
             detail=(
-                "not present — the lane mix is a weighting we chose, not "
+                "not present. The lane mix is a weighting we chose, not "
                 "Sika's. Run scripts/import_sika_flows.py against their "
                 "export to replace it."
             ),
@@ -150,7 +150,7 @@ def load(path: Path | None = None) -> Flows:
             f"pair(s), {ordered[0]} to {ordered[-1]}"
             if ordered else f"{total:,} purchase document(s)"
         ) + (
-            f" (read as {encoding} — an older import wrote it; re-run "
+            f" (read as {encoding}: an older import wrote it; re-run "
             "scripts/import_sika_flows.py to rewrite it as UTF-8)"
             if textfiles.legacy(encoding) else ""
         ),

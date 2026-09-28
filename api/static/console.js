@@ -52,7 +52,7 @@ async function load() {
     render();
   } catch (err) {
     $('console').innerHTML = `
-      <p class="cons-loading">Could not open this lane — ${esc(err.message)}.
+      <p class="cons-loading">Could not open this lane: ${esc(err.message)}.
       <a href="/">Back to the radar</a>.</p>`;
   }
 }
@@ -71,7 +71,7 @@ function render() {
       <p class="cause">${esc(c.reason)}</p>
     </div>
 
-    <p class="cons-freeform" title="The stages record what has been settled, not a sequence you have to walk.">Any order — jump to a stage above, or act on one consignment from its row.</p>
+    <p class="cons-freeform" title="The stages record what has been settled, not a sequence you have to walk.">Any order. Jump to a stage above, or act on one consignment from its row.</p>
 
     <dl class="cons-facts">
       <div class="cons-fact"><dt>Directive</dt><dd style="font-size:15px">${esc(c.directive)}</dd></div>
@@ -204,10 +204,10 @@ function trailHTML(f) {
   }
   const rows = f.trail.slice().reverse().map((t) => {
     const what = t.kind === 'choose'
-      ? `chose <b>${esc(t.label)}</b>${t.followed_recommendation ? ' (as suggested)' : ' — not the suggested path'}`
+      ? `chose <b>${esc(t.label)}</b>${t.followed_recommendation ? ' (as suggested)' : ' (not the suggested path)'}`
       : t.kind === 'reopen' ? `reopened <b>${esc(t.label)}</b>`
       : `completed <b>${esc(t.label)}</b>`;
-    return `<li><time>${esc(when(t.at))}</time> <span>${esc(t.actor)} ${what}${t.note ? ` — ${esc(t.note)}` : ''}</span></li>`;
+    return `<li><time>${esc(when(t.at))}</time> <span>${esc(t.actor)} ${what}${t.note ? `: ${esc(t.note)}` : ''}</span></li>`;
   }).join('');
   return `<details class="flow-trail" open><summary>Decision trail (${f.trail.length})</summary><ol>${rows}</ol></details>`;
 }
@@ -254,7 +254,7 @@ function renderRail(c) {
     return `
       <button type="button" class="${cls}" data-jump="${esc(s.stage)}"
               style="--fill:${Math.round(s.progress * 100)}%"
-              title="Jump to ${esc(s.title)} — nothing here is locked">
+              title="Jump to ${esc(s.title)}. Nothing here is locked">
         <span class="rail-seg-top">
           <span class="rail-seg-num">${s.settled ? '✓' : i + 1}</span>
           ${esc(s.title)}
@@ -298,7 +298,7 @@ function stepHTML(step) {
   const review = step.state === 'evidence'
     ? `<button type="button" class="tool tool--review"
                data-step="${esc(step.step_id)}" data-tool="review">
-         Reviewed — settle it
+         Reviewed, settle it
        </button>` : '';
 
   return `
@@ -318,7 +318,7 @@ function stepHTML(step) {
           ${step.evidence.map((e) => `
             <div class="ev-row">
               <span class="ev-tag ev-tag--${esc((e.weight || '').replace(/\s+/g, '-'))}">${esc(e.weight || e.kind)}</span>
-              <span>${esc(e.text)}${e.detail ? ` — ${esc(e.detail)}` : ''}
+              <span>${esc(e.text)}${e.detail ? `: ${esc(e.detail)}` : ''}
                 ${e.at ? `<span class="ev-tag" style="border:0;padding-left:6px">${esc(when(e.at))}</span>` : ''}</span>
             </div>`).join('')}
         </div>` : ''}
@@ -390,7 +390,7 @@ async function press(btn) {
     if (!res.ok) throw new Error(payload.detail || res.statusText);
     handle(stepId, payload);
   } catch (err) {
-    show(stepId, `<p class="note-line bad">That did not run — ${esc(err.message)}.</p>`);
+    show(stepId, `<p class="note-line bad">That did not run: ${esc(err.message)}.</p>`);
   } finally {
     btn.disabled = false;
     btn.textContent = original;
@@ -478,7 +478,7 @@ function consignmentsHTML(rows) {
 
   return `
     <p class="out-title">${risk.length} of ${rows.length} consignments in scope
-      — every row acts on its own</p>
+      · every row acts on its own</p>
     <table class="dtable">
       <tr><th>Consignment</th><th>Customer</th><th class="num">Value</th>
           <th>Committed</th><th>Decide within</th><th>Fastest option</th>
@@ -568,7 +568,7 @@ function matrixHTML(rows) {
         </tr>`).join('')}
     </table>
     <p class="note-line">The grid itself, full size and shaded by CHF, is on
-      the lane page — this is the same data at a size that fits a step.</p>`;
+      the lane page. This is the same data at a size that fits a step.</p>`;
 }
 
 function ladderHTML(rows) {
@@ -633,7 +633,7 @@ function optionsHTML(payload) {
         ${o.executable
           ? `<button type="button" class="tool tool--primary exec"
                      data-option="${esc(o.option_id)}">Execute it</button>`
-          : `<span class="note-line">${esc(o.owner)} owns this lever — call, do not click</span>`}
+          : `<span class="note-line">${esc(o.owner)} owns this lever. Call, do not click</span>`}
       </div>`).join('')}
     ${(payload.vetoed || []).length ? `
       <p class="note-line">${payload.vetoed.length} option(s) were discarded for
@@ -669,14 +669,14 @@ function wireRowTools(stepId) {
 
         out.hidden = false;
         if (payload.kind === 'options') {
-          out.innerHTML = `<p class="out-title">${esc(shipment)} —
+          out.innerHTML = `<p class="out-title">${esc(shipment)}:
             ${esc(payload.sentence || '')}</p>` + optionsHTML(payload);
           wireExecuteIn(out, stepId);
         } else if (payload.kind === 'draft') {
           out.innerHTML = draftHTML(payload.draft);
           wireCopyIn(out);
         } else if (payload.kind === 'dispatch') {
-          out.innerHTML = `<p class="out-title">${esc(shipment)} — asked</p>
+          out.innerHTML = `<p class="out-title">${esc(shipment)}: asked</p>
             <p class="note-line">${esc(payload.dispatch.sentence)}</p>`;
         }
         out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

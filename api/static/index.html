@@ -221,6 +221,11 @@
             &larr; All routes
           </button>
           <span class="level-chip" id="d-chip"></span>
+          <!-- The route's own page (matrix, charts, every consignment): a
+               small icon, not a sentence. -->
+          <a class="icon-btn d-page" id="link-route" href="#" title="Route page: matrix and charts" aria-label="Route page">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M6 13V8M10 13V4M14 13v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </a>
           <h2 id="d-name"></h2>
           <p class="directive" id="d-directive"></p>
           <p class="reason" id="d-reason"></p>
@@ -233,14 +238,6 @@
              own tab, so the actions stay where they always were. -->
         <p class="alloc-line" id="d-alloc"></p>
 
-        <!-- Onward to the route's own page, which is where the risk matrix,
-             the radar and the per-consignment grid live at a size somebody
-             can actually read them. -->
-        <div class="d-ops">
-          <a class="ctl ctl--primary ctl--wide" id="link-route" href="#">
-            Open route page &mdash; matrix &amp; charts
-          </a>
-        </div>
 
         <!-- Two tabs, not three. Escalation used to be its own tab, which
              meant deciding what to do and telling people about it were two
@@ -293,7 +290,7 @@
               <!-- BRIEF §8.2: the surface is real and says plainly what is not
                    connected, rather than faking a delivery that never happened. -->
               <p class="socket" title="No mail path is wired. A mail relay or a Teams/Slack webhook would make this a one-click send, recorded.">
-                Not sent from here &mdash; opens in your mail app.
+                Not sent from here: opens in your mail app.
               </p>
             </div>
           </div>
@@ -312,7 +309,7 @@
 
         </div>
 
-        <p class="advisory">Advisory only &mdash; you decide.</p>
+        <p class="advisory">Advisory only. You decide.</p>
       </div>
     </aside>
   </div>
@@ -341,7 +338,7 @@
     <p class="reserved-title">Reserved</p>
     <p class="reserved-note">
       The affected routes moved up beside the globe. This band is kept for
-      what the board cannot say yet — how things are trending, not just how
+      what the board cannot say yet: how things are trending, not just how
       they stand.
     </p>
   </div>

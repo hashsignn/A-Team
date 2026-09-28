@@ -1,6 +1,6 @@
 {
  "_fixture_note": "RECORDED FROM THE LIVE SOURCE by scripts/record_fixture.py. Real response, real content, frozen at the time below so the demo replays identically.",
- "label": "RECORDED FROM OPEN-METEO — daily sea, 61 days observed and 7 forecast",
+ "label": "RECORDED FROM OPEN-METEO: daily sea, 61 days observed and 7 forecast",
  "source_url": "https://marine-api.open-meteo.com/v1/marine?latitude=51.980%2C36.950%2C29.600%2C2.500%2C30.550%2C51.420%2C40.450%2C19.250%2C44.350%2C18.900&longitude=3.950%2C-75.950%2C32.600%2C101.000%2C122.150%2C3.450%2C-73.830%2C-96.020%2C8.900%2C72.780&daily=wave_height_max&past_days=61&forecast_days=7&timezone=UTC",
  "places": [
   {

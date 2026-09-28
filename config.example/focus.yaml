@@ -44,10 +44,10 @@ focus_routes:
     sika_flow: DE_US
     why: >
       Rail from the Kornwestheim terminal next to Sika's Stuttgart site to
-      Rotterdam — the cheapest way to the port by far — then the North
+      Rotterdam (the cheapest way to the port by far), then the North
       Atlantic to Norfolk.
     origin:
-      site: "Sika Deutschland, Stuttgart — head office, research centre and production"
+      site: "Sika Deutschland, Stuttgart: head office, research centre and production"
       source: https://deu.sika.com/de/ueber-sika/wie-sie-uns-finden/standorte.html
       basis: >-
         Sika's export names the supplying company by code, never by place.
@@ -62,10 +62,10 @@ focus_routes:
     sika_flow: CH_CN
     why: >
       The cheapest way from Düdingen to Rotterdam is the Rhine barge from
-      Basel, past Kaub — and it is the one leg low water takes away. Then
+      Basel, past Kaub, and it is the one leg low water takes away. Then
       Suez, the Red Sea and Malacca.
     origin:
-      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      site: "Sika Manufacturing AG, Düdingen: adhesives, membranes, joint tapes"
       source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
       basis: >-
         Sika's export names the supplying company by code, never by place. Sika
@@ -82,10 +82,10 @@ focus_routes:
   - lane: LANE_US_01
     sika_flow: CH_US
     why: >
-      Road to Basel, the Schweizerzug to Antwerp — as cheap as the barge and
-      two days faster — then New York.
+      Road to Basel, the Schweizerzug to Antwerp (as cheap as the barge and
+      two days faster), then New York.
     origin:
-      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      site: "Sika Manufacturing AG, Düdingen: adhesives, membranes, joint tapes"
       source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
       basis: >-
         Sika's export names the supplying company by code, never by place. Sika
@@ -105,7 +105,7 @@ focus_routes:
       Road to Basel, rail to Antwerp, then the Gulf of Mexico to Veracruz in
       hurricane season.
     origin:
-      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      site: "Sika Manufacturing AG, Düdingen: adhesives, membranes, joint tapes"
       source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
       basis: >-
         Sika's export names the supplying company by code, never by place. Sika
@@ -122,10 +122,10 @@ focus_routes:
   - lane: LANE_IN_01
     sika_flow: CH_IN
     why: >
-      Road to Basel, the direct train to Genoa — cheaper than trucking over
-      the Simplon — then Suez and the Arabian Sea to Nhava Sheva.
+      Road to Basel, the direct train to Genoa (cheaper than trucking over
+      the Simplon), then Suez and the Arabian Sea to Nhava Sheva.
     origin:
-      site: "Sika Manufacturing AG, Düdingen — adhesives, membranes, joint tapes"
+      site: "Sika Manufacturing AG, Düdingen: adhesives, membranes, joint tapes"
       source: https://www.sika.com/en/media/insights/sikanews/delivering-products-from-duedingen-to-the-world-for-over-50-year.html
       basis: >-
         Sika's export names the supplying company by code, never by place. Sika
@@ -191,7 +191,7 @@ operators:
     checked: 2026-09-26
     note: "Scheduled barge from the Basel border triangle to Antwerp and Rotterdam, run with four coupled units of about 342–348 TEU each (its announcement)."
 
-  - name: OOCL — Basel inland services
+  - name: "OOCL: Basel inland services"
     role: ocean carrier, inland haulage from Basel
     legs: Basel → Rotterdam (rail or barge) / Antwerp (rail)
     routes: [LANE_ASIA_08, LANE_US_01, LANE_MX_01]
@@ -202,7 +202,7 @@ operators:
     checked: 2026-09-26
     note: "Published transit from Basel: Rotterdam in 2 days by rail or 4 by barge (Mon/Wed/Fri); Antwerp in 3 days by rail."
 
-  - name: Swissterminal — Schweizerzug
+  - name: "Swissterminal: Schweizerzug"
     role: container rail, Switzerland ↔ Antwerp
     legs: Basel-Frenkendorf / Zurich-Niederglatt → Antwerp
     routes: [LANE_US_01, LANE_MX_01]
@@ -213,7 +213,7 @@ operators:
     checked: 2026-09-27
     note: "The Schweizerzug links the port of Antwerp directly with Frenkendorf near Basel and Niederglatt near Zurich (Swissterminal). The rail leg these two routes are drawn on: it prices the same as the barge and is two days faster."
 
-  - name: PSA Italy / Swissterminal — Genoa rail link
+  - name: "PSA Italy / Swissterminal: Genoa rail link"
     role: container rail, Switzerland ↔ Genoa
     legs: Basel-Frenkendorf → Genoa-Pra'
     routes: [LANE_IN_01]
@@ -225,7 +225,7 @@ operators:
     note: "Export cut-off 17:00 on Mondays, Wednesdays and Fridays in Frenkendorf, in Genoa at 11:00 the next day (Swissterminal; PSA Italy announced it as the first direct rail link between Genoa and Switzerland). Cheaper than trucking over the Simplon."
 
   # ---- rail from Stuttgart ------------------------------------------
-  - name: Hupac — Kornwestheim–Rotterdam shuttle
+  - name: "Hupac: Kornwestheim–Rotterdam shuttle"
     role: intermodal rail operator
     legs: Stuttgart (Kornwestheim) → Rotterdam
     routes: [LANE_US_04]
@@ -237,7 +237,7 @@ operators:
     note: "Launched in 2018 from the DUSS terminal at Kornwestheim on Mondays, Wednesdays and Fridays (RailFreight). Confirm it still runs in Hupac's Shuttle Net timetable before booking."
 
   # ---- rail out of Antwerp, and across the Alps ---------------------
-  - name: Hupac — Antwerp network
+  - name: "Hupac: Antwerp network"
     role: intermodal rail operator
     legs: Antwerp ↔ Switzerland, Italy, Germany
     routes: [LANE_US_01, LANE_MX_01]
@@ -248,7 +248,7 @@ operators:
     checked: 2026-09-26
     note: "About 80 trains a week from Antwerp to Italy, Switzerland, Germany and beyond: the rail alternative to trucking from Switzerland to Antwerp."
 
-  - name: Hupac — Basel–Busto Arsizio
+  - name: "Hupac: Basel–Busto Arsizio"
     role: intermodal rail operator
     legs: Basel → northern Italy (Busto Arsizio)
     routes: [LANE_IN_01]
@@ -257,10 +257,10 @@ operators:
     website: https://www.hupac.com/
     source: https://www.hupac.com/
     checked: 2026-09-26
-    note: "Hupac announced a strengthened Basel–Busto Arsizio service (its front page). Rail across the Alps to the Milan area, then road to Genoa — a way round an Alpine road closure, not a door-to-port service."
+    note: "Hupac announced a strengthened Basel–Busto Arsizio service (its front page). Rail across the Alps to the Milan area, then road to Genoa: a way round an Alpine road closure, not a door-to-port service."
 
   # ---- North Atlantic ------------------------------------------------
-  - name: Maersk / Hapag-Lloyd — Gemini TA3
+  - name: "Maersk / Hapag-Lloyd: Gemini TA3"
     role: ocean carriers (Gemini Cooperation)
     legs: Rotterdam → Newark → Norfolk
     routes: [LANE_US_04]
@@ -271,7 +271,7 @@ operators:
     checked: 2026-09-26
     note: "Rotation from January 2026: Southampton – Rotterdam – Hamburg – Wilhelmshaven – Newark – Norfolk – Philadelphia – Saint John (FreightWaves, 16 Dec 2025)."
 
-  - name: CMA CGM — NEW Liberty Bridge
+  - name: "CMA CGM: NEW Liberty Bridge"
     role: ocean carrier
     legs: Antwerp / Rotterdam → New York → Norfolk
     routes: [LANE_US_01, LANE_US_04]
@@ -280,10 +280,10 @@ operators:
     website: https://www.cma-cgm.com/
     source: https://www.cma-cgm.com/news/5313/cma-cgm-transatlantic-north-europe-service-update
     checked: 2026-09-26
-    note: "Southampton, Antwerp, Rotterdam, Bremerhaven, Le Havre, New York, Norfolk, Charleston, Savannah — first sailing 27 March 2026 (CMA CGM, 13 Feb 2026)."
+    note: "Southampton, Antwerp, Rotterdam, Bremerhaven, Le Havre, New York, Norfolk, Charleston, Savannah. First sailing 27 March 2026 (CMA CGM, 13 Feb 2026)."
 
   # ---- Gulf of Mexico ------------------------------------------------
-  - name: CMA CGM — Victory Bridge
+  - name: "CMA CGM: Victory Bridge"
     role: ocean carrier
     legs: Antwerp / Rotterdam → Veracruz
     routes: [LANE_MX_01]
@@ -294,7 +294,7 @@ operators:
     checked: 2026-09-26
     note: "Southampton, Rotterdam, Antwerp, Bremerhaven, Veracruz, Altamira, Houston, New Orleans (CMA CGM, 13 Feb 2026)."
 
-  - name: Maersk / Hapag-Lloyd — Gemini TA4/AL4
+  - name: "Maersk / Hapag-Lloyd: Gemini TA4/AL4"
     role: ocean carriers (Gemini Cooperation)
     legs: Rotterdam / Antwerp → Veracruz
     routes: [LANE_MX_01]
@@ -306,7 +306,7 @@ operators:
     note: "Revised in July 2026: Southampton – Rotterdam – Antwerp – Bremerhaven – Wilhelmshaven – Veracruz – Altamira – Miami (Kuehne+Nagel carrier update)."
 
   # ---- Suez, Asia and India ----------------------------------------
-  - name: Maersk / Hapag-Lloyd — Gemini AE5
+  - name: "Maersk / Hapag-Lloyd: Gemini AE5"
     role: ocean carriers (Gemini Cooperation)
     legs: Rotterdam ↔ Ningbo, via Suez
     routes: [LANE_ASIA_08]
@@ -317,7 +317,7 @@ operators:
     checked: 2026-09-26
     note: "Qingdao – Ningbo – Tanjung Pelepas – Suez – London – Bremerhaven – Hamburg – Rotterdam – Algeciras – Suez; back through Suez westbound from 21 Sep 2026 (Maersk advisory of 14 Sep). Calls Ningbo, next to Shanghai, not Shanghai itself."
 
-  - name: OOCL / COSCO — Asia–Europe Loop 2 (LL2)
+  - name: "OOCL / COSCO: Asia–Europe Loop 2 (LL2)"
     role: ocean carriers (Ocean Alliance)
     legs: Rotterdam ↔ Shanghai
     routes: [LANE_ASIA_08]
@@ -328,7 +328,7 @@ operators:
     checked: 2026-09-26
     note: "Published sailing schedule with Shanghai and Rotterdam calls. Which way round Africa or through Suez depends on the sailing: check the schedule."
 
-  - name: CMA CGM — MEDEX (Med Express)
+  - name: "CMA CGM: MEDEX (Med Express)"
     role: ocean carrier
     legs: Genoa → Suez → Nhava Sheva
     routes: [LANE_IN_01]

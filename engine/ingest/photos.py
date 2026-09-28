@@ -65,7 +65,7 @@ def sniff(data: bytes) -> tuple[str, str]:
             continue
         return ext, media
     raise PhotoError(
-        "not a JPEG, PNG or WebP — checked by content, not by file name"
+        "not a JPEG, PNG or WebP (checked by content, not by file name)"
     )
 
 

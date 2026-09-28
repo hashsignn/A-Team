@@ -138,7 +138,7 @@ def run(
     # second.
     flow_mix = flows_mod.load()
     calibrated = (
-        " — lane mix calibrated against Sika's own order history"
+        ", lane mix calibrated against Sika's own order history"
         if flow_mix.available else ""
     )
     bundle.add(
@@ -147,7 +147,7 @@ def run(
             label="Internal shipment book",
             status=FeedStatus.FIXTURE,
             detail=(
-                f"{len(shipments)} SYNTHETIC shipments — generated, not Sika "
+                f"{len(shipments)} SYNTHETIC shipments: generated, not Sika "
                 f"data{calibrated}"
             ),
             unlocks_if_connected=(
@@ -1133,14 +1133,14 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
     absent = [
         (
             "portwatch",
-            "IMF PortWatch — port traffic & chokepoint disruption",
+            "IMF PortWatch: port traffic & chokepoint disruption",
             "coarse and weekly-ish; usable, not a live congestion feed",
             "Congestion and chokepoint exposure on intercontinental lanes.",
         ),
         (
             "portops",
             "Port operating hours, holidays, strike notices",
-            "no clean API exists for this anywhere — it has to be socketed",
+            "no clean API exists for this anywhere. It has to be socketed",
             "The most predictable constraints in the whole system, known months ahead.",
         ),
         (
@@ -1173,7 +1173,7 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
             "social_x",
             "X / Twitter firehose",
             "paid API; not wired",
-            "Earliest signal on strikes and incidents — typically hours before "
+            "Earliest signal on strikes and incidents, typically hours before "
             "trade press, which is where the lead time comes from.",
         ),
         # ---- the rest of the supply-chain API surface -------------------
@@ -1194,7 +1194,7 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
         (
             "notices_to_mariners",
             "Port authority notices & Notices to Mariners",
-            "no common format — each authority publishes its own PDF or RSS "
+            "no common format. Each authority publishes its own PDF or RSS "
             "(Rotterdam, Antwerp, Hamburg and Singapore all differ)",
             "Authoritative closures, draught restrictions and lock outages "
             "at tier 1, which is the only tier allowed to move a date on its "
@@ -1202,16 +1202,16 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
         ),
         (
             "copernicus_marine",
-            "Copernicus Marine / EMODnet — wave, current, sea ice",
+            "Copernicus Marine / EMODnet: wave, current, sea ice",
             "free with registration; this environment's egress proxy blocks "
             "the host",
             "Significant wave height and current on the deep-sea legs, which "
-            "is what actually decides a weather routing diversion — wind "
+            "is what actually decides a weather routing diversion. Wind "
             "speed alone does not.",
         ),
         (
             "waterinfo_nl",
-            "Rijkswaterstaat Waterinfo — Dutch waterway levels & lock status",
+            "Rijkswaterstaat Waterinfo: Dutch waterway levels & lock status",
             "open API; blocked here alongside the German gauge",
             "The lower Rhine and the Dutch canal network. Kaub sets the "
             "loading limit, but a lock outage at Tiel strands the same barge.",
@@ -1222,7 +1222,7 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
             "TAF/TSI feeds require an operator agreement; the public portals "
             "are HTML",
             "Planned possessions months ahead and live disruption on the "
-            "rail legs — the mode a barge derate reroutes ONTO, so its "
+            "rail legs: the mode a barge derate reroutes ONTO, so its "
             "capacity is what decides whether the reroute is real.",
         ),
         (

@@ -99,7 +99,7 @@ layer2_assets:
     family: road
     description: >
       Open deck. Wind-exposed while loaded and while travelling, and
-      weather-exposed in a way a box trailer is not — sheeting is not a roof.
+      weather-exposed in a way a box trailer is not. Sheeting is not a roof.
     open_deck: true
     wind_sensitive: true
     touches_terminals: false
@@ -113,7 +113,7 @@ layer2_assets:
     family: road
     description: >
       Side-loading tautliner. High-sided and light, so it is the first
-      equipment banned or blown over in a gale — a curtain is a sail.
+      equipment banned or blown over in a gale. A curtain is a sail.
     open_deck: false
     wind_sensitive: true
     touches_terminals: false
@@ -155,7 +155,7 @@ layer2_assets:
     description: >
       Liquid bulk under ADR. Tunnel-restricted by hazard class, banned from
       many low-emission and curfew zones, and not substitutable at short
-      notice — the fleet is small and the driver needs an ADR certificate.
+      notice: the fleet is small and the driver needs an ADR certificate.
     adr: true
     tunnel_restricted: true
     open_deck: false
@@ -184,7 +184,7 @@ layer2_assets:
     description: >
       Self-unloading vehicle for sites with no dock or handling equipment.
       Where the receiving site cannot unload without it, there is no
-      substitute vehicle — the constraint is at the kerb, not on the road.
+      substitute vehicle. The constraint is at the kerb, not on the road.
     self_unloading: true
     open_deck: true
     wind_sensitive: true
@@ -235,7 +235,7 @@ layer2_assets:
     family: water
     description: >
       Intercontinental. Long transit means large absolute delays, and a
-      missed sailing rolls a full service interval — typically a week.
+      missed sailing rolls a full service interval, typically a week.
     touches_terminals: true
     powered_conditioning: false
     driver_hours_bound: false
@@ -247,7 +247,7 @@ layer2_assets:
     family: air
     description: >
       The expedite of last resort. ADR classes are heavily restricted or
-      forbidden, so it is NOT a universal substitute — see the clash rules.
+      forbidden, so it is NOT a universal substitute (see the clash rules).
       Modelled under the sea mode until the network gains an air mode; the
       gate reads the asset, not the mode, so nothing downstream is wrong.
     touches_terminals: true
@@ -378,7 +378,7 @@ layer4_cargo:
     label: Freeze-critical (water-based)
     description: >
       Water-based dispersions, polymer emulsions, admixtures. Below the
-      threshold the emulsion breaks — irreversible coagulation — and the
+      threshold the emulsion breaks (irreversible coagulation) and the
       product is scrap, not late.
     damage_conditions:
       - condition: ambient_below_c
@@ -449,7 +449,7 @@ layer4_cargo:
   moisture_sensitive:
     label: Moisture-sensitive packaging
     description: >
-      Dry powders in paper sacks — cement, mortar, tile adhesive. Rain during
+      Dry powders in paper sacks: cement, mortar, tile adhesive. Rain during
       an open-deck leg or a pneumatic transfer ruins the sack and sometimes
       the product. Sheeting reduces this; it does not remove it.
     damage_conditions:
@@ -461,7 +461,7 @@ layer4_cargo:
     families_at_risk: [climate]
 
   adr_class_3:
-    label: ADR Class 3 — flammable liquid
+    label: "ADR Class 3: flammable liquid"
     description: Solvent-borne products. Tunnel category restrictions bite hardest here.
     adr_class: "3"
     damage_conditions: []               # not damaged by weather; RESTRICTED by regulation
@@ -472,7 +472,7 @@ layer4_cargo:
     families_at_risk: []
 
   adr_class_8:
-    label: ADR Class 8 — corrosive
+    label: "ADR Class 8: corrosive"
     description: Acids and caustics. Segregation rules limit consolidation options.
     adr_class: "8"
     damage_conditions: []
@@ -483,7 +483,7 @@ layer4_cargo:
     families_at_risk: []
 
   adr_class_9:
-    label: ADR Class 9 — environmentally hazardous
+    label: "ADR Class 9: environmentally hazardous"
     description: >
       Marine pollutants. The regulatory exposure is on the WATER legs, and a
       spill is a reportable event rather than a delay.
@@ -581,7 +581,7 @@ layer1_pathways:
       pathway: both
       why: >
         Delay for everyone, but genuinely a damage pathway for open-deck and
-        high-sided equipment — a curtain-sider is a sail, and load shift on a
+        high-sided equipment. A curtain-sider is a sail, and load shift on a
         flatbed is a real loss, not a late arrival.
       damage_requires_asset_flag: wind_sensitive
 
@@ -601,8 +601,8 @@ layer1_pathways:
     MEC_CARGO_FIRE:
       pathway: both
       why: >
-        The only mechanical variable that reaches the goods. The others —
-        breakdown, collision, grounding — strand the freight without harming
+        The only mechanical variable that reaches the goods. The others
+        (breakdown, collision, grounding) strand the freight without harming
         what is inside it.
 
     # --- force majeure that is delay-only ---
@@ -643,7 +643,7 @@ clash_rules:
       is invulnerable; the shipment is still days late. Scoring it on the
       damage pathway would be a false Red, and scoring it at zero would miss
       a real delay. It is scored on delay alone, at the channel's own
-      tolerance, and the board says "no cargo risk, four days late" — which
+      tolerance, and the board says "no cargo risk, four days late", which
       is the true sentence.
 
   - id: critical_channel_zero_vulnerability
@@ -685,7 +685,7 @@ clash_rules:
     when: "two or more events gate the same leg in overlapping windows"
     resolve: max_per_pathway_not_sum
     why: >
-      A strike and a blizzard on one corridor do not queue end to end — the
+      A strike and a blizzard on one corridor do not queue end to end: the
       trucks are stopped once. Delay is the worst of the concurrent events,
       per pathway, which is what the Monte Carlo already does. Damage does
       NOT combine this way: a freeze and a theft risk are independent harms

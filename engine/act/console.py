@@ -242,7 +242,7 @@ def _corroboration_evidence(route: dict) -> list[dict]:
         if tier is None:
             continue
         tiers.setdefault(int(tier), []).append(
-            f"{event.get('source', 'unnamed source')} — {event.get('title', '')}"
+            f"{event.get('source', 'unnamed source')} · {event.get('title', '')}"
         )
     out = []
     for tier in sorted(tiers):
@@ -357,7 +357,7 @@ def build(
     ]
     scope.tools = [
         Tool("show.consignments", "List them", REVEAL,
-             "Every consignment — and each row acts on its own",
+             "Every consignment, and each row acts on its own",
              primary=True, data_key="consignments"),
         Tool("show.atrisk", "Only the affected", REVEAL,
              "Hide the ones running to plan", data_key="at_risk"),
@@ -451,7 +451,7 @@ def build(
     ran = [e for e in executions if not e.get("undone")]
     choose.data = {"options": []}   # filled by the API from the fast optimiser
     choose.evidence = [
-        {"kind": "executed", "text": f"{e['label']} — {e['shipment_id']}",
+        {"kind": "executed", "text": f"{e['label']} · {e['shipment_id']}",
          "at": e["executed_at"], "weight": "executed"}
         for e in ran[:5]
     ]
@@ -521,7 +521,7 @@ def build(
     ]
     record.tools = [
         Tool("build.record", "Write the record", RUN,
-             "Assembled from what actually ran — not typed twice",
+             "Assembled from what actually ran, not typed twice",
              primary=True),
         Tool("export.record", "Download the pack", LINK,
              "PDF, the same one the escalation attaches",
@@ -616,9 +616,9 @@ def _caution(steps: list[Step]) -> dict | None:
     return {
         "level": "warn",
         "text": (
-            "Nothing has confirmed this yet from "
+            "Not confirmed yet. Still open: "
             + ", ".join(s.label.lower() for s in unsettled)
-            + ". You can still act — the undo window is the safety net — but "
+            + ". You can still act (the undo window is the safety net), but "
             "you are acting on a single unconfirmed signal."
         ),
     }

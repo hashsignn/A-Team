@@ -202,7 +202,7 @@ async function drain() {
         // never help either, and this is the failure most likely to go
         // unnoticed: the queue would grow quietly while the driver believed
         // every report had landed. So it comes out, and it says what to do.
-        logRejected(row, 'this phone is not authorised — ask the planner for '
+        logRejected(row, 'this phone is not authorised. Ask the planner for '
                        + 'a new link, then send again');
         state.authFailed = true;
         renderAuth();
@@ -243,7 +243,7 @@ function renderQueue() {
 function logSent(report) {
   const el = document.createElement('div');
   el.className = 'dv-sent';
-  el.innerHTML = `<b>Sent</b> ${esc(report.shipment_id)} — ${esc(report.status)}
+  el.innerHTML = `<b>Sent</b> ${esc(report.shipment_id)} · ${esc(report.status)}
     <em>${esc(report.observed_at.slice(11, 16))} UTC</em>`;
   $('dv-log').prepend(el);
 }
@@ -251,7 +251,7 @@ function logSent(report) {
 function logRejected(row, why) {
   const el = document.createElement('div');
   el.className = 'dv-sent is-bad';
-  el.innerHTML = `<b>Not accepted</b> ${esc(row.payload.shipment_id || '')} —
+  el.innerHTML = `<b>Not accepted</b> ${esc(row.payload.shipment_id || '')}:
     ${esc(why)}`;
   $('dv-log').prepend(el);
 }
@@ -301,7 +301,7 @@ async function loadAsk(shipment) {
         && $('f-eta').closest('.dv-field').classList.add('is-wanted');
     }
     $('dv-confirm-wrap').hidden = false;
-    $('dv-confirm-label').textContent = 'Yes — I can see this happening';
+    $('dv-confirm-label').textContent = 'Yes, I can see this happening';
     $('dv-confirm-note').textContent =
       'Only tick this if you can actually see it. It is what lets the office '
       + 'change the route.';
@@ -351,7 +351,7 @@ $('f-gps').addEventListener('click', () => {
    *
    * The words the driver still can type are unaffected; only the pin is. */
   if (!window.isSecureContext) {
-    $('f-gps').textContent = 'needs https — type where you are instead';
+    $('f-gps').textContent = 'needs https. Type where you are instead';
     $('f-gps').title =
       'Browsers only give a position on https or localhost. The forwarded '
       + 'Codespaces URL is https and works; a plain http://<ip>:8000 address '

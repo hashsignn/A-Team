@@ -195,7 +195,7 @@ def execute(
     if not option.executable:
         return Refusal(
             False, "not ours",
-            f"{option.owner} owns this lever — we can ask, not execute. "
+            f"{option.owner} owns this lever. We can ask, not execute. "
             f"Use the contacts on the option.",
         )
     if option.cost_chf > 0 and not option.margin.viable:
@@ -275,7 +275,7 @@ def undo(
     if now >= execution.undo_until:
         return Refusal(
             False, "window closed",
-            "the undo window has passed — this is now a phone call to the "
+            "the undo window has passed. This is now a phone call to the "
             "carrier, not a click",
         )
 

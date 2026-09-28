@@ -88,8 +88,8 @@ CLASH_TEXT = {
     ),
     "critical_channel_zero_vulnerability": (
         "Critical channel, no cargo risk",
-        "The channel's consequence stands in full — a stopped line costs the "
-        "same whatever was on the pallet — but it does not manufacture a "
+        "The channel's consequence stands in full (a stopped line costs the "
+        "same whatever was on the pallet), but it does not manufacture a "
         "cargo risk that physics says is absent.",
     ),
     "conditioned_asset_protects_vulnerable_cargo": (

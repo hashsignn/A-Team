@@ -341,7 +341,7 @@ def from_path(
         label=f"Reroute via {via}",
         detail=(
             f"{path.hours:.0f} h moving over {path.distance_km:,.0f} km by "
-            f"{'/'.join(sorted({m.value for m in path.modes}))} — "
+            f"{'/'.join(sorted({m.value for m in path.modes}))}: "
             f"{' → '.join(node_names)}."
         ),
         owner="us",
@@ -384,7 +384,7 @@ def from_local(
         on_time=days_late <= 0.0,
         cost_chf=option.cost_chf,
         margin=margin_mod.evaluate(shipment, config, option.cost_chf, days_late),
-        contacts=(f"{option.vendor} — {option.phone}",) if option.phone else (),
+        contacts=(f"{option.vendor}: {option.phone}",) if option.phone else (),
     )
 
 

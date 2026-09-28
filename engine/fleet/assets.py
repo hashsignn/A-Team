@@ -192,17 +192,17 @@ def status_of(context: RunContext, shipment: Shipment,
 
     if damaged:
         level = "red"
-        reason = "Damage reported from site — a field report outranks every forecast."
+        reason = "Damage reported from site. A field report outranks every forecast."
     elif stopped:
         level = "red"
         reason = (f"Reported {latest['status']} from site at "
                   f"{latest['observed_at'][:16].replace('T', ' ')} UTC.")
     elif delay_h >= float(cfg["minor_max_hours"]):
         level = "red"
-        reason = f"{title}: expected +{_hours_text(delay_h)} at destination."
+        reason = f"{title}. Expected +{_hours_text(delay_h)} at destination."
     elif delay_h > float(cfg["nominal_max_hours"]):
         level = "yellow"
-        reason = f"{title}: expected +{_hours_text(delay_h)} at destination."
+        reason = f"{title}. Expected +{_hours_text(delay_h)} at destination."
     else:
         level = "green"
         reason = (
@@ -538,9 +538,9 @@ def _logs(context: RunContext, shipment: Shipment, where: dict, status: dict,
         "at": as_of.isoformat(),
         "kind": "schedule",
         "level": status["level"],
-        "title": f"{status['label']} — {PHASE_LABEL[phase]}",
+        "title": f"{status['label']} · {PHASE_LABEL[phase]}",
         # No GPS/AIS feed is connected: the position is the plan's, not a fix.
-        "detail": detail + " Planned position — no GPS feed.",
+        "detail": detail + " Planned position, no GPS feed.",
         "source": "schedule",
     })
 
@@ -635,7 +635,7 @@ def _radar(context: RunContext, risks: list[ShipmentRisk], reports: list[dict],
             if axis is None:
                 continue
             hours[axis] += delay_h * share / total
-            name = f"{var.name} — {_short(getattr(event, 'title', risk.event_id), 56)}"
+            name = f"{var.name} · {_short(getattr(event, 'title', risk.event_id), 56)}"
             if name not in drivers[axis]:
                 drivers[axis].append(name)
 

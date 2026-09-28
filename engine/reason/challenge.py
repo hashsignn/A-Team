@@ -98,7 +98,7 @@ class Verdict:
             flags = ", ".join(c.name for c in self.failures)
             return f"Model output accepted with flags: {flags}."
         reasons = "; ".join(c.detail for c in self.blocking_failures)
-        return f"Model output rejected — {reasons}. Using the rules router."
+        return f"Model output rejected: {reasons}. Using the rules router."
 
     def as_dict(self) -> dict:
         return {
@@ -155,7 +155,7 @@ def grounded(extraction: Extraction, source_text: str) -> Check:
     if len(quote) < MIN_QUOTE_CHARS:
         return Check(
             "grounded", False,
-            f"quote is {len(quote)} characters — too short to be evidence "
+            f"quote is {len(quote)} characters, too short to be evidence "
             f"(minimum {MIN_QUOTE_CHARS})",
             blocking=True,
         )
@@ -308,7 +308,7 @@ def delay_plausible(extraction: Extraction, config: Config) -> Check:
             "delay_plausible", False,
             f"pessimistic estimate {triple.pessimistic:.1f} d is more than "
             f"{DELAY_TOLERANCE:g}x the family's own worst case "
-            f"({ceiling / DELAY_TOLERANCE:.1f} d) — worth a look",
+            f"({ceiling / DELAY_TOLERANCE:.1f} d). Worth a look",
         )
     return Check(
         "delay_plausible", True,

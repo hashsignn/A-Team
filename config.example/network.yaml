@@ -102,7 +102,7 @@ nodes:
     alternatives: [DEDUI]
 
   - id: GAUGE_KAUB
-    name: Kaub (Rhine gauge — governing shallow point)
+    name: Kaub (Rhine gauge, governing shallow point)
     kind: gauge
     country: DE
     lat: 50.085

@@ -109,7 +109,7 @@ def standing_teams(level: Level, config: Config) -> list[Contact]:
                 name=entry["function"],
                 role=entry["role"],
                 group="standing_team",
-                why=f"Convened at {level.value} — responds within "
+                why=f"Convened at {level.value}. Responds within "
                     f"{entry['response_sla_hours']} h.",
                 email=entry.get("contact"),
                 phone=entry.get("phone"),
@@ -242,7 +242,7 @@ def approval_needed(cost_chf: float, config: Config) -> dict | None:
         "email": approver.get("contact"),
         "note": (
             f"CHF {cost_chf:,.0f} is above the delegated limit of "
-            f"CHF {float(limit):,.0f} — {approver.get('function', 'Controlling')} "
+            f"CHF {float(limit):,.0f}. {approver.get('function', 'Controlling')} "
             "must release it."
         ),
     }

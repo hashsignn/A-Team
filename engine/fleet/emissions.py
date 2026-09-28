@@ -35,6 +35,6 @@ def provenance(cfg: dict) -> dict:
         "method": e["method"],
         "source": e["source"],
         "g_co2e_per_tkm": factors(cfg),
-        "scope": "delivery leg after the factory gate — where Sika's Carbon Compass stops",
+        "scope": "delivery leg after the factory gate, where Sika's Carbon Compass stops",
         "indicative": True,
     }

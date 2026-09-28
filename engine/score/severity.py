@@ -71,7 +71,7 @@ LEVEL_LABEL: dict[Level, str] = {
 
 LEVEL_DIRECTIVE: dict[Level, str] = {
     Level.GREEN: "No action required",
-    Level.WHITE: "Monitor closely — watch for changes",
+    Level.WHITE: "Monitor closely and watch for changes",
     Level.BLUE: "Determine action within 3–7 days",
     Level.YELLOW: "Take action within 24–48 hours",
     Level.RED: "Take action within 6 hours",
@@ -345,8 +345,8 @@ def classify(
         return Verdict(
             level=Level.WHITE,
             reason=(
-                f"{len(risks)} shipment(s) intersect an event, but buffers absorb it "
-                f"— exposure below CHF {material_floor:,.0f}. Monitor for change."
+                f"{len(risks)} shipment(s) intersect an event, but buffers absorb it: "
+                f"exposure below CHF {material_floor:,.0f}. Monitor for change."
             ),
             lead_time_hours=None,
             exposure_chf=exposure,
@@ -434,7 +434,7 @@ def classify(
         if drivers:
             reason += (
                 f" Treated as {working['effective_hours']:.0f} h rather than "
-                f"{working['raw_hours']:.0f} h — {' and '.join(drivers)}."
+                f"{working['raw_hours']:.0f} h: {' and '.join(drivers)}."
             )
     if capped and cap_reason:
         reason += " " + cap_reason

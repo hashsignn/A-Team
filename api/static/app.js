@@ -216,7 +216,7 @@ function initDesk() {
   const pick = $('f-site');
   const sites = state.board.sites || [];
   pick.innerHTML = '<option value="">All sites</option>' + sites.map((x) =>
-    `<option value="${esc(x.id)}">${esc(x.name)} — ${x.routes} route${x.routes === 1 ? '' : 's'}${
+    `<option value="${esc(x.id)}">${esc(x.name)} · ${x.routes} route${x.routes === 1 ? '' : 's'}${
       x.urgent_routes ? `, ${x.urgent_routes} urgent` : ''}</option>`).join('');
   if (state.site && !sites.some((x) => x.id === state.site)) state.site = '';
   pick.value = state.site;
@@ -334,7 +334,7 @@ async function reload(asOf) {
     if (window.MapAgent) window.MapAgent.loadAssets({ as_of: asOf, shipments: params.shipments });
   } catch (err) {
     console.error(err);
-    $('brand-sub').textContent = `could not load that instant — ${err.message}`;
+    $('brand-sub').textContent = `could not load that instant: ${err.message}`;
   } finally {
     stage.classList.remove('is-loading');
     $('asof-apply').disabled = false;
@@ -765,7 +765,7 @@ function renderLadder(levels) {
   $('ladder').innerHTML = rows.map((l) => {
     const count = mine ? mine.filter((r) => r.level === l.level).length : null;
     return `
-    <button type="button" class="rung${state.hidden.has(l.level) ? ' is-off' : ''}"
+    <button type="button" class="rung${state.hidden.has(l.level) ? ' is-off' : ''}${count ? ' has-items' : ''}"
             data-level="${l.level}" title="${esc(l.directive)}"
             aria-pressed="${!state.hidden.has(l.level)}">
       <span class="rung-dot" style="background:${LEVEL_COLOR[l.level]}"></span>
@@ -818,9 +818,9 @@ function focusBadge(r) {
   const full = d.of > 0 && d.real === d.of;
   const none = d.real === 0;
   const detail = (d.sources || [])
-    .map((s) => `${s.real ? 'real' : 'not real yet'} — ${s.label}`).join('\n');
+    .map((s) => `${s.real ? '✓' : '✗'} ${s.label}${s.real ? '' : ' (not real yet)'}`).join('\n');
   return `<span class="rli-real${full ? ' is-full' : ''}${none ? ' is-none' : ''}"
-      title="${esc(detail)}">Focus · ${d.real}/${d.of} real</span>`;
+      title="${esc(detail)}">Real data ${d.real}/${d.of}</span>`;
 }
 
 // ===============================================================
@@ -877,6 +877,7 @@ function renderDetail(r) {
   const chip = $('d-chip');
   chip.textContent = r.level_label;
   chip.style.color = c;
+  chip.className = `level-chip level-${r.level}`;
 
   $('d-name').textContent = r.name;
   $('d-directive').textContent = r.directive;
@@ -1137,7 +1138,7 @@ async function primeCompose(r) {
     .filter(Boolean);
 
   $('send-to').value = recipients.join(', ');
-  $('send-subject').value = `[${r.level_label}] ${r.name} — action by ${hours(r.lead_time_hours)}`;
+  $('send-subject').value = `[${r.level_label}] ${r.name}: action by ${hours(r.lead_time_hours)}`;
   $('send-body').value = 'loading summary…';
 
   const params = new URLSearchParams(state.params || readParams());
@@ -1152,7 +1153,7 @@ async function primeCompose(r) {
       `?subject=${encodeURIComponent($('send-subject').value)}` +
       `&body=${encodeURIComponent(text)}`;
   } catch (err) {
-    $('send-body').value = `could not build the summary — ${err.message}`;
+    $('send-body').value = `could not build the summary: ${err.message}`;
   }
 }
 
@@ -1178,7 +1179,7 @@ function initResponseTabs() {
     } catch {
       // Clipboard needs a secure context, which a plain-http demo box is not.
       $('send-body').select();
-      btn.textContent = 'Selected — press Ctrl+C';
+      btn.textContent = 'Selected. Press Ctrl+C';
     }
     setTimeout(() => { btn.textContent = 'Copy'; }, 2200);
   });
@@ -1283,7 +1284,7 @@ function renderAllHands() {
     </div>
     ${keyAccountsHTML()}
     ${cards}
-    <p class="ah-foot">Proposals only — nothing is booked or approved.</p>`;
+    <p class="ah-foot">Proposals only. Nothing is booked or approved.</p>`;
   host.querySelectorAll('li[data-route]').forEach((li) => {
     const go = () => {
       openPanelTab('routes');
@@ -1307,7 +1308,7 @@ async function loadSignals() {
     const data = await (await fetch(`/api/v2/signals?${query}`)).json();
     host.innerHTML = carrierHTML(state.board && state.board.carrier_signals) + signalsHTML(data);
   } catch (err) {
-    host.innerHTML = `<p class="sig-note">Could not read it — ${esc(err.message)}</p>`;
+    host.innerHTML = `<p class="sig-note">Could not read it: ${esc(err.message)}</p>`;
   }
 }
 
@@ -1416,6 +1417,46 @@ function renderFilters() {
  * is left, and what is hitting it — were the two that wrapped worst. Each
  * row here carries the same facts in reading order.
  */
+/* Small inline icons. Drawn with currentColor, so they follow the theme. */
+const ICON = {
+  open: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chart: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M6 13V8M10 13V4M14 13v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  clock: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  chev: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+/* Which route cards are unfolded, kept across redraws. */
+const openCards = new Set();
+
+/* WHY, in a few bullets, for the unfolded card. Built from the board's own
+ * numbers: the deadline, what is hitting the route, what is at stake, which
+ * key accounts, and the best option — the full view is one click on. */
+function whyHTML(r) {
+  const keys = (r.customers || []).filter((c) => c.priority === 'A' && c.at_risk > 0).map((c) => c.name);
+  const best = (r.actions || [])[0];
+  const events = (r.events || []).slice(0, 3).map((e) => `
+    <li><span class="why-kind">${esc(e.kind_label || e.kind || 'Event')}</span>${esc(e.title)}</li>`).join('');
+  return `
+    <ul class="why">
+      <li class="why-deadline">${ICON.clock}<span><b>${r.lead_time_hours == null ? 'No decision due' : `Decide within ${hours(r.lead_time_hours)}`}</b>
+        ${r.actions.length ? `· ${r.actions.length} option${r.actions.length === 1 ? '' : 's'} open` : '· no option worth its cost'}</span></li>
+      ${events}
+      <li><b>${chf(r.exposure_chf)}</b> at risk if nobody acts · ${r.shipments_at_risk} of ${r.shipments} shipments</li>
+      ${keys.length ? `<li>★ <b>${keys.length} key account${keys.length === 1 ? '' : 's'}</b>: ${keys.map(esc).join(', ')}</li>` : ''}
+      ${best ? `<li>Best option: <b>${esc(best.label)}</b> · net ${chf(best.value_chf)}${best.lead_time_hours == null ? '' : ` · decide in ${hours(best.lead_time_hours)}`}</li>` : ''}
+    </ul>
+    <div class="why-go">
+      <a class="icon-btn" href="${routePageHref(r.route_id)}" title="Route page: matrix and charts" aria-label="Route page">${ICON.chart}</a>
+      <button type="button" class="icon-btn icon-btn--primary rli-go" data-go="${esc(r.route_id)}" title="Open route" aria-label="Open route">${ICON.open}</button>
+    </div>`;
+}
+
+function routePageHref(routeId) {
+  const p = state.params || {};
+  const q = new URLSearchParams({ route: routeId, as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  return `/route/${encodeURIComponent(routeId)}?${q}`;
+}
+
 function renderTable() {
   const rows = visibleRoutes();
   const list = $('rlist');
@@ -1424,37 +1465,58 @@ function renderTable() {
   // top of a list they were halfway down.
   const keep = list.scrollTop;
 
+  /* A CARD: level, deadline and the count you act on at a glance; a click
+   * unfolds why; the arrow opens the route. */
   list.innerHTML = rows.length ? rows.map((r) => {
     const key = keyAtRisk(r);
+    const open = openCards.has(r.route_id);
     return `
-    <button type="button" role="listitem" class="rli${state.selected === r.route_id ? ' is-selected' : ''}"
-            data-route="${esc(r.route_id)}" style="--lvl:${LEVEL_COLOR[r.level]}">
-      <span class="rli-top">
-        <span class="level-chip" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span>
-        <span class="rli-site">from ${esc(r.site ? r.site.name : '—')}</span>
-        <span class="rli-when" style="color:${LEVEL_COLOR[r.level]}">${hours(r.lead_time_hours)}</span>
-      </span>
-      <span class="rli-name">${esc(r.name)}</span>
-      ${focusBadge(r)}
-      <span class="rli-driver" title="${esc(r.events[0] ? r.events[0].title : '')}">${esc(r.events[0] ? r.events[0].title : 'no event')}</span>
-      <span class="rli-foot">
-        <span>${r.shipments_at_risk} of ${r.shipments} shipments${
-          key ? ` · <b class="rli-key">★ ${key} key account${key === 1 ? '' : 's'}</b>` : ''}</span>
-        <span>${r.exposure_chf > 0 ? chf(r.exposure_chf) : '—'}</span>
-      </span>
-    </button>`;
+    <div role="listitem" class="rli${state.selected === r.route_id ? ' is-selected' : ''}${open ? ' is-open' : ''} level-${esc(r.level)}"
+         data-route="${esc(r.route_id)}" style="--lvl:${LEVEL_COLOR[r.level]}">
+      <button type="button" class="rli-main" aria-expanded="${open}">
+        <span class="rli-top">
+          <span class="level-chip level-${esc(r.level)}" style="color:${LEVEL_COLOR[r.level]}">${esc(r.level_label)}</span>
+          ${r.lead_time_hours == null ? '' : `<span class="rli-when" title="Decide within">${ICON.clock}${hours(r.lead_time_hours)}</span>`}
+          <span class="rli-site">${esc(r.site ? r.site.name : '')}</span>
+        </span>
+        <span class="rli-title">
+          <span class="rli-name">${esc(r.name)}</span>
+          <span class="rli-count" title="Shipments at risk, of all on this route">${r.shipments_at_risk}/${r.shipments} shipments</span>
+        </span>
+        <span class="rli-driver" title="${esc(r.events[0] ? r.events[0].title : '')}">${esc(r.events[0] ? r.events[0].title : 'No event')}</span>
+        <span class="rli-foot">
+          <span>${focusBadge(r)}${key ? `<b class="rli-key">★ ${key} key account${key === 1 ? '' : 's'}</b>` : ''}</span>
+          <span class="rli-chf">${r.exposure_chf > 0 ? chf(r.exposure_chf) : ''}</span>
+        </span>
+        <span class="rli-chev" aria-hidden="true">${ICON.chev}</span>
+      </button>
+      <button type="button" class="rli-open" data-go="${esc(r.route_id)}" title="Open route" aria-label="Open route">${ICON.open}</button>
+      <div class="rli-more"><div><div class="rli-more-in">${whyHTML(r)}</div></div></div>
+    </div>`;
   }).join('') : `<p class="rlist-empty">No route ${state.site ? `from ${esc(siteName(state.site))} ` : ''}matches
       these filters. Try <b>All</b> customers, or <b>All levels</b>.</p>`;
 
-  list.querySelectorAll('.rli').forEach((li) => {
-    li.addEventListener('click', () => select(li.dataset.route, { fly: true }));
+  list.querySelectorAll('.rli').forEach((card) => {
+    const id = card.dataset.route;
+    // The card unfolds and folds; the lane lights up on the map meanwhile.
+    card.querySelector('.rli-main').addEventListener('click', () => {
+      const open = !card.classList.contains('is-open');
+      card.classList.toggle('is-open', open);
+      card.querySelector('.rli-main').setAttribute('aria-expanded', String(open));
+      open ? openCards.add(id) : openCards.delete(id);
+      if (open) withAgent((agent) => agent.focusLane(id));
+    });
+    card.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      select(id, { fly: true });
+    }));
   });
   list.scrollTop = keep;
 
   const mine = deskRoutes().length;
   state.listSubtitle =
     `${rows.length} of ${mine} route${mine === 1 ? '' : 's'}${state.site ? ` from ${siteName(state.site)}` : ''} · ` +
-    'most urgent first';
+    'most urgent first · click a card for why';
   const count = $('panel-list-count');
   const onRoutes = !$('rlist').hidden;
   if (count && onRoutes) count.textContent = state.listSubtitle;
@@ -1501,7 +1563,7 @@ function initHowto() {
 
 boot().catch((err) => {
   console.error(err);
-  $('brand-sub').textContent = 'failed to load — ' + err.message;
+  $('brand-sub').textContent = 'failed to load: ' + err.message;
 });
 
 // ===============================================================
@@ -1662,8 +1724,8 @@ function initAsk() {
   // a box that was never going to answer.
   fetch('/api/model').then((r) => r.json()).then((m) => {
     $('btn-ask').title = m.status === 'connected'
-      ? `Assistant — ${m.model}`
-      : 'Assistant — no model connected';
+      ? `Assistant (${m.model})`
+      : 'Assistant (no model connected)';
     $('btn-ask').classList.toggle('has-model', m.status === 'connected');
   }).catch(() => {});
 }

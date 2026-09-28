@@ -101,7 +101,7 @@ DEFAULTS: dict = {
                     "World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
                 ],
                 "attribution": (
-                    "Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap "
+                    "Tiles &copy; Esri: Esri, HERE, Garmin, &copy; OpenStreetMap "
                     "contributors, and the GIS User Community"
                 ),
                 "max_zoom": 16,

@@ -259,7 +259,7 @@ capacity:
   # Per corridor, per week. `units` is vehicles or sailings, not tonnes.
   modes:
     barge:
-      tonnes_per_unit:   {value: 2450, source: "4flow 2026 — reference push barge"}
+      tonnes_per_unit:   {value: 2450, source: "4flow 2026, reference push barge"}
       units_per_week:    {value: 6,    source: assumed}
       hours_to_ready:    {value: 48,   source: assumed}
       cost_chf_per_tonne: {value: 34,  source: assumed}
@@ -272,7 +272,7 @@ capacity:
       cost_chf_per_tonne: {value: 58,  source: assumed}
       carries: [bulk, industrial, packaged]
     road:
-      tonnes_per_unit:   {value: 24,   source: "4flow 2026 — 24 t per truck"}
+      tonnes_per_unit:   {value: 24,   source: "4flow 2026, 24 t per truck"}
       units_per_week:    {value: 210,  source: assumed}
       hours_to_ready:    {value: 12,   source: assumed}
       cost_chf_per_tonne: {value: 145, source: assumed}

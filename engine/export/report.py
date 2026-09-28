@@ -92,7 +92,7 @@ class _Pack(FPDF):
             0, 4,
             latin(
                 f"Supply Chain Risk Radar  ·  as of {self.as_of_label}  ·  "
-                f"page {self.page_no()}  ·  ADVISORY — the planner decides  ·  "
+                f"page {self.page_no()}  ·  ADVISORY: the planner decides  ·  "
                 "figures from synthetic data"
             ),
             align="C",
@@ -218,7 +218,7 @@ def build_pdf(route: dict, as_of_label: str, posture: dict) -> bytes:
     manager = response.get("route_manager")
     if manager:
         _kv(pdf, "Route manager",
-            f"{manager['name']} — {manager['role']}"
+            f"{manager['name']}, {manager['role']}"
             + (f" · {manager['phone']}" if manager.get("phone") else ""))
 
     for label, key in (
@@ -233,7 +233,7 @@ def build_pdf(route: dict, as_of_label: str, posture: dict) -> bytes:
     vendors = response.get("vendors", [])
     if vendors:
         _kv(pdf, "Local vendors on route",
-            "; ".join(f"{v['name']} — {v['role']}" for v in vendors))
+            "; ".join(f"{v['name']}, {v['role']}" for v in vendors))
 
     carriers = response.get("carriers", [])
     if carriers:
@@ -327,7 +327,7 @@ def build_summary(route: dict, as_of_label: str, posture: dict) -> str:
     seniors = response.get("seniors", [])
     if seniors:
         lines.append(
-            f"  Seniors       : {', '.join(s['name'] + ' — ' + s['role'] for s in seniors)}"
+            f"  Seniors       : {'; '.join(s['name'] + ' (' + s['role'] + ')' for s in seniors)}"
         )
 
     approval = response.get("approval")
@@ -337,7 +337,7 @@ def build_summary(route: dict, as_of_label: str, posture: dict) -> str:
     lines += [
         "",
         f"As of {as_of_label}. {posture.get('headline', '')}",
-        "Advisory — the tool proposes, the planner decides. Synthetic data.",
+        "Advisory. The tool proposes, the planner decides. Synthetic data.",
     ]
     return "\n".join(lines)
 

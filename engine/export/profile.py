@@ -233,7 +233,7 @@ def _appetite(config: Config) -> dict:
             "yellow_hours": "client",
             "blue_hours": "client",
             "material_chf": "assumed by us",
-            "thresholds": "assumed by us — not yet agreed with the planning team",
+            "thresholds": "assumed by us, not yet agreed with the planning team",
             "min_action_hours": "assumed by us",
         },
     }

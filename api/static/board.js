@@ -115,14 +115,14 @@ const Board = (() => {
           <h4>${FastUI.esc(plan.label)}</h4>
           ${index === 0
             ? `<span class="pick" title="Coverage first, then lateness, then
-                 cost — the same rule the options list uses">Best on delivery</span>`
+                 cost: the same rule the options list uses">Best on delivery</span>`
             : ''}
         </div>
         <p class="plan__thesis">${FastUI.esc(plan.thesis)}</p>
 
         ${plan.also.length
           ? `<p class="plan__also">Every other mix lands here too
-             (${plan.also.map(FastUI.esc).join(', ')}) — this corridor leaves
+             (${plan.also.map(FastUI.esc).join(', ')}). This corridor leaves
              one answer.</p>`
           : ''}
 
@@ -177,7 +177,7 @@ const Board = (() => {
           </span>
           ${plan.unprofitable_shipments > 0
             ? `<span class="plan__warn">${plan.unprofitable_shipments}
-               consignment(s) go under water to hold this — the block still
+               consignment(s) go under water to hold this. The block still
                pays, they do not.</span>`
             : '<span class="muted">No consignment is sold at a loss.</span>'}
           ${plan.margin_viable === false

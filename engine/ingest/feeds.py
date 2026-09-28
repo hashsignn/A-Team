@@ -79,7 +79,7 @@ CORPUS: tuple[FeedItem, ...] = (
         probability=None,  # "unless talks resume" IS the estimate; do not invent one
         probability_basis=(
             "conditional on talks resuming; no base rate available for this "
-            "dispute — marked probability_unknown rather than guessed"
+            "dispute, so marked probability_unknown rather than guessed"
         ),
         realized=False,
     ),
@@ -294,12 +294,12 @@ def load_feed_items(clock: Clock) -> tuple[list[dict], FeedReport]:
             status=FeedStatus.ABSENT,
             detail=(
                 f"left out: this board is a recording, and the {len(CORPUS)} "
-                "written items belong to the scripted scenario — shown beside "
+                "written items belong to the scripted scenario. Shown beside "
                 "real news they would read as real"
             ),
             unlocks_if_connected=(
                 "Real RSS over trade press and authority notices. The gate, the "
-                "router and the scoring are unchanged — only the corpus differs."
+                "router and the scoring are unchanged. Only the corpus differs."
             ),
             records=0,
             retrieved_at=clock.as_of,
@@ -348,7 +348,7 @@ def load_feed_items(clock: Clock) -> tuple[list[dict], FeedReport]:
         ),
         unlocks_if_connected=(
             "Real RSS over trade press and authority notices. The gate, the "
-            "router and the scoring are unchanged — only the corpus differs."
+            "router and the scoring are unchanged. Only the corpus differs."
         ),
         records=len(items),
         retrieved_at=clock.as_of,
@@ -419,6 +419,6 @@ def social_promotion_status(
         return True, f"{len(same_tier) + 1} independent accounts within the window"
 
     return False, (
-        f"unconfirmed — {len(same_tier) + 1} of {needed} independent accounts, "
+        f"unconfirmed: {len(same_tier) + 1} of {needed} independent accounts, "
         "no official source yet. Visible, but cannot drive a decision."
     )

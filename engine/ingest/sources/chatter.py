@@ -230,7 +230,7 @@ def promote(
             "discarded without costing a model call."
             if buckets else
             "No chatter bucketed. Either nothing is being said, or the source "
-            "is not connected — the source panel says which."
+            "is not connected. The source panel says which."
         ),
     }
 

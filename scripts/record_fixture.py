@@ -448,7 +448,7 @@ def record_gauge(as_of=None, *, fetch=None) -> int:
         "station": "KAUB",
         "river": "Rhine",
         "unit": "cm",
-        "label": "RECORDED FROM PEGELONLINE — observed readings",
+        "label": "RECORDED FROM PEGELONLINE: observed readings",
         "is_real_data": True,
         "source_url": watergauge.LIVE_URL,
         "covers": {"from": first.isoformat(), "to": last.isoformat()},
@@ -527,7 +527,7 @@ def record_weather(as_of=None, days: float | None = None, *, fetch=None, now=Non
         days_held = max((len(v) for v in parsed.values()), default=0)
         size = _write_file(fixture, {
             "_fixture_note": NOTE,
-            "label": f"RECORDED FROM OPEN-METEO — daily {name}, {past} days observed "
+            "label": f"RECORDED FROM OPEN-METEO: daily {name}, {past} days observed "
                      f"and {weather.FORECAST_DAYS} forecast",
             "source_url": url,
             "places": [{"node_id": p.node_id, "name": p.name,

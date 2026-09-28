@@ -122,7 +122,7 @@
       const crew = d.asset.crew;
       $('hub-title').innerHTML = `
         <h3><span class="mono">${esc(d.asset.asset_id)}</span>
-          <span class="st-chip" style="--c:${levelColour(routeLevel(s, d.shipment_id))}" title="The route's level on the ladder — how soon a decision on this lane is due"><i></i>${esc(LEVEL_LABEL[routeLevel(s, d.shipment_id)])} route</span></h3>
+          <span class="st-chip" style="--c:${levelColour(routeLevel(s, d.shipment_id))}" title="The route's level on the ladder: how soon a decision on this lane is due"><i></i>${esc(LEVEL_LABEL[routeLevel(s, d.shipment_id)])} route</span></h3>
         <p class="hub-sub">${esc(d.asset.name)} · carrying <b>${esc(d.shipment_id)}</b> · ${esc(d.phase_label)}</p>`;
       const pos = d.position;
       return `
@@ -280,7 +280,7 @@
               callbacks: {
                 label: (ctx) => {
                   const i = ctx.dataIndex;
-                  const drivers = r.drivers[i].length ? ` — ${r.drivers[i][0]}` : '';
+                  const drivers = r.drivers[i].length ? ` · ${r.drivers[i][0]}` : '';
                   return ` ${r.values[i]} / 100 · ${hoursText(r.hours[i])} expected delay${drivers}`;
                 },
               },
@@ -305,7 +305,7 @@
       if (r.status === 'idle' && !d) return '';
       if (!d) {
         return `<section class="hsec" data-sec="routes"><h4>Recovery routes</h4>
-          <p class="hnote">${r.status === 'error' ? `Could not calculate routes — ${esc(r.error)}` : 'Calculating recovery routes…'}</p></section>`;
+          <p class="hnote">${r.status === 'error' ? `Could not calculate routes: ${esc(r.error)}` : 'Calculating recovery routes…'}</p></section>`;
       }
       const w = r.weights || d.weights;
       const slider = (k, label) => `
@@ -360,7 +360,7 @@
           <thead><tr><th>Option</th><th>Arrives</th><th>Cost</th><th>CO₂e</th><th>vs plan</th></tr></thead>
           <tbody>${rows.map(row).join('')}</tbody>
         </table>
-        <p class="chart-note" title="CO₂e = ${d.tonnes} t × km × factor — ${esc(d.carbon.source)}, ${esc(d.carbon.method)}. The leg after the factory gate. Not part of the ranking score.">
+        <p class="chart-note" title="CO₂e = ${d.tonnes} t × km × factor (${esc(d.carbon.source)}, ${esc(d.carbon.method)}). The leg after the factory gate. Not part of the ranking score.">
           ✓ on time (by ${esc(when(d.committed).slice(0, 10))})${greenest ? ` · 🌿 lowest CO₂e on time: <b>${esc(greenest.id === 'ORIGINAL' ? 'the plan' : greenest.label)}</b>` : ''} ⓘ</p>`;
     }
 
@@ -373,7 +373,7 @@
       const data = sp.enabled ? sp.data : null;
       let body = '';
       if (sp.enabled && !data) {
-        body = `<p class="hnote">${sp.status === 'error' ? `Could not evaluate — ${esc(sp.error)}` : 'Working out which containers to move…'}</p>`;
+        body = `<p class="hnote">${sp.status === 'error' ? `Could not evaluate: ${esc(sp.error)}` : 'Working out which containers to move…'}</p>`;
       } else if (data) {
         const colourOf = (routeId) => (routeId === 'ORIGINAL' ? levelColour(routeLevel(s, d.shipment_id))
           : altColour((d.candidates.find((c) => c.id === routeId) || {}).rank));
@@ -421,7 +421,7 @@
         <h4>Smart split <span>urgent boxes fast, the rest stay put</span></h4>
         <label class="switch"><input type="checkbox" id="split-toggle" ${sp.enabled ? 'checked' : ''} ${few ? 'disabled' : ''}>
           <span class="track"></span> Split shipment</label>
-        ${few ? '<p class="chart-note">One container — nothing to split.</p>' : ''}
+        ${few ? '<p class="chart-note">One container: nothing to split.</p>' : ''}
         ${body}
       </section>`;
     }
@@ -431,7 +431,7 @@
       if (v.status === 'idle' && !v.data) return '';
       if (!v.data) {
         return `<section class="hsec" data-sec="partners"><h4>Partners nearby</h4>
-          <p class="hnote">${v.status === 'error' ? `Could not query partners — ${esc(v.error)}` : 'Querying partners in the radius…'}</p></section>`;
+          <p class="hnote">${v.status === 'error' ? `Could not query partners: ${esc(v.error)}` : 'Querying partners in the radius…'}</p></section>`;
       }
       const d = v.data;
       const rows = d.vendors.map((p) => `
@@ -439,7 +439,7 @@
           ${root.MapView.CHANNEL[p.channel] || root.MapView.CHANNEL.phone}
           <span><span class="partner-name">${esc(p.name)}</span>
             <span class="partner-sub">${esc(p.kind.replace(/_/g, ' '))} · ${esc(p.city || '')} · ${Math.round(p.distance_km)} km${p.within_radius ? '' : ' (outside radius)'} · ${p.capacity ? `${p.capacity.available} ${esc(p.capacity.unit)}` : 'capacity unknown'}</span></span>
-          <span class="covers">${p.serviceable.map((c) => `<span class="rbadge${c.ok ? '' : ' no'}" style="--c:${altColour(c.rank)}" title="${esc(c.label)}: ${c.ok ? 'can cover' : 'cannot'}${c.reasons.length ? ` — ${esc(c.reasons.join('; '))}` : ''}">${esc(c.badge || `#${c.rank}`)}</span>`).join('')}</span>
+          <span class="covers">${p.serviceable.map((c) => `<span class="rbadge${c.ok ? '' : ' no'}" style="--c:${altColour(c.rank)}" title="${esc(c.label)}: ${c.ok ? 'can cover' : 'cannot'}${c.reasons.length ? `. ${esc(c.reasons.join('; '))}` : ''}">${esc(c.badge || `#${c.rank}`)}</span>`).join('')}</span>
         </button>`).join('');
       return `
       <section class="hsec" data-sec="partners">
@@ -463,10 +463,10 @@
         <a class="ctl" href="/route/${encodeURIComponent(lane)}?${q}">Lane page →</a>
         <a class="ctl" href="/ops?${ops}" title="The playbook gate: confirm the disruption before rerouting">Playbook →</a>
       </div>
-      <details class="journal"><summary>Actions on this map (${s.journal.length}) — planner or agent</summary>
+      <details class="journal"><summary>Actions on this map (${s.journal.length}) · planner or agent</summary>
         <ol>${recent.map((j) => `<li><span class="who">${esc(j.actor)}</span> ${esc(j.summary || j.action)}</li>`).join('')}</ol>
       </details>
-      <p class="chart-note">Advisory — nothing here books or sends.</p>`;
+      <p class="chart-note">Advisory. Nothing here books or sends.</p>`;
     }
 
     // ---------------------------------------------------------------
@@ -487,7 +487,7 @@
 
       if (sel.status !== 'ready') {
         $('hub-title').innerHTML = `<h3><span class="mono">${esc(sel.id)}</span></h3>
-          <p class="hub-sub">${sel.status === 'error' ? `Could not load — ${esc(sel.error)}` : 'Loading…'}</p>`;
+          <p class="hub-sub">${sel.status === 'error' ? `Could not load: ${esc(sel.error)}` : 'Loading…'}</p>`;
         if (chart) { chart.destroy(); chart = null; }
         hubBody.innerHTML = '';
         card.hidden = true;
@@ -522,23 +522,23 @@
       $('vcard-body').innerHTML = `
         <div class="vcontact">
           ${c.phone ? `<a href="tel:${esc(c.phone.replace(/\s+/g, ''))}">☎ ${esc(c.phone)}</a>` : ''}
-          ${c.email ? `<a href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`Capacity request — ${s.selection.id}`)}">✉ ${esc(c.email)}</a>` : ''}
+          ${c.email ? `<a href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`Capacity request: ${s.selection.id}`)}">✉ ${esc(c.email)}</a>` : ''}
           ${c.portal && /^https?:\/\//i.test(c.portal) ? `<a href="${esc(c.portal)}" target="_blank" rel="noopener noreferrer">⇱ ${v.checked_against ? 'Website' : 'Dispatch portal'}</a>` : ''}
           ${!c.phone && !c.email && !c.portal ? '<span class="muted">No contact on file.</span>' : ''}
         </div>
         ${v.checked_against && /^https?:\/\//i.test(v.checked_against) ? `<p class="chart-note" title="${esc(v.note || '')}">Real operator · checked ${esc(v.checked || '')} · <a href="${esc(v.checked_against)}" target="_blank" rel="noopener noreferrer">source</a> · confirm before booking</p>` : ''}
         <div class="k muted" style="font-size:10px;letter-spacing:.06em">AVAILABLE NOW</div>
         <div class="vcap">${v.capacity ? `${v.capacity.available} ${esc(v.capacity.unit)}` : 'Not on file'}
-          <small>${v.capacity ? ` · from ${esc(v.source)}` : ' · capacity unknown — call'}</small></div>
+          <small>${v.capacity ? ` · from ${esc(v.source)}` : ' · capacity unknown, call'}</small></div>
         <p class="chart-note">${esc(v.modes.join(' · '))} · ADR ${v.adr_certified === true ? 'yes' : v.adr_certified === false ? 'no' : 'unknown'} · reefer ${v.reefer === true ? 'yes' : v.reefer === false ? 'no' : 'unknown'} · serves ${Math.round(v.service_radius_km)} km</p>
         <h4 style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:10px">Serviceable routes</h4>
         <div class="vroutes">${v.serviceable.length ? v.serviceable.map((r) => `
           <div class="vroute ${r.ok ? 'ok' : 'no'}" data-route="${esc(r.route_id)}">
             <span class="rbadge" style="--c:${altColour(r.rank)}">${esc(r.badge || `#${r.rank}`)}</span>
-            <span><span class="verdict">${r.ok ? 'Can cover' : 'Cannot'}</span> — ${esc(r.label)}</span>
+            <span><span class="verdict">${r.ok ? 'Can cover' : 'Cannot'}</span> ${esc(r.label)}</span>
             ${r.reasons.length ? `<span class="why">${esc(r.reasons.join(' · '))}</span>` : ''}
           </div>`).join('') : '<p class="chart-note">No recovery routes to cover for this asset.</p>'}</div>
-        <p class="chart-note">Not booked from here — call to confirm.</p>`;
+        <p class="chart-note">Not booked from here. Call to confirm.</p>`;
     }
 
     // ---------------------------------------------------------------

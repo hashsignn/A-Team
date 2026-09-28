@@ -75,7 +75,7 @@ function renderOverlayFlag(overlay) {
   if (!own.length) {
     el.className = 'overlay-flag';
     el.innerHTML = `<span class="ofdot"></span> all ${files.length} files on the public stand-in`;
-    el.title = 'config.example/ — synthetic, committed, nothing customer-specific';
+    el.title = 'config.example/: synthetic, committed, nothing customer-specific';
   } else {
     el.className = 'overlay-flag is-own';
     el.innerHTML =
@@ -129,7 +129,7 @@ function renderDesk(d, overlay) {
       <div class="pstat-row">
         ${stat('lanes owned', num(d.lanes))}
         ${stat('shipments in the book', num(d.shipments_in_book),
-               d.book_is_synthetic ? 'generated — no order book connected' : 'from the order book')}
+               d.book_is_synthetic ? 'generated, no order book connected' : 'from the order book')}
         ${stat('corridors', num(d.corridors.length))}
         ${stat('countries touched', num(d.countries.length))}
       </div>`) +
@@ -151,7 +151,7 @@ function renderDesk(d, overlay) {
         `<span class="chip">${esc(m.mode)} <b>${num(m.legs)}</b> legs</span>`).join('')}</div>`) +
 
     section('Configuration in force',
-      'The profile is not a separate store — it is these files. '
+      'The profile is not a separate store. It is these files. '
       + '<code>config/</code> is gitignored and overrides <code>config.example/</code>, '
       + 'which stays synthetic and committed.',
       table(['File', 'Loaded from', 'Kind'], files));
@@ -242,11 +242,11 @@ function renderLedger(l) {
   });
 
   $('tab-ledger').innerHTML =
-    section(`Risk ledger — ${l.total} variables`,
+    section(`Risk ledger · ${l.total} variables`,
       'Sika confirmed no risk ledger for outgoing shipments exists today, so '
       + 'this file <b>is</b> the proposal. Every variable names the modes it can '
       + 'touch, how much warning it usually gives, and whether a probability can '
-      + 'honestly be sourced for it — where it cannot, the board shows it in a '
+      + 'honestly be sourced for it. Where it cannot, the board shows it in a '
       + 'separate band rather than assuming a half.',
       families.join('')) +
     (l.overrides.length
@@ -286,7 +286,7 @@ function renderAppetite(a) {
   const agreed = conv.agreed_on
     ? `Agreed ${esc(conv.agreed_on)}${conv.agreed_by ? ' by ' + esc(conv.agreed_by) : ''}.`
     : '<b>Not yet agreed with the planning team.</b> Until it is, the board says '
-      + '"proposed convene rule" rather than "convene rule crossed" — the whole '
+      + '"proposed convene rule" rather than "convene rule crossed". The whole '
       + 'mechanism depends on the group having owned the threshold in calm '
       + 'conditions, so claiming agreement it does not have would break it.';
 
@@ -297,13 +297,13 @@ function renderAppetite(a) {
     section('The ladder',
       'Every rung of the client\'s own scheme is phrased as a <b>deadline</b>, '
       + 'not a damage band. So the level is not "how bad is this" but "how soon '
-      + 'must somebody decide" — which is a quantity the engine already computes.',
+      + 'must somebody decide", which is a quantity the engine already computes.',
       `<div class="prungs">${ladder}</div>`) +
 
     section('Cutoffs',
       'These are the hours that separate the rungs. Change them and the whole '
       + 'board re-levels. Critical must stay sooner than Alert, and Alert sooner '
-      + 'than Watch — otherwise a rung becomes unreachable and nothing on screen '
+      + 'than Watch. Otherwise a rung becomes unreachable and nothing on screen '
       + 'would say so, so those are refused on save.',
       `<div class="pfields">
         ${field('alert_levels.red_hours', 'Critical within', a.alert_levels.red_hours,
@@ -315,7 +315,7 @@ function renderAppetite(a) {
         ${field('alert_levels.material_chf', 'Something is at stake above',
                 a.alert_levels.material_chf, 'CHF',
                 '<b>assumed by us.</b> Below this a touched route is Bias '
-                + '(monitor) rather than Watch — it is the floor that keeps '
+                + '(monitor) rather than Watch. It is the floor that keeps '
                 + 'absorbed disruptions off the decision list.')}
       </div>`) +
 
@@ -323,7 +323,7 @@ function renderAppetite(a) {
       'Sika, answering Q6: <i>"The real problem is that we declare a crisis too '
       + 'late and lose on available options."</i> Authority is not the '
       + 'bottleneck; the decision to convene is. So the tool does not argue for a '
-      + 'crisis — it reports that a threshold the group pre-agreed in calm '
+      + 'crisis. It reports that a threshold the group pre-agreed in calm '
       + 'conditions has been crossed. ' + agreed,
       `<div class="pfields">
         ${field('convene_thresholds.exposure_chf', 'Expected loss across the book',
@@ -335,10 +335,10 @@ function renderAppetite(a) {
         ${field('convene_thresholds.shipments_needing_decision',
                 'Shipments needing a decision', conv.thresholds.shipments_needing_decision,
                 'shipments',
-                'inside 48 h of their decision deadline — the Alert rung reused, '
+                'inside 48 h of their decision deadline: the Alert rung reused, '
                 + 'not a number we invented')}
       </div>
-      <p class="psec-note">Every trigger is something a planner can check —
+      <p class="psec-note">Every trigger is something a planner can check:
         an expected loss and two counts. Nothing here rests on the summed value
         of acting, which is built on our invented action costs and is not a
         number anyone can stand behind.</p>
@@ -352,18 +352,18 @@ function renderAppetite(a) {
 
     section('Agreement',
       'This is the part that changes behaviour, and it is not technical. Teams '
-      + 'do not declare late because they lack a number — they declare late '
+      + 'do not declare late because they lack a number. They declare late '
       + 'because declaring is socially expensive: somebody has to stick their '
       + 'neck out and risk crying wolf. Recording the date and the group here '
       + 'moves the decision from a judgement one person owns to a rule the '
       + 'group already owns, and the headline changes wording to match. Leave '
-      + 'it blank until the meeting has actually happened — claiming agreement '
+      + 'it blank until the meeting has actually happened. Claiming agreement '
       + 'it does not have is the one way to break the mechanism outright.',
       `<div class="pfields">
         ${field('convene_meta.agreed_on', 'Agreed on', conv.agreed_on, '',
                 'the date the group signed off the thresholds above', 'date')}
         ${field('convene_meta.agreed_by', 'Agreed by', conv.agreed_by, '',
-                'the standing group that owns it — e.g. the S&amp;OP meeting', 'text')}
+                'the standing group that owns it, e.g. the S&amp;OP meeting', 'text')}
         ${field('convene_meta.meeting_cadence_days', 'Meeting cadence',
                 conv.meeting_cadence_days, 'days',
                 'how often that group currently sits')}
@@ -373,7 +373,7 @@ function renderAppetite(a) {
       'How long each mitigation takes to execute. They set the decision '
       + 'deadline: <code>deadline = impact − duration</code>. All <b>assumed by '
       + 'us</b> and not editable here, because changing one silently moves every '
-      + 'deadline that depends on it — they belong in a reviewed config change.',
+      + 'deadline that depends on it. They belong in a reviewed config change.',
       `<div class="chips">${minAction}</div>`) +
 
     section('Simulation', null,
@@ -493,7 +493,7 @@ function renderResponse(r) {
       'Sika: <i>"in crisis, established teams that meet on a weekly schedule '
       + 'increase meeting frequency… they have full authority to decide on '
       + 'mitigation."</i> So the ladder decides how many of those teams are '
-      + 'pulled out of their weekly cycle — nobody at Normal, everybody at '
+      + 'pulled out of their weekly cycle: nobody at Normal, everybody at '
       + 'Critical. It never invents a new committee.',
       `<div class="prungs">${byLevel}</div>`) +
 
@@ -519,7 +519,7 @@ function renderResponse(r) {
     section('Alternate carriers', null, carriers) +
 
     section('Alternate vendors by node',
-      'Filtered to the route in question when this appears on the board — a '
+      'Filtered to the route in question when this appears on the board. A '
       + 'contact list that returns everyone is the same as no contact list.',
       vendors);
 }
@@ -562,7 +562,7 @@ const COST_TAG = {
  * design document. */
 const NATURE_WORD = {
   report: 'read by a model',
-  instrument: 'measured — no model',
+  instrument: 'measured, no model',
 };
 
 function renderSources(s) {
@@ -642,7 +642,7 @@ function refreshSaveBar() {
   if (n) {
     $('savebar-text').innerHTML =
       `<b>${n}</b> setting${n === 1 ? '' : 's'} changed. Saving writes `
-      + `<code>config/scoring.yaml</code> — gitignored, and it overrides the `
+      + `<code>config/scoring.yaml</code> (gitignored), and it overrides the `
       + `committed stand-in. The board re-runs on the new numbers.`;
   } else if (overlay) {
     $('savebar-text').innerHTML =
@@ -677,7 +677,7 @@ async function save() {
 
   if (out.problems && out.problems.length) {
     // Nothing was written. Say which rung would have become unreachable.
-    flash('Nothing saved — ' + out.problems.map(esc).join('; '), 'bad');
+    flash('Nothing saved: ' + out.problems.map(esc).join('; '), 'bad');
     return;
   }
   const parts = [];
@@ -690,7 +690,7 @@ async function save() {
 async function reset() {
   const out = await fetch('/api/profile', { method: 'DELETE' }).then((r) => r.json());
   flash(out.removed
-    ? 'Overlay removed — back on the committed stand-in.'
+    ? 'Overlay removed. Back on the committed stand-in.'
     : 'No overlay was in place; already on the committed stand-in.', 'ok');
   await load();
 }

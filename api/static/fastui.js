@@ -96,7 +96,7 @@ const FastUI = (() => {
 
     const why = own
       ? esc(option.detail || '')
-      : `${esc(option.owner)} owns this lever — we can ask, not execute.`;
+      : `${esc(option.owner)} owns this lever. We can ask, not execute.`;
 
     /* Whether the vehicles exist. Sits on the row rather than only on the
        capacity board below, because this is the row with the button on it. */

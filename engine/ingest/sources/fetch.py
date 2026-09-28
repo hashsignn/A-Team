@@ -101,7 +101,7 @@ def collect(
         why = left_out(spec.key)
         if why is not None:
             return [], _absent(spec, (
-                f"left out of this recording ({why}) — its sample is not shown "
+                f"left out of this recording ({why}). Its sample is not shown "
                 "beside recorded sources"
             ))
         cached = load_fixture(spec.fixture)
@@ -111,7 +111,7 @@ def collect(
                 key=spec.key,
                 label=spec.label,
                 status=FeedStatus.FIXTURE,
-                detail=f"{len(items)} item(s) from {fixture_origin(cached)} — {error}",
+                detail=f"{len(items)} item(s) from {fixture_origin(cached)} · {error}",
                 unlocks_if_connected=spec.unlocks_if_connected,
                 records=len(items),
                 retrieved_at=retrieved_at,

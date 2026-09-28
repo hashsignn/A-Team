@@ -562,7 +562,7 @@
         if (!m) {
           const node = document.createElement('div');
           node.className = 'mcluster';
-          node.title = `${p.point_count} assets — ${LEVELS.filter((l) => p[l]).map((l) => `${p[l]} ${LEVEL_LABEL[l]}`).join(', ')}. Click to expand.`;
+          node.title = `${p.point_count} assets: ${LEVELS.filter((l) => p[l]).map((l) => `${p[l]} ${LEVEL_LABEL[l]}`).join(', ')}. Click to expand.`;
           node.addEventListener('click', (ev) => {
             ev.stopPropagation();
             expandCluster(id, f.geometry.coordinates);
@@ -709,7 +709,7 @@
         node.dataset.route = c.id;
         node.style.setProperty('--c', altColour(c.rank));
         node.textContent = c.badge || `#${c.rank}`;
-        node.title = `${c.label} — ${c.delta.text}`;
+        node.title = `${c.label}: ${c.delta.text}`;
         node.addEventListener('mouseenter', () => agent.highlightRoute(c.id));
         node.addEventListener('mouseleave', () => agent.highlightRoute(null));
         node.addEventListener('click', (ev) => { ev.stopPropagation(); agent.chooseRoute(c.id); });
@@ -722,7 +722,7 @@
         const node = document.createElement('div');
         node.className = 'hazard';
         node.textContent = '!';
-        node.title = `${d.title}${d.name ? ` — at ${d.name}` : ''}`;
+        node.title = `${d.title}${d.name ? `, at ${d.name}` : ''}`;
         view.hazard = new root.maplibregl.Marker({ element: node }).setLngLat([d.lon, d.lat]).addTo(map);
       }
 
@@ -743,7 +743,7 @@
         node.className = 'branch-label';
         node.style.setProperty('--c', colour);
         node.innerHTML = `<b>${letters[i]}</b> · ${b.containers.length} box${b.containers.length === 1 ? '' : 'es'} · ${b.teu} TEU`;
-        node.title = `${b.label} — ETA ${b.eta.slice(0, 16).replace('T', ' ')} UTC`;
+        node.title = `${b.label} · ETA ${b.eta.slice(0, 16).replace('T', ' ')} UTC`;
         view.branchMarkers.push(new root.maplibregl.Marker({ element: node, offset: [0, -16] })
           .setLngLat([at[1], at[0]]).addTo(map));
       });
@@ -814,7 +814,7 @@
         node.classList.toggle('covers', !!v.covers_any);
         node.classList.toggle('outside', !v.within_radius);
         node.classList.toggle('is-on', state.vendors.selected === v.id);
-        node.title = `${v.name} — ${v.distance_km} km · ${v.channel}${v.covers_any ? ' · can cover a recovery route' : ''}`;
+        node.title = `${v.name} · ${v.distance_km} km · ${v.channel}${v.covers_any ? ' · can cover a recovery route' : ''}`;
         node.dataset.vendor = v.id;
       }
     }
@@ -834,7 +834,7 @@
       if (busy) {
         busy.hidden = state.assets.status !== 'loading' && state.assets.status !== 'error';
         busy.textContent = state.assets.status === 'error'
-          ? `Could not load assets — ${state.assets.error}` : 'Loading assets…';
+          ? `Could not load assets: ${state.assets.error}` : 'Loading assets…';
       }
       const host = $('map-note');
       if (!host) return;
@@ -847,7 +847,7 @@
         // Which providers refused goes on hover: the note itself says only
         // what the planner is looking at.
         host.title = `No tile provider answered, so the built-in country outlines are drawn.${refused}`;
-        text = '<b>Offline outline</b> — map tiles unavailable';
+        text = '<b>Offline outline</b>: map tiles unavailable';
       } else if (t.refused.length) {
         text = t.ok && current
           ? `<b>${esc(current.name)}</b> tiles, desaturated.${refused}`

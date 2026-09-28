@@ -85,7 +85,7 @@ STAGE_RULE = {
         "Do not reroute until the disruption has been confirmed."
     ),
     Stage.ACT: (
-        "Confirmed. Mitigations are unlocked — take the one that is worth "
+        "Confirmed. Mitigations are unlocked. Take the one that is worth "
         "more than it costs, before its deadline."
     ),
     Stage.CLOSE: (
@@ -224,7 +224,7 @@ def build(
             "Check which consignments are affected",
             manager_name, manager_contact, confirm_sla,
             f"{route['shipments_at_risk']} of the shipments on this lane are "
-            "in scope — they do not all have the same deadline.",
+            "in scope. They do not all have the same deadline.",
             required=True,
         ),
         # ---- CONFIRM ------------------------------------------------
@@ -286,7 +286,7 @@ def build(
             "Note anything the tool got wrong",
             manager_name, manager_contact, None,
             "A missed event or a false alarm is worth more than a correct "
-            "one — it is the only way the ledger improves.",
+            "one. It is the only way the ledger improves.",
         ),
     ]
     return tasks
@@ -318,7 +318,7 @@ def _corroboration(
         return True, ""
     return False, (
         f"Only {len(low)} uncorroborated tier-{min(low)} source. Confirming "
-        "needs a carrier callback or an authority notice — ticking this box "
+        "needs a carrier callback or an authority notice. Ticking this box "
         "would not make the report true."
     )
 
@@ -443,7 +443,7 @@ def evaluate(
     elif outstanding:
         gate_open = False
         gate_reason = (
-            "Rerouting is locked until the disruption is confirmed — "
+            "Rerouting is locked until the disruption is confirmed. "
             f"{len(outstanding)} step(s) outstanding: "
             + ", ".join(t.label.lower() for t in outstanding)
             + "."
@@ -453,7 +453,7 @@ def evaluate(
         by_field = [t for t in confirm_required if t.id in from_reports]
         if by_field:
             gate_reason = (
-                f"Confirmed — {len(by_field)} step(s) answered by a field "
+                f"Confirmed: {len(by_field)} step(s) answered by a field "
                 "report from the freight itself, not from a feed. Rerouting "
                 "is unlocked."
             )

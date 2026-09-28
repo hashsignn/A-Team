@@ -88,7 +88,7 @@ custom:
   #    Disabled because the URL below does not exist until Sika sets it.
   # -------------------------------------------------------------------
   - key: tms_events
-    label: "Transport management system — exception events"
+    label: "Transport management system: exception events"
     enabled: false
     nature: report
     source_tier: 1          # your own system observing your own freight
@@ -118,7 +118,7 @@ custom:
       inferring from a region, which is what every public feed above is doing.
     notes: >
       Set TMS_BASE_URL and TMS_BEARER_TOKEN in .env, then flip enabled to true.
-      The radar only ever GETs. It never posts to a TMS — the outbound payload
+      The radar only ever GETs. It never posts to a TMS. The outbound payload
       is exposed at GET /api/v1/shipment-alerts for a separate process to send,
       so the write credential never enters the radar's address space.
 
@@ -128,7 +128,7 @@ custom:
   #    block per country and change the URL, the key and the paths.
   # -------------------------------------------------------------------
   - key: nap_road_incidents
-    label: "National Access Point — road incidents (DATEX II)"
+    label: "National Access Point: road incidents (DATEX II)"
     enabled: false
     nature: report
     source_tier: 1
@@ -155,7 +155,7 @@ custom:
       keylessly by the autobahn_* built-ins; this is for CH, FR, IT, AT, NL.
     notes: >
       Find your country's NAP at datex2.eu/datex-ii-nap-map. Most publish XML
-      by default — request the JSON representation, or put a converter in
+      by default. Request the JSON representation, or put a converter in
       front. This loader reads JSON only.
 
   # -------------------------------------------------------------------

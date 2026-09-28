@@ -178,7 +178,7 @@ def act(
     if not options:
         raise HTTPException(
             404,
-            f"option {option_id!r} is no longer on {route_id!r} — it has "
+            f"option {option_id!r} is no longer on {route_id!r}: it has "
             "expired or the board has moved on",
         )
 
@@ -214,7 +214,7 @@ def act(
 def _act_sentence(done: list[dict], refused: list[dict]) -> str:
     if done and not refused:
         label = done[0]["label"]
-        return f"{label} — running on {len(done)} consignment(s)."
+        return f"{label}: running on {len(done)} consignment(s)."
     if done and refused:
         return (
             f"Running on {len(done)}; {len(refused)} refused "
@@ -315,7 +315,7 @@ def hook_incident(
             # we recorded that they asserted it.
             "note": (
                 "Incident raised and options computed. Nothing has been "
-                "executed — a person decides that."
+                "executed. A person decides that."
             ),
         }
     )
@@ -632,7 +632,7 @@ def run_tool(
             "sentence": (
                 f"{len(vetoed)} option(s) were discarded for losing money."
                 if vetoed else
-                "Nothing was discarded on cost — every option found pays for "
+                "Nothing was discarded on cost: every option found pays for "
                 "itself."
             ),
         })
@@ -772,7 +772,7 @@ def _customer_draft(context, route_id: str) -> dict:
 
     return {
         "to": customers,
-        "subject": f"{route['level_label']} — {route['name']}",
+        "subject": f"{route['level_label']}: {route['name']}",
         "body": (
             f"{route['reason']}\n\n{outcome}\n\n"
             f"Affected: {route.get('shipments_at_risk')} of "
@@ -820,7 +820,7 @@ def _consignment_draft(context, route_id: str, shipment_id: str) -> dict:
     return {
         "to": [shipment.customer],
         "subject": (
-            f"{shipment.shipment_id} — {route['level_label']} on "
+            f"{shipment.shipment_id}: {route['level_label']} on "
             f"{route['name']}"
         ),
         "body": (

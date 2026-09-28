@@ -74,12 +74,12 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
     if network_allowed():
         series, live_error = _try_live(clock)
     else:
-        series, live_error = [], "egress off — RADAR_ALLOW_NETWORK is not set"
+        series, live_error = [], "egress off: RADAR_ALLOW_NETWORK is not set"
     series = _six_hourly(series)
     if series:
         return series, FeedReport(
             key="watergauge_kaub",
-            label="Rhine water level — Kaub (Pegelonline)",
+            label="Rhine water level at Kaub (Pegelonline)",
             status=FeedStatus.CONNECTED,
             detail=f"{len(series)} readings, latest {series[-1][1]:.0f} cm",
             unlocks_if_connected="",
@@ -93,10 +93,10 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
     if why is not None:
         return [], FeedReport(
             key="watergauge_kaub",
-            label="Rhine water level — Kaub (Pegelonline)",
+            label="Rhine water level at Kaub (Pegelonline)",
             status=FeedStatus.ABSENT,
             detail=(
-                f"left out of this recording ({why}) — the generated series is "
+                f"left out of this recording ({why}). The generated series is "
                 "not shown beside recorded sources"
             ),
             unlocks_if_connected=(
@@ -110,7 +110,7 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
     if raw is None:
         return [], FeedReport(
             key="watergauge_kaub",
-            label="Rhine water level — Kaub (Pegelonline)",
+            label="Rhine water level at Kaub (Pegelonline)",
             status=FeedStatus.ABSENT,
             detail=f"no live feed ({live_error}) and no fixture at {FIXTURE_NAME}",
             unlocks_if_connected=(
@@ -136,10 +136,10 @@ def fetch_kaub(config: Config, clock: Clock) -> tuple[list[tuple], FeedReport]:
 
     return series, FeedReport(
         key="watergauge_kaub",
-        label="Rhine water level — Kaub (Pegelonline)",
+        label="Rhine water level at Kaub (Pegelonline)",
         status=FeedStatus.FIXTURE,
         detail=(
-            f"{label} — {len(series)} readings up to as-of, "
+            f"{label} · {len(series)} readings up to as-of, "
             f"latest {series[-1][1]:.0f} cm" if series else "fixture has no readings before as-of"
         ),
         unlocks_if_connected=(
@@ -280,7 +280,7 @@ def assess_kaub(config: Config, clock: Clock) -> tuple[list[dict], FeedReport]:
                     f"trend {per_day:+.1f} cm/day over {over}"
                 ),
                 "title": (
-                    f"Rhine low water at Kaub — loading restricted to "
+                    f"Rhine low water at Kaub: loading restricted to "
                     f"{effective['payload_fraction']:.0%} of full payload"
                 ),
                 "source": "pegelonline",
@@ -309,7 +309,7 @@ def assess_kaub(config: Config, clock: Clock) -> tuple[list[dict], FeedReport]:
                 "cost_multiplier": 1.0,
                 "threshold_source": high.get("source", "assumed"),
                 "verbatim_quote": f"Kaub gauge {latest_cm:.0f} cm ({latest_at:%Y-%m-%d %H:%M UTC})",
-                "title": "Rhine high water at Kaub — navigation suspended",
+                "title": "Rhine high water at Kaub: navigation suspended",
                 "source": "pegelonline",
                 "source_tier": 1,
                 "level_cm": latest_cm,

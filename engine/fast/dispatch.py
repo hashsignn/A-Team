@@ -146,9 +146,9 @@ def _post(url: str, body: dict) -> tuple[bool, str]:
     except urllib.error.HTTPError as exc:
         return False, f"HTTP {exc.code}"
     except urllib.error.URLError as exc:
-        return False, f"unreachable — {exc.reason}"
+        return False, f"unreachable: {exc.reason}"
     except (TimeoutError, OSError) as exc:
-        return False, f"failed — {exc}"
+        return False, f"failed: {exc}"
 
 
 def _deliver(channel: Channel, body: dict, bus: Bus) -> Receipt:
@@ -188,7 +188,7 @@ def _deliver(channel: Channel, body: dict, bus: Bus) -> Receipt:
         return Receipt(
             channel.channel_id, channel.kind, channel.audience,
             ok=False, status="recorded",
-            detail=f"egress is off — set {ALLOW_NETWORK_ENV}=1 to send",
+            detail=f"egress is off. Set {ALLOW_NETWORK_ENV}=1 to send",
             recorded=OUTBOX.record(channel.channel_id, body),
         )
 
@@ -230,7 +230,7 @@ def summarise(receipts: list[Receipt]) -> dict:
         sentence = "No channel matched this audience."
     elif failed:
         sentence = (
-            f"{len(delivered)} delivered, {len(failed)} failed — "
+            f"{len(delivered)} delivered, {len(failed)} failed: "
             + "; ".join(f"{r.channel_id}: {r.detail}" for r in failed)
         )
     elif delivered and not recorded:
