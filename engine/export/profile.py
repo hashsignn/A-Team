@@ -211,7 +211,14 @@ def _appetite(config: Config) -> dict:
             "red_hours": levels.get("red_hours"),
             "yellow_hours": levels.get("yellow_hours"),
             "blue_hours": levels.get("blue_hours"),
+            "white_hours": levels.get("white_hours"),
             "material_chf": levels.get("material_chf"),
+        },
+        # The rungs are counted in working time: weekends and holidays out.
+        "working_calendar": {
+            "enabled": bool(scoring.get("working_calendar", {}).get("enabled", False)),
+            "country": scoring.get("working_calendar", {}).get("country"),
+            "weekend": list(scoring.get("working_calendar", {}).get("weekend") or []),
         },
         "convene_rule": {
             "agreed_on": convene.get("agreed_on"),
@@ -232,6 +239,7 @@ def _appetite(config: Config) -> dict:
             "red_hours": "client",
             "yellow_hours": "client",
             "blue_hours": "client",
+            "white_hours": "client",
             "material_chf": "assumed by us",
             "thresholds": "assumed by us, not yet agreed with the planning team",
             "min_action_hours": "assumed by us",
@@ -354,7 +362,7 @@ def _sources(context) -> dict:
 # that can write arbitrary keys into the engine's config is an endpoint that
 # can change what the numbers mean.
 EDITABLE = {
-    "alert_levels": {"red_hours", "yellow_hours", "blue_hours", "material_chf"},
+    "alert_levels": {"red_hours", "yellow_hours", "blue_hours", "white_hours", "material_chf"},
     "convene_thresholds": {
         "exposure_chf", "contracts_exposed", "shipments_needing_decision",
     },
@@ -377,10 +385,12 @@ def check(scoring: dict) -> list[str]:
     red = _as_float(levels.get("red_hours"))
     yellow = _as_float(levels.get("yellow_hours"))
     blue = _as_float(levels.get("blue_hours"))
+    white = _as_float(levels.get("white_hours", 120))
     floor = _as_float(levels.get("material_chf"))
 
     for name, value in (
         ("red_hours", red), ("yellow_hours", yellow), ("blue_hours", blue),
+        ("white_hours", white),
     ):
         if value is None or value <= 0:
             problems.append(f"{name} must be a positive number of hours")
@@ -396,6 +406,11 @@ def check(scoring: dict) -> list[str]:
         problems.append(
             f"Alert ({yellow:g} h) must be sooner than Watch ({blue:g} h), "
             "or nothing can ever be classed Watch"
+        )
+    if None not in (blue, white) and blue >= white:
+        problems.append(
+            f"Watch ({blue:g} h) must be sooner than Bias ({white:g} h), "
+            "or nothing can ever be classed Bias"
         )
 
     thresholds = scoring.get("convene_rule", {}).get("thresholds", {})

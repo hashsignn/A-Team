@@ -116,13 +116,22 @@ def warning_gained(
     return (impact_at - first_detected_at).total_seconds() / 3600.0
 
 
-def deadline_text(clock: Clock, deadline: datetime | None) -> str | None:
-    """The deadline as a planner would say it."""
+def deadline_text(clock: Clock, deadline: datetime | None,
+                  working_hours: float | None = None) -> str | None:
+    """The deadline as a planner would say it.
+
+    With *working_hours* (the lead time with weekends and holidays taken out)
+    the bracket says the working time when it differs from the plain one, so
+    "Mon 04:00 (6 working h)" explains itself on a Saturday night.
+    """
     if deadline is None:
         return None
     hours = clock.hours_until(deadline)
     if hours < 0:
         return f"{deadline:%a %d %b %H:%M} UTC (passed)"
-    if hours < 48:
-        return f"{deadline:%a %H:%M} UTC ({hours:.0f} h)"
-    return f"{deadline:%a %d %b %H:%M} UTC ({hours / 24:.0f} days)"
+    left, unit = hours, ""
+    if working_hours is not None and abs(working_hours - hours) >= 0.5:
+        left, unit = max(0.0, working_hours), " working"
+    if left < 48:
+        return f"{deadline:%a %H:%M} UTC ({left:.0f}{unit} h)"
+    return f"{deadline:%a %d %b %H:%M} UTC ({left / 24:.0f}{unit} days)"

@@ -56,10 +56,10 @@ from engine.clock import Clock
 from engine.config import Config
 from engine.schemas import ConveneVerdict, EventAssessment, Posture
 
-# Shipments inside this many hours of their decision deadline count as
-# pressing. It is the Alert rung of the client's own ladder, reused rather
-# than invented: "action should be taken within 24-48 hours".
-PRESSING_HOURS = 48.0
+# Shipments inside the Alert rung of the team's own ladder (yellow_hours,
+# "24-36 hours", in working time) count as pressing: reused rather than
+# invented. This is the fallback when the config does not say.
+PRESSING_HOURS = 36.0
 
 
 def next_meeting(config: Config, clock: Clock) -> datetime | None:
@@ -104,6 +104,7 @@ def evaluate(
 
     contracts: set[str] = set()
     pressing: set[str] = set()
+    pressing_hours = float(config.scoring.get("alert_levels", {}).get("yellow_hours", PRESSING_HOURS))
     for assessment in assessments:
         for risk in assessment.shipment_risks:
             if risk.do_nothing.expected_loss_chf > 0:
@@ -111,7 +112,7 @@ def evaluate(
             # A shipment whose decision deadline falls inside the Alert window.
             # Plain supply chain: a cutoff to switch to rail, not an option
             # expiring.
-            if risk.lead_time_hours is not None and risk.lead_time_hours <= PRESSING_HOURS:
+            if risk.lead_time_hours is not None and risk.lead_time_hours <= pressing_hours:
                 pressing.add(risk.shipment_id)
 
     meeting = next_meeting(config, clock)

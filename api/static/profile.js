@@ -301,17 +301,19 @@ function renderAppetite(a) {
       `<div class="prungs">${ladder}</div>`) +
 
     section('Cutoffs',
-      'These are the hours that separate the rungs. Change them and the whole '
-      + 'board re-levels. Critical must stay sooner than Alert, and Alert sooner '
-      + 'than Watch. Otherwise a rung becomes unreachable and nothing on screen '
-      + 'would say so, so those are refused on save.',
+      'The working hours that separate the rungs. Weekends and public holidays '
+      + 'do not count. Change them and the whole board re-levels. Each rung must '
+      + 'stay sooner than the next, or a rung becomes unreachable and nothing on '
+      + 'screen would say so, so that is refused on save.',
       `<div class="pfields">
         ${field('alert_levels.red_hours', 'Critical within', a.alert_levels.red_hours,
-                'hours', 'client\'s wording: “action within 6 hours”')}
+                'working hours', 'team\'s wording: “8 hours”')}
         ${field('alert_levels.yellow_hours', 'Alert within', a.alert_levels.yellow_hours,
-                'hours', 'client\'s wording: “within 24–48 hours”')}
+                'working hours', 'team\'s wording: “24–36 hours”')}
         ${field('alert_levels.blue_hours', 'Watch within', a.alert_levels.blue_hours,
-                'hours', 'client\'s wording: “determine action within 3–7 days”')}
+                'working hours', 'team\'s wording: “3 days” (72 h)')}
+        ${field('alert_levels.white_hours', 'Bias within', a.alert_levels.white_hours,
+                'working hours', 'team\'s wording: “5 days” (120 h). Further out is Normal.')}
         ${field('alert_levels.material_chf', 'Something is at stake above',
                 a.alert_levels.material_chf, 'CHF',
                 '<b>assumed by us.</b> Below this a touched route is Bias '

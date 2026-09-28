@@ -219,6 +219,10 @@ def _build_route(
         # marker opens.
         "marker": _lane_marker(lane, risks, context),
         "lead_time_hours": verdict.lead_time_hours,
+        # The same deadline on the plain clock. The lead time above is working
+        # time (weekends and holidays out); the two differ over a weekend,
+        # and the panel says so.
+        "clock_hours": _clock_hours(risks, context),
         "exposure_chf": round(verdict.exposure_chf, 2),
         # NOT DISPLAYED. Kept because the convene rule is built on it, but it
         # is the least defensible number in the system: it comes from our
@@ -831,11 +835,13 @@ def _actions(risks: list[ShipmentRisk], context: RunContext) -> list[dict]:
                     risk.act_outcome.expected_loss_chf if risk.act_outcome else 0.0,
                     action.cost_chf,
                     action.label,
-                    deadline_text(context.clock, risk.decision_deadline),
+                    deadline_text(context.clock, risk.decision_deadline, risk.lead_time_hours),
                 ),
                 "value_chf": round(risk.value_of_acting_chf, 2),
                 "cost_chf": round(action.cost_chf, 2),
                 "lead_time_hours": risk.lead_time_hours,
+                "clock_hours": (round(context.clock.hours_until(risk.decision_deadline), 2)
+                                if risk.decision_deadline else None),
                 "actionability": risk.actionability,
                 "min_hours": action.min_hours,
                 "contacts": action.contacts,
@@ -860,6 +866,17 @@ def _urgency_band(hours: float | None, config) -> int:
         return 3
     level = _level_for_hours(hours, config)
     return {Level.RED: 0, Level.YELLOW: 1}.get(level, 2)
+
+
+def _clock_hours(risks: list, context: RunContext) -> float | None:
+    """Plain hours to the route's binding deadline: the earliest one with an
+    option still worth taking, the same one the level is read from."""
+    open_ = [r for r in risks
+             if r.lead_time_hours is not None and r.value_of_acting_chf > 0 and r.decision_deadline]
+    if not open_:
+        return None
+    binding = min(open_, key=lambda r: r.lead_time_hours)
+    return round(context.clock.hours_until(binding.decision_deadline), 2)
 
 
 def _stops(node_ids: list[str], context: RunContext) -> list[dict]:

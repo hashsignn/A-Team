@@ -50,11 +50,12 @@ const WEIGHT = {
   white:  { stroke: 0.8, alpha: 0.40 },
   green:  { stroke: 0.6, alpha: 0.24 },
 };
+// Counted in working time: weekends and public holidays do not count.
 const LEVEL_WHEN = {
-  red: 'within 6 h',
-  yellow: 'within 24–48 h',
-  blue: 'within 3–7 days',
-  white: 'monitor',
+  red: 'within 8 h',
+  yellow: 'within 24–36 h',
+  blue: 'within 3 days',
+  white: 'within 5 days',
   green: 'no action',
 };
 
@@ -104,8 +105,24 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
 function hours(h) {
   if (h == null) return '—';
   if (h < 0) return 'passed';
+  if (h < 0.5) return 'now';
   if (h < 48) return Math.round(h) + ' h';
   return Math.round(h / 24) + ' days';
+}
+// "decide in 6 h", or "decide now" when no working time is left before the
+// option closes (it closes over a weekend or a holiday).
+function inHours(h) {
+  const t = hours(h);
+  return t === 'now' || t === 'passed' || t === '—' ? t : `in ${t}`;
+}
+// Lead times are WORKING time: weekends and holidays do not count. When the
+// plain clock says something else, say both, so a Saturday-night board that
+// reads "now" for a Sunday cut-off explains itself.
+function clockNote(working, clock) {
+  if (working == null || clock == null || clock - working < 1) return '';
+  const plain = hours(clock) === 'now' ? 'under 1 h' : hours(clock);
+  return working < 0.5 ? `closes in ${plain}, before the next working day`
+    : `working time (${plain} on the clock)`;
 }
 
 // ===============================================================
@@ -1071,7 +1088,8 @@ function renderDetail(r) {
   // Critical with money at stake and no option left is not "no deadline":
   // the one thing left is telling the customer, and that is due now.
   const stuck = r.lead_time_hours == null && r.level === 'red' && r.exposure_chf > 0 && !r.actions.length;
-  const by = r.lead_time_hours != null ? [hours(r.lead_time_hours), 'first option closes', true]
+  const by = r.lead_time_hours != null
+    ? [hours(r.lead_time_hours), clockNote(r.lead_time_hours, r.clock_hours) || 'first option closes', true]
     : stuck ? ['now', 'tell the customer', true] : ['no deadline', 'nothing closes', false];
   $('d-stats').innerHTML = `
     <div class="stat">
@@ -1247,12 +1265,13 @@ function renderRActions(r) {
   // first says so. What it costs, saves and takes, as numbers; the whole
   // sentence is the tooltip.
   const soonest = Math.min(...actions.map((a) => (a.lead_time_hours == null ? Infinity : a.lead_time_hours)));
-  const urgency = (h) => (h == null ? '' : h <= 6 ? 'is-now' : h <= 48 ? 'is-soon' : '');
+  // The Critical and Alert rungs (8 and 36 working hours, scoring.yaml).
+  const urgency = (h) => (h == null ? '' : h <= 8 ? 'is-now' : h <= 36 ? 'is-soon' : '');
   $('r-actions').innerHTML = actions.map((a) => `
     <div class="act${a.customer_priority === 'A' ? ' is-key' : ''} ${urgency(a.lead_time_hours)}" title="${esc(a.sentence)}">
       <div class="act-top">
         <b class="act-label">${esc(a.label)}</b>
-        <span class="act-when">${a.lead_time_hours === soonest && Number.isFinite(soonest) ? '<b>closes first</b> · ' : ''}decide in ${hours(a.lead_time_hours)}</span>
+        <span class="act-when">${a.lead_time_hours === soonest && Number.isFinite(soonest) ? '<b>closes first</b> · ' : ''}decide ${inHours(a.lead_time_hours)}</span>
       </div>
       <div class="act-nums">
         <span><i>Cost</i> ${chf(a.cost_chf)}</span>
@@ -1536,7 +1555,7 @@ function keyAccountsHTML() {
     <div class="ah-card-head"><b>★ Key accounts at risk</b><span>served first</span></div>
     <ul class="ah-items">${rows.map((k) => `
       <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0" title="${esc(k.route)}">
-        <span class="ah-text"><b>${esc(k.customer)}</b> · ${k.lead_time_hours == null ? 'no deadline' : `decide in ${hours(k.lead_time_hours)}`}</span>
+        <span class="ah-text"><b>${esc(k.customer)}</b> · ${k.lead_time_hours == null ? 'no deadline' : `decide ${inHours(k.lead_time_hours)}`}</span>
         <span class="ah-detail">${esc(k.action || 'no option worth its cost')} · order ${esc(k.shipment_id)} · ${esc(siteName(k.site))}</span>
       </li>`).join('')}</ul>
   </section>`;
@@ -1650,12 +1669,12 @@ function whyHTML(r) {
     <li><span class="why-kind" title="${esc(e.kind_meaning || '')}">${esc(e.kind_label || e.kind || 'Event')}</span>${esc(e.title)}</li>`).join('');
   return `
     <ul class="why">
-      <li class="why-deadline">${ICON.clock}<span><b>${r.lead_time_hours == null ? 'No decision due' : `Decide within ${hours(r.lead_time_hours)}`}</b>
+      <li class="why-deadline">${ICON.clock}<span><b>${r.lead_time_hours == null ? 'No decision due' : `Decide ${inHours(r.lead_time_hours)}`}</b>
         ${r.actions.length ? `· ${r.actions.length} option${r.actions.length === 1 ? '' : 's'} open` : '· no option worth its cost'}</span></li>
       ${events}
       <li><b>${chf(r.exposure_chf)}</b> at risk if nobody acts · ${r.shipments_at_risk} of ${r.shipments} shipments</li>
       ${keys.length ? `<li>★ <b>${keys.length} key account${keys.length === 1 ? '' : 's'}</b>: ${keys.map(esc).join(', ')}</li>` : ''}
-      ${best ? `<li>Best option: <b>${esc(best.label)}</b> · net ${chf(best.value_chf)}${best.lead_time_hours == null ? '' : ` · decide in ${hours(best.lead_time_hours)}`}</li>` : ''}
+      ${best ? `<li>Best option: <b>${esc(best.label)}</b> · net ${chf(best.value_chf)}${best.lead_time_hours == null ? '' : ` · decide ${inHours(best.lead_time_hours)}`}</li>` : ''}
     </ul>
     <div class="why-go">
       <a class="icon-btn" href="${routePageHref(r.route_id)}" title="Route page: matrix and charts" aria-label="Route page">${ICON.chart}</a>

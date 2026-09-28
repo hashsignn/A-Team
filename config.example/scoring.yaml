@@ -186,17 +186,21 @@ decay_curve:
 #     decision_deadline = impact_time - action_duration
 #
 #   GREEN   Normal    no action is required
-#   WHITE   Bias      monitor closely, pay attention to changes
-#   BLUE    Watch     action determined within 3-7 days
-#   YELLOW  Alert     action taken within 24-48 hours
-#   RED     Critical  action taken within 6 hours
+#   WHITE   Bias      monitor closely, decide within 5 days
+#   BLUE    Watch     action determined within 3 days
+#   YELLOW  Alert     action taken within 24-36 hours
+#   RED     Critical  action taken within 8 hours
 #
-# The hour cutoffs are the client's own numbers. The two values marked ASSUMED
-# are ours and are the ones to replace when the real severity formula arrives.
+# The cutoffs are the team's own (agreed 28 Sep 2026: 8 h, 24-36 h, 3 days,
+# 5 days), counted in WORKING time: see working_calendar below. A first
+# option further out than white_hours is Normal: nothing to decide yet.
+# The two values marked ASSUMED are ours and are the ones to replace when the
+# real severity formula arrives.
 alert_levels:
-  red_hours: 6        # client's wording: "within 6 hours"
-  yellow_hours: 48    # client's wording: "within 24-48 hours"
-  blue_hours: 168     # client's wording: "within 3-7 days"
+  red_hours: 8        # team's wording: "8 hours"
+  yellow_hours: 36    # team's wording: "24-36 hours"
+  blue_hours: 72      # team's wording: "3 days"
+  white_hours: 120    # team's wording: "5 days"
 
   # ASSUMED — the floor below which a touched route is White (monitor) rather
   # than Blue (decide). Without it every route with any event at all demands a
@@ -206,6 +210,36 @@ alert_levels:
   # ASSUMED — ranking within a level is by CHF exposure. Lexicographic: the
   # rung always wins, and money only breaks ties inside it.
   rank_within_level_by: exposure_chf
+
+# -------------------------------------------------------------------
+# THE WORKING CALENDAR: what the rungs above are counted in
+# -------------------------------------------------------------------
+# "3 days" means three working days. A Saturday, a Sunday or a public holiday
+# of the team's country counts zero; every other day counts in full. Days are
+# cut in Central European time (UTC+1, +2 in EU summer time), because a
+# holiday starts at local midnight. The deadline itself does not move: only
+# the time the team has to act on it is counted.
+#
+# Holidays are rules, not a list of dates, so the file does not go stale:
+#   MM-DD            a fixed date
+#   good_friday, easter_monday, ascension, whit_monday, corpus_christi
+#                    days that move with Easter, which the engine computes
+# The calendar used for a shipment is its origin country's when listed here,
+# otherwise `country`. National holidays only: cantonal and state ones vary.
+working_calendar:
+  enabled: true
+  country: CH
+  weekend: [sat, sun]
+  utc_offset_hours: 1
+  summer_time: true
+  holidays:
+    # https://en.wikipedia.org/wiki/Public_holidays_in_Switzerland
+    # Only 1 August is federal; these are the days kept in most cantons.
+    CH: ["01-01", good_friday, easter_monday, ascension, whit_monday,
+         "08-01", "12-25", "12-26"]
+    # https://en.wikipedia.org/wiki/Public_holidays_in_Germany (nationwide ones)
+    DE: ["01-01", good_friday, easter_monday, "05-01", ascension, whit_monday,
+         "10-03", "12-25", "12-26"]
 
 # =====================================================================
 # URGENCY COMPRESSION — the severity formula
@@ -225,7 +259,7 @@ alert_levels:
 #     tau_effective = tau / U
 #     U = 1 + w_magnitude*M + w_likelihood*L + w_irreversible*D
 #
-# and tau_effective is classified against the CLIENT'S OWN 6/48/168. Their
+# and tau_effective is classified against the TEAM'S OWN 8/36/72/120. Their
 # thresholds are never touched, which matters: re-tuning them would make the
 # ladder ours instead of theirs.
 #
@@ -240,15 +274,18 @@ urgency:
   # file and they belong to the planning team.
   #
   # THE CAP IS NOT A TASTE CALL. U_max = 1 + sum(weights) must stay BELOW the
-  # smallest ratio between adjacent thresholds — here min(168/48, 48/6) = 3.5
-  # — because that is what makes a single compression unable to advance more
-  # than one rung. Money may make you decide sooner; it must never
-  # manufacture a six-hour emergency out of a week of slack. A test asserts
-  # this against the live thresholds, so changing either side fails loudly.
+  # smallest ratio between adjacent thresholds, here
+  # min(36/8, 72/36, 120/72) = 1.67, because that is what makes a single
+  # compression unable to advance more than one rung. Money may make you
+  # decide sooner; it must never manufacture an eight-hour emergency out of
+  # a week of slack. A test asserts this against the live thresholds, so
+  # changing either side fails loudly. The rungs are close together now
+  # (3 and 5 days are only 1.67 apart), so the pulls are small: the same
+  # proportions as before (2 : 1 : 2), scaled to fit.
   weights:
-    magnitude: 0.8      # CHF exposure, log-scaled
-    likelihood: 0.4     # P(late) of the binding shipment
-    irreversible: 0.8   # cargo that cannot be saved by arriving later
+    magnitude: 0.26     # CHF exposure, log-scaled
+    likelihood: 0.13    # P(late) of the binding shipment
+    irreversible: 0.26  # cargo that cannot be saved by arriving later
 
   # The exposure at which the magnitude term saturates. Reuses the convene
   # threshold rather than inventing a number: "big enough to pull the team

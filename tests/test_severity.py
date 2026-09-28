@@ -99,18 +99,20 @@ def _without_urgency(config):
 @pytest.mark.parametrize(
     "lead_hours, expected",
     [
-        (1.0, Level.RED),       # "within 6 hours"
-        (5.9, Level.RED),
-        (6.1, Level.YELLOW),    # "within 24-48 hours"
-        (47.0, Level.YELLOW),
-        (49.0, Level.BLUE),     # "within 3-7 days"
-        (167.0, Level.BLUE),
-        (200.0, Level.WHITE),   # beyond the ladder: monitor, no decision yet
+        (1.0, Level.RED),       # "within 8 hours"
+        (7.9, Level.RED),
+        (8.1, Level.YELLOW),    # "within 24-36 hours"
+        (35.0, Level.YELLOW),
+        (37.0, Level.BLUE),     # "within 3 days"
+        (71.0, Level.BLUE),
+        (73.0, Level.WHITE),    # "within 5 days"
+        (119.0, Level.WHITE),
+        (121.0, Level.GREEN),   # beyond the ladder: nothing to decide yet
     ],
 )
 def test_the_raw_ladder_is_the_clients_own_cutoffs(lead_hours, expected, config):
-    """Uncompressed, the level IS the clock — 6 / 48 / 168 straight out of
-    the client's own wording.
+    """Uncompressed, the level IS the clock: 8 / 36 / 72 / 120 working hours,
+    straight out of the team's own wording.
 
     Tested with the compression switched off rather than with a small
     exposure, because there is no such thing as a quiet shipment: P(late)
@@ -128,9 +130,10 @@ def test_the_raw_ladder_is_the_clients_own_cutoffs(lead_hours, expected, config)
 @pytest.mark.parametrize(
     "lead_hours, raw, compressed",
     [
-        (6.1, Level.YELLOW, Level.RED),
-        (49.0, Level.BLUE, Level.YELLOW),
-        (200.0, Level.WHITE, Level.BLUE),
+        (8.5, Level.YELLOW, Level.RED),
+        (40.0, Level.BLUE, Level.YELLOW),
+        (80.0, Level.WHITE, Level.BLUE),
+        (130.0, Level.GREEN, Level.WHITE),
     ],
 )
 def test_large_exposure_compresses_the_clock_by_exactly_one_rung(
@@ -138,9 +141,9 @@ def test_large_exposure_compresses_the_clock_by_exactly_one_rung(
 ):
     """The Q6 fix, and the behaviour change this formula exists for.
 
-    CHF 80,000 six hours out is not "act within 24-48 hours"; it is Critical.
-    CHF 80,000 a week out is not "monitor"; it is a decision to take this
-    week. Both of those used to read one rung calmer than they are, which is
+    CHF 80,000 eight and a half hours out is not "act within 24-36 hours";
+    it is Critical. CHF 80,000 five and a half days out is not "nothing to
+    decide"; it is a decision to take this week. Both of those used to read one rung calmer than they are, which is
     exactly the "we declare a crisis too late" failure the client named.
     """
     risks = [_risk(lead_hours=lead_hours, value_of_acting=50_000, expected_loss=80_000)]
@@ -154,7 +157,7 @@ def test_a_compressed_level_says_why_in_its_own_reason(config):
     """A level that moved for a reason the planner cannot see is a level they
     will argue with, and they would be right to."""
     verdict = classify(
-        [_risk(lead_hours=200.0, value_of_acting=50_000, expected_loss=80_000)],
+        [_risk(lead_hours=130.0, value_of_acting=50_000, expected_loss=80_000)],
         config,
     )
     assert "rather than" in verdict.reason
@@ -446,11 +449,11 @@ def test_the_dead_band_stops_a_marginal_nudge_from_re_levelling(config):
     loose.files["scoring"].data = copy.deepcopy(config.scoring)
     loose.files["scoring"].data["urgency"]["dead_band"] = 0.6
 
-    # 170 h, barely past the 168 h line, with a modest exposure.
-    marginal = [_risk(lead_hours=170.0, value_of_acting=100.0,
+    # 122 h, barely past the 120 h line, with a modest exposure.
+    marginal = [_risk(lead_hours=122.0, value_of_acting=100.0,
                       expected_loss=1_400.0, p_late=0.1)]
-    assert classify(marginal, tight).level is Level.BLUE
-    assert classify(marginal, loose).level is Level.WHITE, (
+    assert classify(marginal, tight).level is Level.WHITE
+    assert classify(marginal, loose).level is Level.GREEN, (
         "a wide dead band should refuse a marginal re-levelling"
     )
 
@@ -485,7 +488,7 @@ def test_an_authority_notice_needs_no_corroboration(config):
 
 def test_the_cap_only_ever_lowers_a_level(config):
     """A cap must not PROMOTE a quiet route to Watch."""
-    quiet = [_risk(lead_hours=5000.0, value_of_acting=10.0,
+    quiet = [_risk(lead_hours=100.0, value_of_acting=10.0,
                    expected_loss=1_010.0, p_late=0.0)]
     assert classify(quiet, config, source_tiers=[3]).level is Level.WHITE
 

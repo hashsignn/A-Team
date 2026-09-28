@@ -117,12 +117,12 @@ def test_a_node_with_no_alternative_is_empty_not_invented(profile):
 
 
 def test_an_edit_lands_in_the_customer_dir_not_the_example(config, tmp_path):
-    out = P.apply_edits(config, {"alert_levels": {"red_hours": 8}}, tmp_path)
+    out = P.apply_edits(config, {"alert_levels": {"red_hours": 10}}, tmp_path)
     assert out["applied"] == ["alert_levels.red_hours"]
     written = yaml.safe_load((tmp_path / "scoring.yaml").read_text(encoding="utf-8"))
-    assert written["alert_levels"]["red_hours"] == 8
+    assert written["alert_levels"]["red_hours"] == 10
     # and the committed stand-in is untouched
-    assert config.scoring["alert_levels"]["red_hours"] != 8
+    assert config.scoring["alert_levels"]["red_hours"] != 10
 
 
 def test_the_whole_scoring_file_is_written_not_just_the_edit(config, tmp_path):
@@ -162,6 +162,7 @@ def test_action_durations_cannot_be_edited_from_the_page(config, tmp_path):
     [
         ({"red_hours": 72, "yellow_hours": 48}, "sooner than Alert"),
         ({"yellow_hours": 200, "blue_hours": 168}, "sooner than Watch"),
+        ({"blue_hours": 130, "white_hours": 120}, "sooner than Bias"),
         ({"red_hours": 0}, "positive number"),
         ({"material_chf": -5}, "zero or more"),
     ],
@@ -230,10 +231,11 @@ def test_a_saved_cutoff_actually_re_levels_the_board(config, tmp_path):
     before = build_board(
         run(clock=AS_OF, config=config, options=RunOptions(shipment_count=120))
     )
-    # Collapse the ladder: everything beyond 1 h becomes Bias.
+    # Collapse the ladder: everything beyond 1.5 h becomes Normal.
     P.apply_edits(
         config,
-        {"alert_levels": {"red_hours": 0.5, "yellow_hours": 0.75, "blue_hours": 1}},
+        {"alert_levels": {"red_hours": 0.5, "yellow_hours": 0.75, "blue_hours": 1,
+                          "white_hours": 1.5}},
         tmp_path,
     )
     after = build_board(

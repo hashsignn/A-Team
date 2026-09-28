@@ -53,7 +53,7 @@ from engine.schemas import (
     ShipmentRisk,
 )
 from engine.score import impact as impact_mod
-from engine.score import leadtime, matrix, survive
+from engine.score import leadtime, matrix, survive, workcal
 from engine.simulate.draws import build_draw_matrix, propagate, variable_contributions
 from engine.variables import modality, onset
 from engine.variables import rules as rules_router
@@ -997,6 +997,14 @@ def _assess(
     return assessments
 
 
+def _origin_country(shipment: Shipment, network: Network) -> str | None:
+    """The country whose calendar the shipping team keeps."""
+    try:
+        return network.node(shipment.origin_node).country
+    except KeyError:
+        return None
+
+
 def _assess_one(
     shipment: Shipment,
     event: Event,
@@ -1057,7 +1065,10 @@ def _assess_one(
         )
         if impact_at is not None:
             deadline = leadtime.decision_deadline(impact_at, chosen)
-            lead_hours = clock.hours_until(deadline)
+            # Working time: weekends and holidays of the shipping team's
+            # country do not count toward the time left to act.
+            lead_hours = workcal.working_hours(
+                clock.as_of, deadline, config, _origin_country(shipment, network))
 
     band = leadtime.actionability(
         lead_hours, chosen.min_hours if chosen else None, config

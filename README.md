@@ -218,15 +218,17 @@ the model is unavailable on the day the board still fills.
 
 ## The five-level ladder
 
-The client's scale:
+The team's scale (cut-offs agreed 28 Sep 2026), counted in **working time**:
+weekends and public holidays of the shipping team's country do not count
+(`working_calendar` in `config.example/scoring.yaml`).
 
 | | Level | Meaning |
 |---|---|---|
-| 🟢 | **Normal** | No action required |
-| ⚪ | **Bias** | Monitor closely — watch for changes |
-| 🔵 | **Watch** | Determine action within 3–7 days |
-| 🟡 | **Alert** | Take action within 24–48 hours |
-| 🔴 | **Critical** | Take action within 6 hours |
+| 🟢 | **Normal** | No action required (first option more than 5 working days out) |
+| ⚪ | **Bias** | Monitor closely; decide within 5 days |
+| 🔵 | **Watch** | Determine action within 3 days |
+| 🟡 | **Alert** | Take action within 24–36 hours |
+| 🔴 | **Critical** | Take action within 8 hours |
 
 **Every rung is a deadline, not a damage band.** So the level is not "how bad
 is this" — it is "how soon must somebody decide", which is exactly
@@ -723,8 +725,8 @@ board is complete either way.
 
 ### It is a time-to-act scale, so severity is a deadline
 
-The client's own wording phrases every rung as one: *act within 6 hours*,
-*within 24–48*, *determine action within 3–7 days*. So severity here is **how
+The team's own wording phrases every rung as one: *act within 8 hours*,
+*within 24–36*, *determine action within 3 days*, *within 5 days*. So severity here is **how
 soon must somebody decide**, never *how bad is this*. The raw answer is the
 clock the engine already computes:
 

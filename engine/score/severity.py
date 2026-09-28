@@ -5,10 +5,13 @@ THE LADDER IS A TIME-TO-ACT SCALE, NOT A DAMAGE SCALE
 Read the client's own definitions and this falls out:
 
     GREEN   Normal    no action is required
-    WHITE   Bias      monitor closely, pay attention to changes
-    BLUE    Watch     action should be DETERMINED within 3-7 days
-    YELLOW  Alert     action should be TAKEN within 24-48 hours
-    RED     Critical  action should be TAKEN within 6 hours
+    WHITE   Bias      monitor closely, decide within 5 days
+    BLUE    Watch     action should be DETERMINED within 3 days
+    YELLOW  Alert     action should be TAKEN within 24-36 hours
+    RED     Critical  action should be TAKEN within 8 hours
+
+The cutoffs are counted in WORKING time (engine/score/workcal.py): weekends
+and public holidays do not count toward the time left to act.
 
 Every rung is phrased as a deadline. So the level is not "how bad is this" — it
 is "how soon must somebody decide". That is exactly ``lead_time_hours``, which
@@ -20,7 +23,7 @@ already there, which is why it can be wired straight through.
 
 PROVISIONAL — THE CUTOFFS ARE THEIRS TO SET
 -------------------------------------------
-The thresholds below come from the client's own wording (6 h / 48 h / 7 days).
+The thresholds below are the team's own (8 h / 36 h / 3 days / 5 days).
 The two judgement calls that are NOT in their wording are marked ``ASSUMED``:
 
   * what counts as "something at stake" — the floor below which a touched route
@@ -40,6 +43,7 @@ from enum import Enum
 
 from engine.config import Config
 from engine.schemas import ShipmentRisk
+from engine.score import workcal
 
 
 class Level(str, Enum):
@@ -71,10 +75,10 @@ LEVEL_LABEL: dict[Level, str] = {
 
 LEVEL_DIRECTIVE: dict[Level, str] = {
     Level.GREEN: "No action required",
-    Level.WHITE: "Monitor closely and watch for changes",
-    Level.BLUE: "Determine action within 3–7 days",
-    Level.YELLOW: "Take action within 24–48 hours",
-    Level.RED: "Take action within 6 hours",
+    Level.WHITE: "Monitor closely; decide within 5 days",
+    Level.BLUE: "Determine action within 3 days",
+    Level.YELLOW: "Take action within 24–36 hours",
+    Level.RED: "Take action within 8 hours",
 }
 
 
@@ -184,26 +188,33 @@ def smallest_threshold_ratio(config: Config) -> float:
     """The tightest gap between adjacent rungs.
 
     U_max must stay below this, and that is what makes a single compression
-    unable to advance more than one rung. With the client's own 6/48/168 the
-    ratios are 3.5 and 8.0, so anything under 3.5 is safe.
+    unable to advance more than one rung. With the team's 8/36/72/120 the
+    ratios are 4.5, 2.0 and 1.67, so anything under 1.67 is safe.
     """
-    spec = _thresholds(config)
-    red = float(spec.get("red_hours", 6))
-    yellow = float(spec.get("yellow_hours", 48))
-    blue = float(spec.get("blue_hours", 168))
-    ratios = [r for r in (yellow / red, blue / yellow) if r > 0]
+    red, yellow, blue, white = _cutoffs(config)
+    ratios = [r for r in (yellow / red, blue / yellow, white / blue) if r > 0]
     return min(ratios) if ratios else float("inf")
 
 
-def _level_for_hours(hours: float, config: Config) -> Level:
+def _cutoffs(config: Config) -> tuple[float, float, float, float]:
     spec = _thresholds(config)
-    if hours <= float(spec.get("red_hours", 6)):
+    return (float(spec.get("red_hours", 8)), float(spec.get("yellow_hours", 36)),
+            float(spec.get("blue_hours", 72)), float(spec.get("white_hours", 120)))
+
+
+def _level_for_hours(hours: float, config: Config) -> Level:
+    red, yellow, blue, white = _cutoffs(config)
+    if hours <= red:
         return Level.RED
-    if hours <= float(spec.get("yellow_hours", 48)):
+    if hours <= yellow:
         return Level.YELLOW
-    if hours <= float(spec.get("blue_hours", 168)):
+    if hours <= blue:
         return Level.BLUE
-    return Level.WHITE
+    if hours <= white:
+        return Level.WHITE
+    # The first option closes more than five working days out: something is
+    # at stake, but nothing needs deciding yet.
+    return Level.GREEN
 
 
 def _apply_dead_band(
@@ -225,12 +236,13 @@ def _apply_dead_band(
     if band <= 0.0:
         return new_level, True
 
-    spec = _thresholds(config)
+    red, yellow, blue, white = _cutoffs(config)
     boundary = {
-        Level.RED: float(spec.get("red_hours", 6)),
-        Level.YELLOW: float(spec.get("yellow_hours", 48)),
-        Level.BLUE: float(spec.get("blue_hours", 168)),
-        Level.WHITE: float("inf"),
+        Level.RED: red,
+        Level.YELLOW: yellow,
+        Level.BLUE: blue,
+        Level.WHITE: white,
+        Level.GREEN: float("inf"),
     }[new_level]
     if boundary == float("inf"):
         return new_level, True
@@ -308,16 +320,16 @@ def classify(
     So magnitude COMPRESSES the clock rather than replacing it:
 
         tau_effective = tau_binding / U
-        U = 1 + 0.8*magnitude + 0.4*P(late) + 0.8*irreversible
+        U = 1 + 0.26*magnitude + 0.13*P(late) + 0.26*irreversible
 
-    and tau_effective is read against the CLIENT'S OWN 6/48/168. Their
-    thresholds are never touched: re-tuning them would make the ladder ours
-    instead of theirs.
+    and tau_effective is read against the TEAM'S OWN 8/36/72/120, in working
+    hours. Their thresholds are never touched: re-tuning them would make the
+    ladder ours instead of theirs.
 
-    U <= 3 is a load-bearing bound, not a preference. The adjacent threshold
-    ratios are 168/48 = 3.5 and 48/6 = 8, so a U below 3.5 cannot cross two
-    boundaries — money may make you decide sooner, it can never manufacture a
-    six-hour emergency out of a week of slack. ``test_severity.py`` asserts
+    U <= 1.65 is a load-bearing bound, not a preference. The tightest
+    adjacent ratio is 120/72 = 1.67, so a U below it cannot cross two
+    boundaries: money may make you decide sooner, it can never manufacture an
+    eight-hour emergency out of a week of slack. ``test_severity.py`` asserts
     that against the live config, so changing either side fails loudly.
 
     ``source_tiers`` and ``irreversible_damage`` are optional and default to
@@ -406,10 +418,15 @@ def classify(
         capped = True
     working["capped"] = capped
 
+    # Working time when the calendar is on: "3 working days" is what the
+    # rung is counted in, so it is what the sentence says.
+    work = " working" if workcal.enabled(config) else ""
     when = (
-        f"{soonest:.0f} h"
+        "less than a working hour: it closes before the next working day"
+        if work and soonest < 0.5
+        else f"{soonest:.0f}{work} h"
         if soonest < 48
-        else f"{soonest / 24:.0f} days"
+        else f"{soonest / 24:.0f}{work} days"
     )
     # Deliberately does NOT quote a recoverable CHF figure. That number comes
     # from our invented action costs and residual fractions — the least
@@ -439,7 +456,9 @@ def classify(
     if capped and cap_reason:
         reason += " " + cap_reason
     if level is Level.WHITE:
-        reason += " No decision needed yet."
+        reason += " Keep watching; decide within 5 days."
+    elif level is Level.GREEN:
+        reason += " Nothing to decide yet."
 
     return Verdict(
         level=level,

@@ -52,8 +52,9 @@ Rules, in order of importance:
    say what the board implies and what it would cost.
 
 The levels are a TIME-TO-ACT scale, not a damage scale:
-Critical = act within 6 h, Alert = 24-48 h, Watch = decide in 3-7 days,
-Bias = monitor, Normal = nothing needed."""
+Critical = act within 8 h, Alert = 24-36 h, Watch = decide in 3 days,
+Bias = decide within 5 days, Normal = nothing needed. All counted in working
+time: weekends and public holidays do not count."""
 
 
 def _event_context(event: dict) -> dict:
