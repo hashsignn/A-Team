@@ -69,6 +69,8 @@ const state = {
   // Normal routes need nothing, so the list of affected routes leaves them
   // out until asked. The map and the globe still draw all freight.
   showNormal: false,
+  // Closed cases leave the list; this brings them back.
+  showClosed: false,
   focusOnly: false,    // the list narrowed to the focus routes
   // WHOSE BOARD THIS IS. The site a planner answers for, and which
   // customers they are looking at ('' all, 'A' key accounts, 'AB' key and
@@ -949,7 +951,7 @@ function renderLadder(levels) {
   const mine = state.board ? deskRoutes() : null;
   const only = state.levelOnly;
   $('ladder').innerHTML = rows.map((l) => {
-    const count = mine ? mine.filter((r) => r.level === l.level).length : null;
+    const count = mine ? mine.filter((r) => r.level === l.level && !isClosed(r)).length : null;
     const on = only === l.level;
     return `
     <button type="button" class="rung${on ? ' is-on' : ''}${only && !on ? ' is-off' : ''}${count ? ' has-items' : ''}"
@@ -1018,8 +1020,13 @@ function visibleRoutes() {
  * (nothing to decide) unless they were asked for. */
 function listRoutes() {
   const keepNormal = state.showNormal || state.levelOnly === 'green';
-  return visibleRoutes().filter((r) => keepNormal || r.level !== 'green');
+  return visibleRoutes().filter((r) => (keepNormal || r.level !== 'green')
+    && (state.showClosed || !isClosed(r)));
 }
+
+/* A closed case (engine/act/cases.py) is dealt with: it leaves the list and
+ * the ladder counts, and sits in the risk ledger's history. */
+const isClosed = (r) => !!(r && r.case && r.case.status === 'closed');
 
 /* The focus-route label. It counts the sources this run actually read as
  * real (a recording or a live answer), never the route merely being on the
@@ -1214,11 +1221,76 @@ function renderDetail(r) {
 
   renderAlloc(r);
   renderShips(r);
+  renderCase(r);
 
   // No radar, no event list, no matrix here. They were on this panel AND on
   // the route page AND in a modal — three copies of three charts, none big
   // enough to read. One copy, on /route/<id>, which is a page you can send.
   $('panel').scrollTop = 0;
+}
+
+/* CLOSE THE CASE. Once dealt with, one click on how it ended closes it, and
+ * it goes into the risk ledger's history (Risk profile → Risk ledger). A
+ * closed case reopens by itself if the route climbs the ladder. */
+const CASE_OUTCOMES = [
+  ['rerouted', 'Rerouted'], ['split', 'Split'], ['other_port', 'Other port'],
+  ['customer_told', 'Customer informed'], ['absorbed', 'No impact'], ['other', 'Other'],
+];
+
+function renderCase(r) {
+  const host = $('d-case');
+  if (!host) return;
+  if (r.level === 'green' && !isClosed(r)) { host.innerHTML = ''; return; }
+  if (isClosed(r)) {
+    const c = r.case;
+    host.innerHTML = `
+      <span class="case-done" title="${esc(`${c.outcome_label} · ${c.closed_by} · ${new Date(c.closed_at).toLocaleString()}`)}">
+        ✓ Closed · ${esc(c.outcome_label)}</span>
+      <button type="button" class="ctl ctl--mini" id="case-reopen">Reopen</button>`;
+    $('case-reopen').addEventListener('click', () => caseCall(`/api/cases/${encodeURIComponent(c.case_id)}/reopen`, {}, r.route_id));
+    return;
+  }
+  host.innerHTML = `
+    <button type="button" class="ctl" id="case-close" aria-expanded="false">✓ Close case</button>
+    <div class="case-pick" id="case-pick" hidden>
+      ${CASE_OUTCOMES.map(([id, label]) => `<button type="button" class="case-opt" data-outcome="${id}">${esc(label)}</button>`).join('')}
+      <input type="text" id="case-note" maxlength="500" placeholder="Note (optional)" aria-label="Note">
+    </div>`;
+  $('case-close').addEventListener('click', () => {
+    const pick = $('case-pick');
+    pick.hidden = !pick.hidden;
+    $('case-close').setAttribute('aria-expanded', String(!pick.hidden));
+  });
+  host.querySelectorAll('.case-opt').forEach((b) => b.addEventListener('click', () => {
+    const actor = (r.site && r.site.planner) ? plainName(r.site.planner) : 'planner';
+    caseCall(`/api/cases/${encodeURIComponent(r.route_id)}/close`,
+      { outcome: b.dataset.outcome, note: $('case-note').value, actor }, r.route_id, true);
+  }));
+}
+
+async function caseCall(url, body, routeId, closing) {
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  const host = $('d-case');
+  host.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  try {
+    const res = await fetch(`${url}?${q}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out.detail || `${res.status}`);
+    state.board = await fetchBoard({ as_of: p.as_of || DEFAULT_AS_OF, shipments: p.shipments || 150 });
+    applyBoard(state.board);
+    refreshPaths();
+    if (closing) {
+      showRouteList();
+    } else {
+      select(routeId);
+    }
+  } catch (err) {
+    host.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    host.insertAdjacentHTML('beforeend', `<span class="case-err">${esc(err.message)}</span>`);
+  }
 }
 
 /* Who the route is for. The review said it was unclear how things were
@@ -2226,6 +2298,7 @@ function renderTable() {
           ${r.lead_time_hours == null ? '' : `<span class="rli-when" title="Decide within${r.clock_hours != null && state.board ? `, by ${esc(DeadlineClock.at(dueAt(r)))}` : ''}">${
             r.clock_hours != null && state.board ? DeadlineClock.html(dueAt(r)) : `${ICON.clock}${hours(r.lead_time_hours)}`}</span>`}
           ${r.early_warning ? `<span class="rli-ew" title="${esc(r.early_warning.sentence)}">⚡ orders</span>` : ''}
+          ${isClosed(r) ? `<span class="rli-closed" title="${esc(r.case.outcome_label)}">✓ Closed</span>` : ''}
           <span class="rli-site">${esc(r.site ? r.site.name : '')}</span>
         </span>
         <span class="rli-title">
@@ -2252,6 +2325,16 @@ function renderTable() {
         : `Show ${normalCount} normal route${normalCount === 1 ? '' : 's'} <span class="muted">(no action needed)</span>`}</button>`);
     $('f-normal').addEventListener('click', () => {
       state.showNormal = !state.showNormal;
+      renderTable();
+    });
+  }
+
+  const closedCount = visibleRoutes().filter(isClosed).length;
+  if (closedCount) {
+    list.insertAdjacentHTML('beforeend', `<button type="button" class="rlist-more" id="f-closed">
+      ${state.showClosed ? `Hide closed (${closedCount})` : `✓ Closed (${closedCount})`}</button>`);
+    $('f-closed').addEventListener('click', () => {
+      state.showClosed = !state.showClosed;
       renderTable();
     });
   }

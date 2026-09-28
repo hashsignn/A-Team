@@ -36,9 +36,9 @@ Write-Host "Downloading $Model (only the first time)..."
 ollama pull $Model
 
 Write-Host ""
-Write-Host "Ready. Start the radar with this model, in the same window:"
+Write-Host "Ready. Start Horizon with this model, in the same window:"
 Write-Host "  `$env:RADAR_LOCAL_MODEL = `"$Model`""
 Write-Host "  `$env:RADAR_LLM_TIMEOUT = `"120`""
-Write-Host "  uvicorn api.main:app --port 8000"
+Write-Host "  .venv\Scripts\python run.py serve"
 Write-Host ""
 Write-Host "Then open Ask on the board: answers say 'written by $Model'."

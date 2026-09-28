@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import secrets
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -32,6 +33,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api import fast_routes
 from engine import alerts as alerts_mod
+from engine.act import cases as cases_mod
 from engine.act import flow as flow_mod
 from engine.clock import Clock
 from engine.config import CUSTOMER_DIR, load_config
@@ -151,8 +153,60 @@ def board(
     as_of: str = Query(DEFAULT_AS_OF),
     shipments: int = Query(150, ge=20, le=400),
 ) -> JSONResponse:
-    """Everything the UI draws: nodes, routes, radar data, ranking, posture."""
-    return JSONResponse(_board(as_of, shipments))
+    """Everything the UI draws: nodes, routes, radar data, ranking, posture.
+
+    Each route carries its case state (engine/act/cases.py): open, or closed
+    and by whom. Laid over the cached board per request, never cached with
+    it, so a close shows on the next load.
+    """
+    return JSONResponse(_with_cases(_board(as_of, shipments), as_of, shipments))
+
+
+def _with_cases(board: dict, as_of: str, shipments: int) -> dict:
+    return cases_mod.annotate(board, _context(as_of, shipments).clock.as_of)
+
+
+# ------------------------------------------------------------------ cases
+# Closing a case: once a route is dealt with, the planner closes it and it
+# goes into the risk ledger's history. The wall clock is read here, at the
+# boundary, and nowhere in engine/.
+@app.get("/api/cases")
+def cases_history() -> JSONResponse:
+    """Every closed case, newest first: the risk ledger's history."""
+    return JSONResponse({"cases": cases_mod.history(), "outcomes": cases_mod.OUTCOMES})
+
+
+@app.post("/api/cases/{route_id}/close")
+def close_case(
+    route_id: str,
+    payload: Annotated[dict, Body()],
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    board = _board(as_of, shipments)
+    route = _route(board, route_id)
+    try:
+        record = cases_mod.close(
+            route,
+            outcome=str(payload.get("outcome", "")).strip(),
+            note=payload.get("note"),
+            actor=payload.get("actor"),
+            closed_at=datetime.now(UTC),
+            as_of=_context(as_of, shipments).clock.as_of,
+        )
+    except cases_mod.CaseError as exc:
+        raise HTTPException(409 if "already" in str(exc) else 400, str(exc)) from exc
+    return JSONResponse({"ok": True, "case": record})
+
+
+@app.post("/api/cases/{case_id}/reopen")
+def reopen_case(case_id: str, payload: Annotated[dict | None, Body()] = None) -> JSONResponse:
+    try:
+        record = cases_mod.reopen(case_id, actor=(payload or {}).get("actor"),
+                                  at=datetime.now(UTC))
+    except cases_mod.CaseError as exc:
+        raise HTTPException(409 if "already" in str(exc) else 404, str(exc)) from exc
+    return JSONResponse({"ok": True, "reopen": record})
 
 
 @app.get("/api/decision/{route_id}")
@@ -166,7 +220,11 @@ def decision(
     reduces the damage otherwise, who to tell."""
     board = _board(as_of, shipments)
     route = _route(board, route_id)
-    return JSONResponse(_tree(board, route, as_of, shipments))
+    tree = _tree(board, route, as_of, shipments)
+    # Whether the case is closed, so the tree can offer Close or Reopen.
+    case = cases_mod.annotate({"routes": [route]}, _context(as_of, shipments).clock.as_of)
+    return JSONResponse(tree | {"case": case["routes"][0]["case"],
+                                "case_outcomes": cases_mod.OUTCOMES})
 
 
 def _tree(board: dict, route: dict, as_of: str, shipments: int) -> dict:

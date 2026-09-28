@@ -22,6 +22,10 @@ data/photos/
 data/reports.jsonl
 data/reports.*.jsonl
 
+# Closed cases: the risk ledger's history. Operational data (it names
+# customers and the people who closed them), append-only, like the reports.
+data/cases.jsonl
+
 # Python
 .venv/
 __pycache__/

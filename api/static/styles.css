@@ -3280,3 +3280,45 @@ button.dt-order:hover { color: var(--text-primary); }
 .al-subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-st { font-weight: 650; color: var(--text-secondary); }
 .al-st--sent { color: var(--calm); }
+
+/* ---- close the case (engine/act/cases.py) ------------------------------ */
+.case { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.case:empty { display: none; }
+.case-pick {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.case-pick[hidden] { display: none; }
+.case-opt {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 6px 11px; border-radius: 999px;
+  border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--text-primary);
+}
+.case-opt:hover { border-color: var(--calm, #1f7a4a); color: var(--calm, #1f7a4a); }
+.case-pick input {
+  flex: 1 1 160px; min-width: 0; font: inherit; font-size: 13px;
+  padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+}
+.case-done {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 11px; border-radius: 999px; font-size: 13px; font-weight: 650;
+  color: var(--calm, #1f7a4a);
+  background: color-mix(in srgb, var(--calm, #1f7a4a) 12%, transparent);
+}
+.case-err { font-size: 12.5px; color: var(--lvl-red); }
+.rli-closed {
+  font-size: 11.5px; font-weight: 650; color: var(--calm, #1f7a4a);
+  padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--calm, #1f7a4a) 12%, transparent);
+}
+/* The risk ledger's history (profile → Risk ledger). */
+.lvl-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.rtable tr.is-reopened td { opacity: .6; }
+/* On the tree page the outcomes open under the button, over the tree. */
+.tr-tools .case { position: relative; }
+.case-pick--pop {
+  position: absolute; z-index: 30; top: calc(100% + 6px); right: 0;
+  width: min(360px, 90vw); box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}

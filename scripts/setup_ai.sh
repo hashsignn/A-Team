@@ -45,9 +45,9 @@ echo "Downloading $MODEL (only the first time)..."
 ollama pull "$MODEL"
 
 echo
-echo "Ready. Start the radar with this model, in the same terminal:"
+echo "Ready. Start Horizon with this model, in the same terminal:"
 echo "  export RADAR_LOCAL_MODEL=$MODEL"
 echo "  export RADAR_LLM_TIMEOUT=120"
-echo "  uvicorn api.main:app --port 8000"
+echo "  .venv/bin/python run.py serve"
 echo
 echo "Then open Ask on the board: answers say 'written by $MODEL'."

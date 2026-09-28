@@ -58,6 +58,7 @@ function render() {
   renderDesk(p.desk, p.overlay_active);
   renderNetwork(p.network);
   renderLedger(p.ledger);
+  loadCaseHistory();
   renderAppetite(p.appetite);
   renderResponse(p.response);
   renderSources(p.sources);
@@ -242,6 +243,7 @@ function renderLedger(l) {
   });
 
   $('tab-ledger').innerHTML =
+    '<div id="case-history"></div>' +
     section(`Risk ledger · ${l.total} variables`,
       'Sika confirmed no risk ledger for outgoing shipments exists today, so '
       + 'this file <b>is</b> the proposal. Every variable names the modes it can '
@@ -255,6 +257,49 @@ function renderLedger(l) {
         `<div class="chips">${l.overrides.map((o) =>
           `<span class="chip">${esc(o)}</span>`).join('')}</div>`)
       : '');
+}
+
+/* The ledger's HISTORY: every case a planner closed on the board, newest
+ * first (engine/act/cases.py, GET /api/cases). A reopened case stays in the
+ * list, marked. */
+async function loadCaseHistory() {
+  const host = $('case-history');
+  if (!host) return;
+  let data;
+  try {
+    const res = await fetch('/api/cases');
+    if (!res.ok) throw new Error(String(res.status));
+    data = await res.json();
+  } catch (err) {
+    host.innerHTML = section('History', '', `<p class="muted">Could not load: ${esc(err.message)}</p>`);
+    return;
+  }
+  const rows = data.cases.map((c) => `<tr class="${c.reopened ? 'is-reopened' : ''}" data-case="${esc(c.case_id)}">
+      <td class="num">${esc(new Date(c.closed_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }))}</td>
+      <td>
+        <div class="r-route">${esc(c.route_name)}</div>
+        <div class="r-driver">${esc((c.events || []).map((e) => e.title).slice(0, 2).join(' · '))}</div>
+      </td>
+      <td><span class="lvl-dot" style="background:${LEVEL_COLOR[c.level] || 'transparent'}"></span>${esc(c.level_label || '')}</td>
+      <td><b>${esc(c.outcome_label)}</b>${c.note ? `<div class="r-driver">${esc(c.note)}</div>` : ''}</td>
+      <td class="num">${chf(c.exposure_chf)}</td>
+      <td class="muted">${esc(c.closed_by)}</td>
+      <td>${c.reopened
+        ? '<span class="tag tag--warn">reopened</span>'
+        : `<button type="button" class="ctl ctl--mini case-reopen" data-case="${esc(c.case_id)}">Reopen</button>`}</td>
+    </tr>`);
+  host.innerHTML = section(`History · ${data.cases.length} closed`, '',
+    rows.length
+      ? table([{ label: 'Closed', num: true }, 'Route', 'Level', 'Outcome',
+               { label: 'Exposure', num: true }, 'By', ''], rows)
+      : '<p class="muted">No case closed yet. Close one from a route on the board.</p>');
+  host.querySelectorAll('.case-reopen').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    const res = await fetch(`/api/cases/${encodeURIComponent(b.dataset.case)}/reopen`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    if (res.ok) loadCaseHistory(); else b.disabled = false;
+  }));
 }
 
 // ===============================================================

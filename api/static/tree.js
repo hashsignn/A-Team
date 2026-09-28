@@ -987,6 +987,53 @@ function header(d) {
   const back = new URLSearchParams(qs());
   back.set('route', d.route_id);
   $('tr-back').href = `/?${back}`;
+  caseControl(d);
+}
+
+/* CLOSE THE CASE, here where the work is finished: one click on how it
+ * ended, and it goes to the risk ledger's history. */
+function caseControl(d) {
+  const host = $('tr-case');
+  if (!host) return;
+  const c = d.case || { status: 'open' };
+  if (c.status === 'closed') {
+    host.innerHTML = `<span class="case-done" title="${esc(`${c.closed_by} · ${new Date(c.closed_at).toLocaleString()}`)}">✓ Closed · ${esc(c.outcome_label)}</span>
+      <button type="button" class="ctl ctl--ghost" id="tr-case-reopen">Reopen</button>`;
+    $('tr-case-reopen').addEventListener('click', () => caseCall(`/api/cases/${encodeURIComponent(c.case_id)}/reopen`, {}));
+    return;
+  }
+  if ((d.route?.level || 'green') === 'green') { host.innerHTML = ''; return; }
+  const outcomes = Object.entries(d.case_outcomes || {});
+  host.innerHTML = `<button type="button" class="ctl" id="tr-case-close" aria-expanded="false">✓ Close case</button>
+    <div class="case-pick case-pick--pop" id="tr-case-pick" hidden>
+      ${outcomes.map(([id, label]) => `<button type="button" class="case-opt" data-outcome="${esc(id)}">${esc(label)}</button>`).join('')}
+      <input type="text" id="tr-case-note" maxlength="500" placeholder="Note (optional)" aria-label="Note">
+    </div>`;
+  $('tr-case-close').addEventListener('click', () => {
+    const pick = $('tr-case-pick');
+    pick.hidden = !pick.hidden;
+    $('tr-case-close').setAttribute('aria-expanded', String(!pick.hidden));
+  });
+  host.querySelectorAll('.case-opt').forEach((b) => b.addEventListener('click', () =>
+    caseCall(`/api/cases/${encodeURIComponent(d.route_id)}/close`,
+      { outcome: b.dataset.outcome, note: $('tr-case-note').value, actor: 'planner' })));
+}
+
+async function caseCall(url, body) {
+  const host = $('tr-case');
+  host.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  try {
+    const res = await fetch(`${url}?${qs()}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out.detail || String(res.status));
+    toast(url.endsWith('/close') ? 'Case closed: it is in the risk ledger history' : 'Case reopened');
+    await load({ keepPath: true });
+  } catch (err) {
+    host.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    toast(`Could not: ${err.message}`);
+  }
 }
 
 $('tr-pick').addEventListener('change', (e) => {
