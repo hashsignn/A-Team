@@ -457,10 +457,33 @@ def _response(page, check) -> None:
     check(page.locator("#d-name").inner_text().strip() not in ("", "—"),
           "[response] the panel head never populated",
           f"response: {page.locator('#d-name').inner_text()[:40]!r}")
-    acts = page.locator("#r-actions .act").count()
-    empty = page.locator("#r-actions .response-empty").count()
-    check(acts > 0 or empty > 0, "[response] the actions list rendered nothing at all",
-          f"response: {acts} action card(s)" if acts else "response: 'nothing worth doing' said plainly")
+    # The Action tab is a decision tree: numbered steps down one spine, a
+    # Yes / No at "can we keep the dates", options that open, and a
+    # comparison of the routes.
+    _settle(page, "document.querySelector('#r-actions .dt, #r-actions .response-empty') !== null", 30_000)
+    steps = page.locator("#r-actions .dt-node").count()
+    choice = page.locator("#r-actions .dt-choice button").count()
+    check(steps >= 3 and (choice == 2 or page.locator("#r-actions .dt-end").count() == 1),
+          f"[tree] the decision tree did not render: {steps} step(s), {choice} choice(s)",
+          f"decision tree: {steps} steps, Yes/No at 'can we keep the dates'")
+    numbers = page.locator("#r-actions .dt-node .dt-step").all_inner_texts()
+    digits = [int(n) for n in numbers if n.strip().isdigit()]
+    check(digits == list(range(1, len(digits) + 1)),
+          f"[tree] the steps are not numbered in order: {numbers}", "steps numbered in reading order")
+    heads = page.locator("#r-actions .dt-opt-head")
+    if heads.count():
+        heads.first.click()
+        page.wait_for_timeout(400)
+        check(page.locator("#r-actions .dt-opt.is-open .dt-opt-body").is_visible(),
+              "[tree] clicking an option did not open it", "an option opens on a click, with its orders")
+    page.locator('.dt-view[data-view="compare"]').click()
+    page.wait_for_timeout(300)
+    rows = page.locator("#r-actions .dt-ctable tbody tr").count()
+    empty = page.locator("#r-actions .dt-compare-empty").count()
+    check(rows >= 2 or empty == 1, "[tree] Compare routes showed nothing",
+          f"compare routes: {rows} row(s), staying as planned first" if rows else "compare routes: nothing to compare, said plainly")
+    page.locator('.dt-view[data-view="tree"]').click()
+    page.wait_for_timeout(300)
 
     page.get_by_role("tab", name="Who to contact").click()
     page.wait_for_timeout(600)
@@ -625,17 +648,20 @@ def _review(page, check) -> None:
         page.wait_for_function("!document.getElementById('send-body').value.startsWith('loading')",
                                timeout=30_000)
         page.wait_for_timeout(300)
+        _settle(page, "document.querySelector('#r-actions .dt, #r-actions .response-empty') !== null", 30_000)
         order = page.evaluate("""(id) => {
-            const r = state.board.routes.find(x => x.route_id === id);
-            const lead = r.actions.map(a => a.lead_time_hours == null ? 1e9 : a.lead_time_hours);
-            return { first: lead[0], min: Math.min(...lead),
-                     tag: document.querySelector('#r-actions .act .act-when').innerText,
+            const d = state.decision || {};
+            const best = document.querySelector('#r-actions .dt-opt');
+            return { route: d.route_id,
+                     first_best: !best || best.classList.contains('is-best')
+                                 || (d.keep && d.keep.options.length === 0),
+                     tile: document.querySelector('#d-stat-opt .stat-sub').innerText,
                      act: document.getElementById('link-act').getAttribute('href'),
                      ops: document.getElementById('link-ops').getAttribute('href') };
         }""", rid)
-        check(order["first"] <= 6 or order["first"] == order["min"] or order["min"] > 6,
-              f"[options] the soonest option is not first: {order}",
-              f"options: the one closing in {round(order['first'])} h is first ({order['tag'][:28]!r})")
+        check(order["route"] == rid and order["first_best"],
+              f"[options] the tree is not this route's, or its first way is not the best: {order}",
+              f"options: the best way is first; the tile says {order['tile']!r}")
         check(order["act"].startswith(f"/fast/{rid}") and order["ops"].startswith("/ops?route="),
               f"[options] the onward links are wrong: {order}",
               "Act fast on this route and Step by step are linked from the panel")

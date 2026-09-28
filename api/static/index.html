@@ -324,13 +324,20 @@
 
         <div class="rtab-panels">
 
-          <!-- ACT & ESCALATE -->
+          <!-- ACT & ESCALATE: a decision tree. What is happening, who is hit,
+               can the dates be kept (and which way), what reduces the damage
+               otherwise, who needs to know. "Compare routes" lays the ways to
+               move the freight side by side. -->
           <div class="rpanel is-on" data-panel="actions">
+            <div class="dt-views" role="tablist" aria-label="How to see the options">
+              <button type="button" class="dt-view is-on" data-view="tree" role="tab">Decision tree</button>
+              <button type="button" class="dt-view" data-view="compare" role="tab">Compare routes</button>
+            </div>
             <div id="r-actions"></div>
 
-            <div class="rsplit">
-              <h4>Escalate and report</h4>
-            </div>
+            <!-- The tree's last step, "who needs to know", opens this. -->
+            <details class="dt-write" id="dt-write">
+              <summary>Escalation and the summary to send</summary>
             <div id="r-escalate"></div>
 
             <div class="compose">
@@ -360,6 +367,7 @@
                 Not sent from here: opens in your mail app.
               </p>
             </div>
+            </details>
           </div>
 
           <!-- CUSTOMERS & SHIPMENTS — who this route serves, key accounts

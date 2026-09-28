@@ -1188,7 +1188,7 @@ function renderDetail(r) {
       <div class="stat-v">${chf(r.exposure_chf)}</div>
       <div class="stat-sub">${r.shipments_at_risk} of ${r.shipments} shipments</div>
     </div>
-    <div class="stat">
+    <div class="stat" id="d-stat-opt">
       <div class="stat-k">Options</div>
       <div class="stat-v">${r.actions.length}</div>
       <div class="stat-sub">worth doing</div>
@@ -1340,32 +1340,288 @@ function renderResponse(r) {
   primeCompose(r);
 }
 
-function renderRActions(r) {
-  const actions = r.actions || [];
-  if (!actions.length) {
-    $('r-actions').innerHTML = '<div class="response-empty">No option worth its cost right now.</div>';
+/* THE ACTION TAB, AS A DECISION TREE (engine/export/decision.py).
+ *
+ * The questions in the order a planner asks them: what is happening, who is
+ * hit, can we still keep the promised dates (and which way), if not what
+ * reduces the damage, and who needs to know. A click on Yes or No shows that
+ * branch; a click on an option opens it, with its path on the map; "Compare
+ * routes" lays the ways to move the freight side by side. Every order at risk
+ * sits in exactly one branch. */
+let decisionSeq = 0;
+state.dt = { view: 'tree', branch: null, open: null };
+
+async function renderRActions(r) {
+  const host = $('r-actions');
+  const seq = ++decisionSeq;
+  state.dt = { view: state.dt.view || 'tree', branch: null, open: null };
+  host.innerHTML = '<p class="dt-loading">Working out the options…</p>';
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  let d;
+  try {
+    const res = await fetch(`/api/decision/${encodeURIComponent(r.route_id)}?${q}`);
+    if (!res.ok) throw new Error(`the server answered ${res.status}`);
+    d = await res.json();
+  } catch (err) {
+    if (seq === decisionSeq) host.innerHTML = `<div class="response-empty">Could not work out the options: ${esc(err.message)}</div>`;
     return;
   }
-  // Soonest first (the engine orders them: the Critical window, then
-  // Alert, then later; key accounts first inside each). The one that closes
-  // first says so. What it costs, saves and takes, as numbers; the whole
-  // sentence is the tooltip.
-  const soonest = Math.min(...actions.map((a) => (a.lead_time_hours == null ? Infinity : a.lead_time_hours)));
-  // The Critical and Alert rungs (8 and 36 working hours, scoring.yaml).
-  const urgency = (h) => (h == null ? '' : h <= 8 ? 'is-now' : h <= 36 ? 'is-soon' : '');
-  $('r-actions').innerHTML = actions.map((a) => `
-    <div class="act${a.customer_priority === 'A' ? ' is-key' : ''} ${urgency(a.lead_time_hours)}" title="${esc(a.sentence)}">
-      <div class="act-top">
-        <b class="act-label">${esc(a.label)}</b>
-        <span class="act-when">${a.lead_time_hours === soonest && Number.isFinite(soonest) ? '<b>closes first</b> · ' : ''}decide ${inHours(a.lead_time_hours)}</span>
-      </div>
-      <div class="act-nums">
-        <span><i>Cost</i> ${chf(a.cost_chf)}</span>
-        <span><i>Net benefit</i> ${chf(a.value_chf)}</span>
-        <span><i>Takes</i> ${Math.round(a.min_hours)} h</span>
-      </div>
-      <div class="act-meta">${priBadge(a.customer_priority)} <b>${esc(a.customer)}</b> · order ${esc(a.shipment_id)} · ${a.owner === 'us' ? 'we can do this' : `${esc(a.owner)} does this`}</div>
-    </div>`).join('');
+  if (seq !== decisionSeq || state.selected !== r.route_id) return;
+  state.decision = d;
+  const k = d.keep.answer;
+  state.dt.branch = k === 'no' ? 'no' : 'yes';
+  drawDecision(r, d);
+  optionsTile(d);
+}
+
+/* The Options tile above the tabs says what the tree says: how many ways
+ * keep the date, or else how many reduce the damage. */
+function optionsTile(d) {
+  const tile = $('d-stat-opt');
+  if (!tile) return;
+  const keep = d.keep.options.length;
+  const reduce = d.reduce.options.length;
+  const [n, words] = !d.hit.need ? [0, 'nothing to decide']
+    : keep ? [keep, keep === 1 ? 'way keeps the date' : 'ways keep the date']
+      : reduce ? [reduce, reduce === 1 ? 'way cuts the damage' : 'ways cut the damage']
+        : [0, 'tell the customer'];
+  tile.querySelector('.stat-v').textContent = n;
+  tile.querySelector('.stat-sub').textContent = words;
+}
+
+const cleanLabel = (l) => String(l || '').replace(/\s*\+\d+ more$/, '');
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || `${one}s`)}`;
+function pathWords(path) {
+  return (path || []).map((x) => esc(x.name)).join(' <span class="dt-arrow">→</span> ');
+}
+function extra(chf_) { return chf_ > 0 ? `+${chf(chf_)}` : 'no extra cost'; }
+function lateWords(days) {
+  if (days == null) return '';
+  if (days < 0.05) return 'on time';
+  return days < 1 ? `late by ${Math.round(days * 24)} h` : `late by ${days.toFixed(1)} days`;
+}
+
+function drawDecision(r, d) {
+  const host = $('r-actions');
+  document.querySelectorAll('.dt-view').forEach((b) => b.classList.toggle('is-on', b.dataset.view === state.dt.view));
+  host.innerHTML = state.dt.view === 'compare' ? compareHTML(r, d) : treeHTML(r, d);
+  wireDecision(r, d);
+}
+
+function treeHTML(r, d) {
+  const hit = d.hit;
+  const keep = d.keep;
+  const noCount = hit.need - keep.kept.length;
+  const happening = (d.happening || []).map((e) => `
+      <li title="${esc(e.title)}"><span>${esc(e.title)}</span>${e.kind ? `<span class="dt-tag" title="${esc(e.meaning || '')}">${esc(e.kind)}</span>` : ''}</li>`).join('');
+
+  const root = `
+    <div class="dt-node dt-root">
+      <span class="dt-step">1</span>
+      <div class="dt-body"><b class="dt-h">What is happening</b>
+        ${happening ? `<ul class="dt-list">${happening}</ul>` : '<p class="dt-sub">Nothing reaches this route.</p>'}</div>
+    </div>`;
+  const who = `
+    <div class="dt-node">
+      <span class="dt-step">2</span>
+      <div class="dt-body"><b class="dt-h">Who is hit</b>
+        <p class="dt-sub"><b>${hit.orders} of ${hit.of}</b> orders on this route${hit.exposure_chf ? ` · ${chf(hit.exposure_chf)} exposure` : ''}</p>
+        <div class="dt-split">
+          <span class="dt-pill dt-pill--need"><i></i>${hit.need === 1 ? '1 order needs' : `${hit.need} orders need`} a decision</span>
+          ${hit.absorbed ? `<span class="dt-pill"><i></i>${hit.absorbed} arrive on time anyway</span>` : ''}
+        </div></div>
+    </div>`;
+  if (!hit.need) {
+    return `<div class="dt">${root}${who}
+      <div class="dt-node dt-end"><span class="dt-step">✓</span>
+        <div class="dt-body"><b class="dt-h">Nothing to decide</b>
+          <p class="dt-sub">No order on this route is expected to miss its date.</p></div></div></div>`;
+  }
+
+  const yesOn = state.dt.branch === 'yes';
+  const question = `
+    <div class="dt-node dt-q">
+      <span class="dt-step">3</span>
+      <div class="dt-body"><b class="dt-h">Can we still keep the promised dates?</b>
+        <div class="dt-choice" role="group">
+          <button type="button" class="dt-yes${yesOn ? ' is-on' : ''}" data-branch="yes" ${keep.kept.length ? '' : 'disabled'}>
+            Yes <span>${keep.kept.length ? `for ${plural(keep.kept.length, 'order')}` : 'no way found'}</span></button>
+          <button type="button" class="dt-no${yesOn ? '' : ' is-on'}" data-branch="no" ${noCount ? '' : 'disabled'}>
+            No <span>${noCount ? `for ${plural(noCount, 'order')}` : 'every order is covered'}</span></button>
+        </div></div>
+    </div>`;
+
+  const branch = yesOn ? yesHTML(r, d) : noHTML(r, d);
+  // Steps are numbered in the order they are read: the No branch has one
+  // step for "reduce the damage" and one for "tell the customer", if any.
+  const last = yesOn ? 4 : 3 + (d.reduce.options.length ? 1 : 0) + (d.tell.orders.length ? 1 : 0);
+  const esc_ = d.escalation || {};
+  const end = `
+    <div class="dt-node dt-end">
+      <span class="dt-step">${last + 1}</span>
+      <div class="dt-body"><b class="dt-h">Who needs to know</b>
+        <p class="dt-sub">${esc_.level != null ? `Escalation level ${esc(esc_.level)}` : 'Escalation'}${
+          esc_.notify && esc_.notify.length ? ` · tell <b>${esc_.notify.map(esc).join(', ')}</b>` : ''}${
+          esc_.acknowledge_within_hours ? ` · they answer within ${esc_.acknowledge_within_hours} h` : ''}</p>
+        <button type="button" class="ctl ctl--mini" id="dt-write-open">Write the summary ▸</button></div>
+    </div>`;
+  return `<div class="dt">${root}${who}${question}<div class="dt-branch dt-branch--${yesOn ? 'yes' : 'no'}">${branch}</div>${end}</div>`;
+}
+
+function optionHTML(o, body) {
+  const open = state.dt.open === o.id;
+  return `<li class="dt-opt${o.best ? ' is-best' : ''}${open ? ' is-open' : ''}" data-opt="${esc(o.id)}">
+      <button type="button" class="dt-opt-head" aria-expanded="${open}">
+        <span class="dt-opt-name">${o.best ? '<span class="dt-star" title="Best: keeps the most orders on time, soonest, for the least">★</span>' : ''}${esc(cleanLabel(o.label))}</span>
+        <span class="dt-opt-sum">${o.sum}</span>
+        <span class="dt-opt-caret" aria-hidden="true">▸</span>
+      </button>
+      <div class="dt-opt-body"${open ? '' : ' hidden'}>${body}</div>
+    </li>`;
+}
+
+function routeBody(r, o) {
+  const orders = (o.shipment_ids || []).map((id) => `<span class="dt-order">${esc(id)}</span>`).join('');
+  // A new route has a path to draw; a playbook action (divert a road leg)
+  // has a description instead.
+  const drawable = (o.path || []).length >= 2;
+  return `
+    <p class="dt-path">${drawable ? pathWords(o.path) : esc(o.detail || '')}</p>
+    ${o.capacity_note ? `<p class="dt-warn">${esc(o.capacity_note)}</p>` : ''}
+    <div class="dt-orders">${orders}</div>
+    <div class="dt-acts">
+      ${drawable ? `<button type="button" class="ctl ctl--mini" data-map="${esc(o.id)}">Show on map</button>` : ''}
+      <a class="ctl ctl--mini ctl--primary" href="${esc($('link-act').getAttribute('href') || '/fast')}">Do it in Act fast</a>
+    </div>`;
+}
+
+function yesHTML(r, d) {
+  const opts = d.keep.options.map((o) => optionHTML({ ...o,
+    sum: `${o.on_time} of ${o.orders} on time · ${extra(o.cost_chf)} · starts in ${hours(o.starts_in_h)}` },
+  routeBody(r, o))).join('');
+  return `
+    <div class="dt-node dt-q">
+      <span class="dt-step">4</span>
+      <div class="dt-body"><b class="dt-h">Which way keeps the date?</b>
+        <p class="dt-sub">Click one to open it; <button type="button" class="dt-link" data-view-to="compare">compare the routes</button> side by side.</p></div>
+    </div>
+    <ul class="dt-opts">${opts}</ul>
+    ${d.keep.more ? `<p class="dt-more">${plural(d.keep.more, 'other way')} checked: slower, dearer or late.</p>` : ''}`;
+}
+
+function noHTML(r, d) {
+  const red = d.reduce.options.map((g) => {
+    if (g.route) {
+      return optionHTML({ ...g,
+        sum: `${plural(g.orders_n, 'order')} · ${lateWords(g.late_after_days)} · ${extra(g.cost_chf)}` }, routeBody(r, g));
+    }
+    const orders = g.orders.map((o) => `<span class="dt-order" title="${esc(o.customer)}">${o.priority === 'A' ? '★ ' : ''}${esc(o.shipment_id)} · ${esc(o.customer)}</span>`).join('');
+    return optionHTML({ id: `act:${g.label}`, label: g.label, best: false,
+      sum: `${plural(g.orders.length, 'order')} · ${g.cost_chf > 0 ? `costs ${chf(g.cost_chf)}` : 'free'} · saves ${chf(g.saves_chf)} · decide ${inHours(g.decide_in_h)}` }, `
+      <div class="dt-orders">${orders}</div>
+      <p class="dt-sub">Takes ${Math.round(g.takes_h || 0)} h · ${g.owner === 'us' ? 'we can do this' : `${esc(g.owner || 'the carrier')} does this`}. "Saves" is the expected cost of lateness it avoids.</p>
+      <div class="dt-acts"><a class="ctl ctl--mini ctl--primary" href="${esc($('link-act').getAttribute('href') || '/fast')}">Do it in Act fast</a></div>`);
+  }).join('');
+  const tell = d.tell.orders;
+  const leaf = tell.length ? `
+    <div class="dt-node dt-leaf">
+      <span class="dt-step">✉</span>
+      <div class="dt-body"><b class="dt-h">Tell the customer and agree a new date</b>
+        <p class="dt-sub">No way left keeps ${tell.length === 1 ? 'this order' : 'these orders'} on time.</p>
+        <div class="dt-orders">${tell.map((o) => `<span class="dt-order">${esc(o.shipment_id)} · ${esc(o.customer)} · ${
+          o.late_days >= 0.5 ? lateWords(o.late_days) : `${Math.round(o.p_late * 100)}% chance late`}</span>`).join('')}</div></div>
+    </div>` : '';
+  return `
+    ${red ? `
+    <div class="dt-node dt-q">
+      <span class="dt-step">4</span>
+      <div class="dt-body"><b class="dt-h">What reduces the damage?</b>
+        <p class="dt-sub">These do not make the date, but cut what being late costs.</p></div>
+    </div>
+    <ul class="dt-opts">${red}</ul>` : ''}
+    ${leaf ? leaf.replace('<span class="dt-step">✉</span>', `<span class="dt-step">${red ? 5 : 4}</span>`) : ''}`;
+}
+
+function compareHTML(r, d) {
+  const rows = d.compare || [];
+  if (rows.length < 2) {
+    return `<p class="dt-sub dt-compare-empty">No other way to move this freight was found: there is nothing to compare.
+      <button type="button" class="dt-link" data-view-to="tree">Back to the tree</button></p>`;
+  }
+  const best = rows.find((x) => x.best);
+  const body = rows.map((x) => {
+    const share = x.orders ? x.on_time / x.orders : 0;
+    return `<tr class="${x.baseline ? 'is-base' : ''}${x.best ? ' is-best' : ''}" data-map="${esc(x.id)}" tabindex="0"
+        title="${esc((x.path || []).map((p) => p.name).join(' → '))}">
+      <td><b>${x.best ? '★ ' : ''}${esc(cleanLabel(x.label))}</b><span class="dt-cpath">${(x.path || []).length >= 2 ? pathWords(x.path) : esc(x.detail || '')}</span></td>
+      <td class="num"><span class="dt-meter"><span style="width:${Math.round(share * 100)}%"></span></span>${x.on_time} of ${x.orders}</td>
+      <td class="num">${x.baseline ? (x.late_after_days >= 0.05 ? `up to ${x.late_after_days.toFixed(1)} d` : 'on time') : lateWords(x.late_after_days)}</td>
+      <td class="num">${x.baseline ? '—' : extra(x.cost_chf)}</td>
+      <td class="num">${x.baseline ? '—' : hours(x.starts_in_h)}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="dt-compare">
+      <table class="dt-ctable">
+        <thead><tr><th>Route</th><th class="num">On time</th><th class="num">Late by</th><th class="num">Extra cost</th><th class="num">Starts in</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      <p class="dt-sub">${best ? `★ ${esc(cleanLabel(best.label))} keeps ${best.on_time} of ${best.orders} on time. ` : ''}Click a row to see it on the map.
+        "Stay as planned" is the route today${rows[0].exposure_chf ? `, with ${chf(rows[0].exposure_chf)} exposure` : ''}.</p>
+    </div>`;
+}
+
+/* Draw one way to move the freight on the map, over the route's own line;
+ * "Stay as planned" puts the route's journey back. */
+function showOption(r, d, id) {
+  if (!window.MapJourney) return;
+  const all = [...(d.keep.options || []), ...(d.reduce.options || []).filter((g) => g.route)];
+  const o = all.find((x) => x.id === id);
+  if (!o) {
+    const spec = journeySpec(r);
+    if (spec) { spec.fit = true; window.MapJourney.show(spec); }
+    return;
+  }
+  const path = o.path || [];
+  const points = path.filter((x) => x.lat != null).map((x, i, arr) => ({
+    lat: x.lat, lon: x.lon,
+    role: i === 0 ? 'origin' : i === arr.length - 1 ? 'dest' : (x.kind === 'seaport' ? 'port' : 'via'),
+    label: i === arr.length - 1 ? `${x.name}: new route` : x.name,
+    title: `${cleanLabel(o.label)}: ${o.on_time != null ? `${o.on_time} of ${o.orders} on time` : ''}`,
+  }));
+  window.MapJourney.show({ route_id: `${r.route_id}#${o.id}`, points, onward: o.line && o.line.length ? [o.line] : [], fit: true });
+}
+
+function wireDecision(r, d) {
+  const host = $('r-actions');
+  host.querySelectorAll('[data-branch]').forEach((b) => b.addEventListener('click', () => {
+    state.dt.branch = b.dataset.branch;
+    state.dt.open = null;
+    drawDecision(r, d);
+  }));
+  host.querySelectorAll('.dt-opt-head').forEach((b) => b.addEventListener('click', () => {
+    const id = b.closest('.dt-opt').dataset.opt;
+    state.dt.open = state.dt.open === id ? null : id;
+    drawDecision(r, d);
+    const opened = [...(d.keep.options || []), ...(d.reduce.options || [])].find((x) => x.id === id);
+    if (state.dt.open && opened && (opened.path || []).length >= 2) showOption(r, d, id);
+  }));
+  host.querySelectorAll('button[data-map], tr[data-map]').forEach((el) => {
+    const go = () => showOption(r, d, el.dataset.map);
+    el.addEventListener('click', go);
+    if (el.tagName === 'TR') el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  });
+  host.querySelectorAll('[data-view-to]').forEach((b) => b.addEventListener('click', () => {
+    state.dt.view = b.dataset.viewTo;
+    drawDecision(r, d);
+  }));
+  const write = $('dt-write-open');
+  if (write) write.addEventListener('click', () => {
+    const box = $('dt-write');
+    box.open = true;
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 function renderRContacts(r) {
@@ -1479,6 +1735,12 @@ function initResponseTabs() {
   const back = $('d-back');
   // Back to the overview: the journey markers go with the route.
   if (back) back.addEventListener('click', () => showRouteList());
+  // The Action tab's two views: the decision tree, and the routes compared.
+  document.querySelectorAll('.dt-view').forEach((b) => b.addEventListener('click', () => {
+    state.dt.view = b.dataset.view;
+    const r = state.board && state.board.routes.find((x) => x.route_id === state.selected);
+    if (r && state.decision && state.decision.route_id === r.route_id) drawDecision(r, state.decision);
+  }));
 
   document.querySelectorAll('.rtab').forEach((tab) => {
     tab.addEventListener('click', () => {

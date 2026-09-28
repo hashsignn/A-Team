@@ -1079,6 +1079,31 @@ Radius scales with the **square root** of the affected count, because a
 ring's visual weight is its area — a linear radius makes a lane with twice
 the freight look four times as bad.
 
+### The Action tab: a decision tree
+
+The route panel's **Act & escalate** tab asks the questions in the order a
+planner does, one numbered step each, down one line
+(`engine/export/decision.py`, `GET /api/decision/{route}`):
+
+```
+1 What is happening          the events on the route
+2 Who is hit                 orders touched; how many the buffers absorb
+3 Can we keep the dates?     [ Yes for 7 orders ]  [ No for 3 orders ]
+  Yes → 4 Which way keeps the date?   the route alternatives that land on time
+  No  → 4 What reduces the damage?    actions that cut what lateness costs
+        5 Tell the customer            the orders nothing can save
+5/6 Who needs to know        the escalation step; the summary to send
+```
+
+Two engines answer the options, and each answers the question it is for:
+the delivery-first optimiser (Act fast) the routes that keep the date, the
+playbook the actions that reduce the damage otherwise. Every order at risk
+sits in exactly one branch, so the tab can no longer show one order under two
+answers (`tests/test_decision.py`). A click on an option opens it, with its
+orders, and draws its path on the map; **Compare routes** lays staying as
+planned and every alternative side by side: orders on time, lateness, extra
+cost, when it starts.
+
 ### The response path: a decision flow that branches
 
 Telling a planner "there is a risk" is where most tools stop. The top of the

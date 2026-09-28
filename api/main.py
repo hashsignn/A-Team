@@ -63,6 +63,9 @@ _REPORT_FEED: list[dict] = []
 # simulation. Editing the profile changes the config, so it clears both.
 _RUNS: dict[tuple[str, int], RunContext] = {}
 _BOARDS: dict[tuple[str, int], dict] = {}
+# The delivery-first optimiser's lane summaries, for the decision tree: one
+# computation per board, not one per route clicked.
+_LANES: dict[tuple[str, int], list[dict]] = {}
 
 
 # The delay-penalty switch, for this server process. None means "as the
@@ -118,6 +121,7 @@ def _invalidate() -> None:
     """
     _RUNS.clear()
     _BOARDS.clear()
+    _LANES.clear()
 
 
 # The v2 surface shares this cache rather than keeping its own: two caches of
@@ -133,6 +137,28 @@ def board(
 ) -> JSONResponse:
     """Everything the UI draws: nodes, routes, radar data, ranking, posture."""
     return JSONResponse(_board(as_of, shipments))
+
+
+@app.get("/api/decision/{route_id}")
+def decision(
+    route_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """The route's Action tab as a decision tree (engine/export/decision.py):
+    what is happening, who is hit, can the dates be kept and how, what
+    reduces the damage otherwise, who to tell."""
+    from engine.export import decision as decision_mod  # noqa: PLC0415
+    from engine.fast import view as fast_view  # noqa: PLC0415
+
+    board = _board(as_of, shipments)
+    route = _route(board, route_id)
+    context = _context(as_of, shipments)
+    key = (as_of, shipments)
+    if key not in _LANES:
+        _LANES[key] = fast_view.route_summaries(context)
+    detail = next((row for row in _LANES[key] if row["route_id"] == route_id), None)
+    return JSONResponse(decision_mod.build(context, route, detail))
 
 
 def _route(board: dict, route_id: str) -> dict:

@@ -3013,3 +3013,91 @@ ul.esc-list li::before { content: "•"; color: var(--muted); margin-right: 6px;
   font-size: 12px; font-weight: 650; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
   background: color-mix(in srgb, var(--lvl-yellow) 16%, var(--surface-1)); color: var(--text-primary);
 }
+
+/* ---- the Action tab: a decision tree, and the routes compared ----
+   One spine down the left with a numbered step per question; the chosen
+   answer's options branch off it to the right. */
+.dt-views { display: flex; gap: 4px; margin: 12px 18px 0; padding: 3px; border-radius: 10px; background: var(--surface-2); width: max-content; }
+.dt-view { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.dt-view.is-on { background: var(--surface-1); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.dt-loading { margin: 14px 18px; color: var(--muted); font-size: 13.5px; }
+.dt { position: relative; padding: 6px 18px 2px; }
+.dt::before { content: ""; position: absolute; left: 31px; top: 24px; bottom: 30px; border-left: 2px solid var(--border-strong); }
+.dt-node { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 8px 0; }
+.dt-step {
+  position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; font-weight: 750; background: var(--surface-1); border: 2px solid var(--border-strong); color: var(--text-secondary);
+}
+.dt-root .dt-step { border-color: var(--lvl-red); color: var(--lvl-red); }
+.dt-q .dt-step { border-color: var(--accent); color: var(--accent); }
+.dt-leaf .dt-step { border-color: var(--lvl-yellow); color: var(--text-primary); }
+.dt-end .dt-step { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dt-body { min-width: 0; padding-top: 3px; }
+.dt-h { display: block; font-size: 14.5px; color: var(--text-primary); }
+.dt-sub { margin: 3px 0 0; font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+.dt-list { margin: 4px 0 0; padding-left: 16px; font-size: 13.5px; display: grid; gap: 3px; color: var(--text-primary); }
+.dt-tag { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary); white-space: nowrap; cursor: help; }
+.dt-split { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dt-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
+.dt-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--lvl-green); }
+.dt-pill--need i { background: var(--lvl-red); }
+.dt-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.dt-choice button {
+  font: inherit; text-align: left; padding: 9px 12px; border-radius: 11px; cursor: pointer;
+  border: 2px solid var(--border); background: var(--surface-1); font-size: 15px; font-weight: 750; color: var(--text-primary);
+}
+.dt-choice button span { display: block; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+.dt-choice .dt-yes.is-on { border-color: var(--lvl-green); background: color-mix(in srgb, var(--lvl-green) 10%, var(--surface-1)); }
+.dt-choice .dt-no.is-on { border-color: var(--lvl-red); background: color-mix(in srgb, var(--lvl-red) 8%, var(--surface-1)); }
+.dt-choice button:disabled { opacity: .45; cursor: not-allowed; }
+/* Options hang off the spine: a short branch line to each card. */
+.dt-opts { list-style: none; margin: 0 0 4px 54px; padding: 0; }
+.dt-opts > li { position: relative; margin: 0 0 7px; }
+.dt-opts > li::after { content: ""; position: absolute; left: -40px; top: 21px; width: 38px; border-top: 2px solid var(--border-strong); }
+.dt-opts > li.is-open::after { border-top-color: var(--accent); }
+.dt-opt-head {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-areas: "name caret" "sum caret";
+  gap: 2px 8px; text-align: left; padding: 9px 12px; border-radius: 11px; cursor: pointer;
+  font: inherit; border: 1px solid var(--border); background: var(--surface-1);
+}
+.dt-opt-head:hover { border-color: var(--border-strong); }
+.dt-opt-name { grid-area: name; font-weight: 650; font-size: 14px; color: var(--text-primary); }
+.dt-opt-sum { grid-area: sum; font-size: 12.5px; color: var(--text-secondary); }
+.dt-opt-caret { grid-area: caret; align-self: center; color: var(--muted); transition: transform .15s; }
+.dt-opt.is-open .dt-opt-caret { transform: rotate(90deg); }
+.dt-opt.is-best .dt-opt-head { border-color: color-mix(in srgb, var(--lvl-green) 55%, var(--border)); }
+.dt-opt.is-open .dt-opt-head { border-color: var(--accent); border-radius: 11px 11px 0 0; }
+.dt-star { color: var(--lvl-green); margin-right: 5px; }
+.dt-opt-body { border: 1px solid var(--accent); border-top: 0; border-radius: 0 0 11px 11px; padding: 8px 12px 10px; background: var(--surface-1); }
+.dt-opt-body[hidden] { display: none; }
+.dt-path { margin: 0 0 6px; font-size: 13px; color: var(--text-primary); line-height: 1.45; }
+.dt-arrow { color: var(--muted); }
+.dt-orders { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.dt-order { font-size: 12px; padding: 2px 7px; border-radius: 6px; background: var(--surface-2); color: var(--text-secondary); }
+.dt-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dt-warn { margin: 0 0 6px; padding: 4px 8px; font-size: 12.5px; border-left: 3px solid var(--lvl-yellow); color: var(--text-primary); }
+.dt-more { margin: 0 0 6px 54px; font-size: 12.5px; color: var(--muted); }
+.dt-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.dt-compare { padding: 10px 18px 4px; }
+.dt-compare-empty { margin: 14px 18px; }
+.dt-ctable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dt-ctable th {
+  text-align: left; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-secondary); padding: 6px; border-bottom: 1px solid var(--border-strong);
+}
+.dt-ctable td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-primary); }
+.dt-ctable .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dt-ctable tr[data-map] { cursor: pointer; }
+.dt-ctable tr[data-map]:hover, .dt-ctable tr[data-map]:focus-visible { background: var(--surface-2); outline: none; }
+.dt-ctable tr.is-base td { color: var(--text-secondary); }
+.dt-ctable tr.is-best td:first-child b { color: var(--text-primary); }
+.dt-ctable tr.is-best td:first-child b::first-letter { color: var(--lvl-green); }
+.dt-cpath { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.dt-meter { display: inline-block; width: 34px; height: 6px; border-radius: 999px; background: var(--surface-2); margin-right: 6px; vertical-align: middle; overflow: hidden; }
+.dt-meter span { display: block; height: 100%; background: var(--lvl-green); }
+.dt-write { margin: 6px 18px 12px; border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; }
+.dt-write > summary { cursor: pointer; padding: 10px 0; font-weight: 650; font-size: 13.5px; color: var(--text-primary); }
+.dt-write[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+/* A news headline can run to four lines; two carry the point, the rest is
+   the tooltip. */
+.dt-list li > span:first-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
