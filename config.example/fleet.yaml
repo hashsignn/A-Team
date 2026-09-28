@@ -173,10 +173,6 @@ basemap:
         - "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
       attribution: "Tiles &copy; Esri: Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS User Community"
       max_zoom: 16
-      # Names and borders only, drawn at full strength over the faint base.
-      labels:
-        light: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"]
-        dark: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"]
     - name: "NASA Blue Marble relief"
       tiles:
         - "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg"

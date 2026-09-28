@@ -105,16 +105,6 @@ DEFAULTS: dict = {
                     "contributors, and the GIS User Community"
                 ),
                 "max_zoom": 16,
-                # Names and borders only, on a transparent tile, drawn at full
-                # strength over a faint base: the map keeps the theme's
-                # colours and the words stay readable. Dark text for the
-                # light themes, light text for the dark one.
-                "labels": {
-                    "light": ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
-                              "World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"],
-                    "dark": ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
-                             "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"],
-                },
             },
             {
                 # Public-domain relief from NASA's imagery service, on its own
@@ -188,21 +178,12 @@ def basemap(block: dict | None) -> dict:
         tiles = [t for t in tiles if isinstance(t, str) and "{z}" in t]
         if not tiles:
             continue
-        provider = {
+        providers.append({
             "name": str(entry.get("name") or "Tiles"),
             "tiles": tiles,
             "attribution": str(entry.get("attribution") or ""),
             "max_zoom": int(entry.get("max_zoom") or 18),
-        }
-        labels = entry.get("labels")
-        if isinstance(labels, dict):
-            kept = {k: [t for t in ([v] if isinstance(v, str) else list(v or []))
-                        if isinstance(t, str) and "{z}" in t]
-                    for k, v in labels.items() if k in ("light", "dark")}
-            kept = {k: v for k, v in kept.items() if v}
-            if kept:
-                provider["labels"] = kept
-        providers.append(provider)
+        })
     return {"providers": providers}
 
 

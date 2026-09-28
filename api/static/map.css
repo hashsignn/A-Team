@@ -41,7 +41,6 @@
   --map-raster-max: 1;
   --map-raster-contrast: 0.25;
   --map-raster-opacity: 0.38;
-  --map-labels-opacity: 0.9;
   --map-casing: rgba(255, 255, 255, 0.92);
 
   --glass-bg: rgba(255, 255, 255, 0.8);
@@ -81,7 +80,6 @@
   --map-raster-max: 0.04;
   --map-raster-contrast: 0.3;
   --map-raster-opacity: 0.34;
-  --map-labels-opacity: 0.85;
   --map-casing: rgba(7, 11, 20, 0.9);
 
   --glass-bg: rgba(15, 22, 36, 0.74);
