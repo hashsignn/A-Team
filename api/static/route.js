@@ -151,25 +151,23 @@ function selectVehicle(shipmentId, legIndex) {
   const where = `
     <div class="where">
       <div class="where-col">
-        <span class="muted">WHERE THE PLAN PUTS IT</span>
+        <span class="muted" title="Interpolated along the leg">PLANNED POSITION</span>
         ${plan ? `<b>${coord(plan)}</b> ${mapLink(plan)}` : '<b>—</b>'}
-        <em>interpolated along the leg; freight follows roads, not geodesics</em>
       </div>
       <div class="where-col">
-        <span class="muted">LAST SEEN BY SOMEBODY</span>
+        <span class="muted">LAST SEEN</span>
         ${seen ? `<b>${coord(seen)}</b> ${mapLink(seen)}
            <em>${esc(seen.reported_by || 'on site')},
              ${esc(String(seen.observed_at).slice(0, 16).replace('T', ' '))} UTC${
                seen.accuracy_m ? ` · ±${Math.round(seen.accuracy_m)} m` : ''}${
                seen.first_hand === false ? ' · second hand' : ''}</em>`
-          : '<b>not reported</b><em>nobody with this consignment has sent a position</em>'}
+          : '<b>not reported</b>'}
       </div>
       <div class="where-col">
         <span class="muted">OFF PLAN BY</span>
         ${veh.drift_km == null
-          ? '<b>unknown</b><em>needs a position from site to compute</em>'
-          : `<b class="${veh.drift_km > 50 ? 'drift-bad' : ''}">${veh.drift_km} km</b>
-             <em>between where it should be and where it was seen</em>`}
+          ? '<b>—</b>'
+          : `<b class="${veh.drift_km > 50 ? 'drift-bad' : ''}">${veh.drift_km} km</b>`}
       </div>
     </div>`;
 
@@ -199,9 +197,7 @@ function selectVehicle(shipmentId, legIndex) {
           }).join('')}</div>` : ''}
           ${r.lat != null ? `<div class="rep-line"><b>Fix:</b> ${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}${r.accuracy_m ? ` ±${Math.round(r.accuracy_m)} m` : ''}</div>` : ''}
         </div>`).join('')}</div>`
-    : `<p class="socket"><b>Nothing reported from the road.</b> Whoever is with
-       this consignment can file in four taps at <code>/driver</code> — and a
-       first-hand confirmation is what releases a re-route.</p>`;
+    : `<p class="socket" title="A first-hand confirmation is what releases a re-route.">No field report yet — file one at <a href="/driver">/driver</a>.</p>`;
 
   $('rt-vehicle-title').textContent = `${veh.shipment_id} — ${WORD[veh.status]}`;
   $('rt-vehicle').innerHTML = `
@@ -251,8 +247,8 @@ const CHF = (n) => `CHF ${Math.round(n).toLocaleString('en-CH')}`;
 function evidence(label, e) {
   if (!e || !(e.site || e.name)) return '';
   const url = safeUrl(e.source);
-  return `<p><b>${esc(label)}:</b> ${esc(e.site || e.name)}. <span class="muted">${esc(e.basis || '')}
-    ${url ? ` <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}</span></p>`;
+  return `<li title="${esc(e.basis || '')}"><span class="muted">${esc(label)}</span> <b>${esc(e.site || e.name)}</b>
+    ${url ? ` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}</li>`;
 }
 
 function precarriageHTML(pre) {
@@ -262,27 +258,26 @@ function precarriageHTML(pre) {
   for (const c of (today && today.chains) || []) todayCost[c.id] = c.cost_chf;
   const rows = pre.chains.map((c) => `
     <tr class="${c.id === pre.chosen ? 'is-chosen' : ''}">
-      <td>${esc(c.id)}${c.id === pre.chosen ? ' <span class="muted">— drawn on this route</span>' : ''}</td>
+      <td>${esc(c.id)}${c.id === pre.chosen ? ' <span class="muted">✓ used</span>' : ''}</td>
       <td class="num">${CHF(c.cost_chf)}</td>
       <td class="num">${Math.round(c.hours)} h</td>
       ${today ? `<td class="num">${todayCost[c.id] !== undefined ? CHF(todayCost[c.id]) : '—'}</td>` : ''}
     </tr>`).join('');
   const switchNote = today && today.chosen && today.chosen !== pre.chosen
-    ? `<p class="rt-pre-switch">At today's Kaub reading the cheapest is <b>${esc(today.chosen)}</b>:
-         ${esc(today.because)} — barge freight ×${today.surcharge}.</p>`
+    ? `<p class="rt-pre-switch" title="${esc(today.because)}">At today's Kaub level, <b>${esc(today.chosen)}</b>
+         is cheaper (barge ×${today.surcharge}).</p>`
     : '';
+  const method = 'Priced from published rates: ASNAV operator costs per tonne-km, the Swiss '
+    + 'heavy-vehicle fee, German and Italian tolls, a transfer per change of mode. The cheapest '
+    + 'is used unless another is within 5% and faster.';
   return `
-    <h3>How the freight reaches ${esc(pre.port_name || pre.port || 'the port')}</h3>
+    <h3 title="${esc(method)}">How the freight reaches ${esc(pre.port_name || pre.port || 'the port')} ⓘ</h3>
     <table class="rt-pre">
       <thead><tr><th>chain</th><th class="num">per container</th><th class="num">time</th>
         ${today ? '<th class="num">at today\'s Kaub</th>' : ''}</tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    ${switchNote}
-    <p class="muted">Priced from published rates: ASNAV operator costs per tonne-km, the Swiss
-      heavy-vehicle fee, German and Italian tolls, a transfer per change of mode. The cheapest
-      is kept unless another is within 5% and faster. Sika's export does not say which mode it
-      books; this is what a forwarder would quote.</p>`;
+    ${switchNote}`;
 }
 
 function renderReal(v) {
@@ -292,14 +287,15 @@ function renderReal(v) {
   block.hidden = false;
   $('rt-real-note').textContent = `${d.real} of ${d.of} sources real at this as-of`;
 
-  const chosen = `${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${precarriageHTML(d.precarriage)}`;
   const volume = d.flow_documents != null
-    ? `<p class="muted">Customer export, this machine only: ${Number(d.flow_documents).toLocaleString('en-CH')} documents on ${esc((d.flow || '').replace('_', ' → '))}.</p>`
+    ? `<li><span class="muted">Sika export</span> <b>${Number(d.flow_documents).toLocaleString('en-CH')} documents</b>
+        ${esc((d.flow || '').replace('_', ' → '))} <span class="muted">(this machine only)</span></li>`
     : '';
+  const chosen = `<ul class="rt-facts">${evidence('Starts at', d.origin)}${evidence('Leaves by', d.port)}${volume}</ul>
+    ${precarriageHTML(d.precarriage)}`;
   const sources = (d.sources || []).map((s) => `
-    <li class="${s.real ? 'is-real' : 'is-not'}">
+    <li class="${s.real ? 'is-real' : 'is-not'}" title="${esc(s.detail || s.status)}">
       <b>${s.real ? '✓' : '○'} ${esc(s.label)}</b>
-      <span class="muted">${esc(s.detail || s.status)}</span>
     </li>`).join('');
 
   const places = (v.conditions || []);
@@ -311,28 +307,26 @@ function renderReal(v) {
           <td>${esc(c.name)}${c.marine_at ? `<br><span class="muted">sea read at ${esc(c.marine_at)}</span>` : ''}</td>
           <td>${esc(c.observed_day || '—')}</td>
           <td>${esc(readings(c.observed))}</td>
-          <td>${c.forecast_from ? esc(readings({ ...c.forecast_max, ...c.forecast_min })) : '<span class="muted">replay — the forecast issued then was not recorded</span>'}</td>
+          <td>${c.forecast_from ? esc(readings({ ...c.forecast_max, ...c.forecast_min })) : '<span class="muted">not recorded</span>'}</td>
         </tr>`).join('')}
       </tbody>
     </table>`
-    : '<p class="muted">No conditions recorded for this route yet — record them with scripts/record_fixture.py weather_focus.</p>';
+    : '<p class="muted">No conditions recorded yet.</p>';
 
   const operators = (d.operators || []).map((o) => {
     const url = safeUrl(o.website);
     const checked = safeUrl(o.source);
+    const hover = [o.note, checked ? `Checked ${o.checked || ''} against its own page.` : ''].filter(Boolean).join(' ');
     return `
-      <li>
+      <li title="${esc(hover)}">
         <b>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(o.name)}</a>` : esc(o.name)}</b>
-        <span class="muted">${esc(o.role || '')}${o.legs ? ' · ' + esc(o.legs) : ''}</span>
-        ${o.note ? `<span>${esc(o.note)}</span>` : ''}
-        <span class="muted">Capacity and price: unknown.${checked ? ` Checked ${esc(o.checked || '')} against <a href="${esc(checked)}" target="_blank" rel="noopener noreferrer">its own page</a>.` : ''}</span>
+        <span class="muted">${esc(o.legs || o.role || '')}</span>
       </li>`;
   }).join('');
 
   $('rt-real').innerHTML = `
     ${d.why ? `<p>${esc(d.why)}</p>` : ''}
     ${chosen}
-    ${volume}
     <div class="rt-real-grid">
       <div>
         <h3>Sources</h3>
@@ -340,18 +334,26 @@ function renderReal(v) {
       </div>
       <div>
         <h3>Who runs these legs</h3>
-        ${operators ? `<ul class="rt-real-list">${operators}</ul>` : '<p class="muted">No operators listed for this route yet.</p>'}
+        ${operators ? `<ul class="rt-real-list">${operators}</ul>` : '<p class="muted">None listed yet.</p>'}
       </div>
     </div>
-    ${(d.notes || []).map((n) => `
+    ${(d.notes || []).map((n) => {
+      // The first sentence on the page; the rest one click away.
+      const text = String(n.text || '');
+      const cut = text.indexOf('. ');
+      const head = cut > 0 ? text.slice(0, cut + 1) : text;
+      const rest = cut > 0 ? text.slice(cut + 2) : '';
+      return `
       <div class="rt-note">
         <b>On the corridor, ${esc(n.date || '')}</b>
-        <span>${esc(n.text || '')}</span>
+        <span>${esc(head)}</span>
+        ${rest ? `<details><summary>more</summary><span>${esc(rest)}</span></details>` : ''}
         ${safeUrl(n.source) ? `<a class="muted" href="${esc(safeUrl(n.source))}" target="_blank" rel="noopener noreferrer">source</a>` : ''}
-      </div>`).join('')}
+      </div>`;
+    }).join('')}
     <h3>Conditions at each place</h3>
     ${conditions}
-    <p class="muted">Still assumed on every route: ${esc((d.assumed || []).join(', '))}.</p>`;
+    <p class="muted">Assumed: ${esc((d.assumed || []).join(' · '))}</p>`;
 }
 
 /* How each event is judged (engine/export/board.py::_judgement).
@@ -381,29 +383,24 @@ function renderJudgement(v) {
     const d = e.delay_days;
     const ends = e.capped_at ? new Date(e.capped_at) : null;
     const cap = ends && !Number.isNaN(ends.getTime())
-      ? ` Never beyond its stated end, ${ends.toUTCString().slice(0, 22)} UTC: a closure is
-           waited out or gone round.`
-      : '';
+      ? `<li>Ends by ${ends.toUTCString().slice(0, 22)} UTC</li>` : '';
     const delay = d
-      ? `<p>If it hits, it adds <b>${days(d.best)}</b> in the best case, <b>${days(d.likely)}</b>
-           likely, <b>${days(d.worst)}</b> in the worst <span class="muted">(judged:
-           delay_model.yaml)</span>.${cap}</p>`
-      : '<p class="muted">No delay model for this kind of event.</p>';
+      ? `<li title="Judged in delay_model.yaml">Delay if it hits: <b>${days(d.best)}</b> / <b>${days(d.likely)}</b> / <b>${days(d.worst)}</b>
+           <span class="muted">best / likely / worst</span></li>${cap}`
+      : '<li class="muted">No delay model for this kind of event</li>';
     const surviving = ((e.matrix && e.matrix.points) || [])
       .map((p) => p.time_to_survive_days)
       .filter((t) => t !== null && t !== undefined);
     const tightest = surviving.length
-      ? `<p class="muted">The tightest shipment survives ${days(Math.min(...surviving))} of delay
-           before it misses the date promised to its customer.</p>`
+      ? `<li title="Time-to-survive: the most delay before it misses the promised date">Tightest shipment can absorb <b>${days(Math.min(...surviving))}</b></li>`
       : '';
     let odds = '';
     if (e.break_even_probability !== null && e.break_even_probability !== undefined) {
-      odds = `<p class="rt-judge-odds">Worth acting if you judge it more than
-        <b>${Math.max(1, Math.round(e.break_even_probability * 100))}%</b> likely to happen —
-        <b>${esc(e.break_even_words || '')}</b> on the ICD 203 scale. Nobody publishes odds
-        for this, so the tool gives the threshold, not a guess.</p>`;
+      odds = `<li class="rt-judge-odds" title="Nobody publishes odds for this, so the tool gives the break-even, not a guess (ICD 203 scale).">
+        Act if you judge it over <b>${Math.max(1, Math.round(e.break_even_probability * 100))}%</b> likely
+        <span class="muted">(${esc(e.break_even_words || '')})</span></li>`;
     } else if (e.kind === 'warning') {
-      odds = '<p class="muted">No available action pays for itself here, even if it happens.</p>';
+      odds = '<li class="muted">No action pays for itself, even if it happens</li>';
     }
     return `
       <article class="rt-judge kind-${esc(e.kind)}">
@@ -411,11 +408,8 @@ function renderJudgement(v) {
           <span class="kind-chip kind-${esc(e.kind)}">${esc(e.kind_label || e.kind)}</span>
           <b>${esc(e.title)}</b>
         </header>
-        <p class="muted">${esc(e.kind_basis || '')}</p>
-        ${delay}
+        <ul class="rt-judge-list" title="${esc(e.kind_basis || '')}">${delay}${tightest}${odds}</ul>
         ${verdicts ? `<div class="sv-row">${verdicts}</div>` : ''}
-        ${tightest}
-        ${odds}
       </article>`;
   }).join('');
 }

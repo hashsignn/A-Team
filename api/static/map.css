@@ -455,3 +455,10 @@
 }
 .map-note b { color: var(--text-secondary); font-weight: 600; }
 .map-note[hidden] { display: none; }
+
+/* Long server sentences: two lines on the card, the rest on hover. */
+.log-detail {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  cursor: help;
+}
+.alt-notes[title]:not([title=""]), .chart-note[title] { cursor: help; }

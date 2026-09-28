@@ -189,7 +189,8 @@ def test_a_planned_position_is_never_presented_as_a_fix(board, context, fleet):
     assert d["position"]["source"] == "schedule"
     assert "schedule" in d["last_sync_source"]
     schedule_logs = [log for log in d["logs"] if log["kind"] == "schedule"]
-    assert schedule_logs and "not a fix" in schedule_logs[0]["detail"]
+    assert schedule_logs and "Planned position" in schedule_logs[0]["detail"]
+    assert "no GPS" in schedule_logs[0]["detail"]
 
 
 def test_the_revised_eta_is_the_original_plus_the_delay(board, context, fleet):

@@ -496,3 +496,8 @@ details.fold .fold__body { padding: 0 15px 15px; font-size: 13px; }
   color: var(--lvl-yellow);
 }
 .act--primary .act__fleet { color: var(--lvl-yellow); }
+
+/* One line each; the whole text on hover. */
+.qrow__sub, .act__why {
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}

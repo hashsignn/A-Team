@@ -465,17 +465,9 @@
         tip.style.top = `${Math.min(e.point.y + 14, r.height - 90)}px`;
       };
 
-      /* ROUTE FIRST. A click on a shipment opens its ROUTE in the right
-       * column — who it is for, what else is on it — and only a second
-       * click, or "Plan recovery" there, opens the recovery options. The
-       * review asked for exactly that order: route, then proposals. With no
-       * board beside the map (a test page), it opens the hub directly. */
       map.on('click', 'asset-icons', (e) => {
         const f = e.features && e.features[0];
-        if (!f) return;
-        const board = root.RadarBoard;
-        if (board && board.onAssetClick) board.onAssetClick(f.properties.id);
-        else agent.selectAsset(f.properties.id);
+        if (f) agent.selectAsset(f.properties.id);
       });
       map.on('mouseenter', 'asset-icons', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mousemove', 'asset-icons', (e) => {
@@ -852,7 +844,10 @@
         ? ` ${t.refused.map((n) => esc(n)).join(' and ')} did not answer.` : '';
       let text = '';
       if (t.offline) {
-        text = `<b>Offline outline</b> — no tile provider answered, so the vendored country shapes are drawn instead.${refused}`;
+        // Which providers refused goes on hover: the note itself says only
+        // what the planner is looking at.
+        host.title = `No tile provider answered, so the built-in country outlines are drawn.${refused}`;
+        text = '<b>Offline outline</b> — map tiles unavailable';
       } else if (t.refused.length) {
         text = t.ok && current
           ? `<b>${esc(current.name)}</b> tiles, desaturated.${refused}`

@@ -204,8 +204,7 @@
               cost, key accounts first. <i>Customers &amp; shipments</i> shows who the route
               serves; <i>Plan recovery</i> there opens the ways round on the map.</li>
           </ol>
-          <p class="muted">Clicking a shipment on the map opens its route first; click it
-            again for its recovery options.</p>
+          <p class="muted">Click a vehicle on the map to open its Action Hub.</p>
           <button type="button" class="ctl ctl--mini" id="howto-close">Close</button>
         </div>
         <div class="rlist" id="rlist" role="list"></div>
@@ -239,7 +238,7 @@
              can actually read them. -->
         <div class="d-ops">
           <a class="ctl ctl--primary ctl--wide" id="link-route" href="#">
-            Open this route &mdash; matrix, charts and every consignment
+            Open route page &mdash; matrix &amp; charts
           </a>
         </div>
 
@@ -263,10 +262,6 @@
 
           <!-- ACT & ESCALATE -->
           <div class="rpanel is-on" data-panel="actions">
-            <!-- Shown when the route was opened by clicking a shipment on the
-                 map: its recovery options are one click from here. -->
-            <div class="frommap" id="d-from-map" hidden></div>
-            <p class="rpanel-note">Only options worth more than they cost. Key accounts first.</p>
             <div id="r-actions"></div>
 
             <div class="rsplit">
@@ -297,11 +292,8 @@
 
               <!-- BRIEF §8.2: the surface is real and says plainly what is not
                    connected, rather than faking a delivery that never happened. -->
-              <p class="socket">
-                <b>Not connected.</b> The app composes; it does not send. No mail
-                path is wired, so &ldquo;Open in mail client&rdquo; hands the draft
-                to yours. Wiring a mail relay or the Teams/Slack webhook would make
-                this a one-click send and record who was told, and when.
+              <p class="socket" title="No mail path is wired. A mail relay or a Teams/Slack webhook would make this a one-click send, recorded.">
+                Not sent from here &mdash; opens in your mail app.
               </p>
             </div>
           </div>
@@ -315,18 +307,12 @@
 
           <!-- WHO TO CONTACT -->
           <div class="rpanel" data-panel="contacts">
-            <p class="rpanel-note">
-              Filtered to this route: the vendors are at nodes this lane passes
-              through, the carriers run the modes it uses.
-            </p>
             <div id="r-contacts"></div>
           </div>
 
         </div>
 
-        <p class="advisory">
-          Advisory. The tool proposes; the planner decides.
-        </p>
+        <p class="advisory">Advisory only &mdash; you decide.</p>
       </div>
     </aside>
   </div>

@@ -163,23 +163,6 @@ def main() -> int:
         if not check(target is not None, "[click] no red or yellow icon rendered to click"):
             browser.close()
             return _report(errors)
-        # ROUTE FIRST: the first click opens the shipment's route in the right
-        # column and marks the shipment there — no recovery card yet. The
-        # second click on the same shipment opens it.
-        page.mouse.click(target["x"], target["y"])
-        page.wait_for_timeout(900)
-        first = page.evaluate("""(() => {
-            const note = document.getElementById('d-from-map');
-            return { panel: !document.getElementById('panel-body').hidden,
-                     hub: !document.getElementById('hub').hidden,
-                     note: note && !note.hidden ? note.innerText : '',
-                     plan: !!(note && note.querySelector('[data-plan]')) }; })()""")
-        check(first["panel"] and not first["hub"],
-              f"[route-first] first click did not open the route alone: {first}",
-              "first click on a shipment opens its route, not the recovery card")
-        check(target["id"] in first["note"] and first["plan"],
-              f"[route-first] the route does not offer {target['id']}'s recovery: {first['note']!r}",
-              f"the route says it was opened from {target['id']}, with Plan recovery one click away")
         page.mouse.click(target["x"], target["y"])
         page.wait_for_function("MapAgent.getState().selection.status === 'ready'", timeout=30_000)
         page.wait_for_function("MapAgent.getState().routing.status === 'ready' "

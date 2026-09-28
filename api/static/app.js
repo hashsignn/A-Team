@@ -820,7 +820,7 @@ function focusBadge(r) {
   const detail = (d.sources || [])
     .map((s) => `${s.real ? 'real' : 'not real yet'} — ${s.label}`).join('\n');
   return `<span class="rli-real${full ? ' is-full' : ''}${none ? ' is-none' : ''}"
-      title="${esc(detail)}">Focus route · ${d.real} of ${d.of} sources real</span>`;
+      title="${esc(detail)}">Focus · ${d.real}/${d.of} real</span>`;
 }
 
 // ===============================================================
@@ -833,8 +833,6 @@ function select(routeId, { fly, fit, ship } = {}) {
   state.shipFocus = ship || null;
 
   refreshPaths();
-  // Opened from the map: land on the actions, where its recovery is offered.
-  if (ship) showRTab('actions');
   renderDetail(r);
   renderResponse(r);
   markTableRow(routeId);
@@ -882,13 +880,16 @@ function renderDetail(r) {
 
   $('d-name').textContent = r.name;
   $('d-directive').textContent = r.directive;
-  $('d-reason').textContent = r.reason;
+  $('d-directive').title = r.reason || '';
+  // The reason repeats the numbers right below it; it is the tooltip.
+  $('d-reason').textContent = '';
+  $('d-reason').hidden = true;
 
   $('d-stats').innerHTML = `
     <div class="stat">
       <div class="stat-k">Action by</div>
       <div class="stat-v" style="color:${c}">${hours(r.lead_time_hours)}</div>
-      <div class="stat-sub">first option to expire</div>
+      <div class="stat-sub">first deadline</div>
     </div>
     <div class="stat">
       <div class="stat-k">Exposure</div>
@@ -898,12 +899,11 @@ function renderDetail(r) {
     <div class="stat">
       <div class="stat-k">Options open</div>
       <div class="stat-v">${r.actions.length}</div>
-      <div class="stat-sub">worth more than they cost</div>
+      <div class="stat-sub">worth doing</div>
     </div>`;
 
   renderAlloc(r);
   renderShips(r);
-  renderFromMap();
 
   // No radar, no event list, no matrix here. They were on this panel AND on
   // the route page AND in a modal — three copies of three charts, none big
@@ -935,22 +935,6 @@ function renderAlloc(r) {
   $('d-cust').innerHTML = customers.length ? `<table class="alloc-tab">
       <thead><tr><th>Customer</th><th>Importance</th><th>At risk</th><th>If nobody acts</th></tr></thead>
       <tbody>${rows}</tbody></table>` : '';
-}
-
-/* Opened by clicking a shipment on the map: say so, and put its recovery
- * options one click away, above the route's own actions. */
-function renderFromMap() {
-  const box = $('d-from-map');
-  if (!box) return;
-  const id = state.shipFocus;
-  const agent = window.MapAgent;
-  const a = id && agent && agent.getState().assets.byId[id];
-  if (!a) { box.hidden = true; box.innerHTML = ''; return; }
-  box.hidden = false;
-  box.innerHTML = `<span>Opened from <b>${esc(a.id)}</b> on the map · ${esc(a.customer)} ${priBadge(a.customer_priority)}
-      <span class="muted">· ${esc(a.status_label)}</span></span>
-    <button type="button" class="ctl ctl--mini ctl--primary" data-plan="${esc(a.id)}">Plan recovery</button>`;
-  box.querySelector('[data-plan]').addEventListener('click', () => planRecovery(a.id));
 }
 
 function planRecovery(id) {
@@ -998,40 +982,12 @@ function renderShips(r) {
   }));
 }
 
-/* ROUTE FIRST, from the map. A click on a shipment whose route is not the
- * open one opens the ROUTE (and marks the shipment in it); a click on a
- * shipment of the open route opens its recovery. */
-function onAssetClick(id) {
-  const agent = window.MapAgent;
-  const a = agent && agent.getState().assets.byId[id];
-  if (!a || !state.board) { if (agent) agent.selectAsset(id); return; }
-  const open = state.selected === a.lane_id && !$('panel-body').hidden;
-  if (open) {
-    state.shipFocus = id;
-    renderShips(state.board.routes.find((r) => r.route_id === a.lane_id));
-    renderFromMap();
-    agent.selectAsset(id);
-    return;
-  }
-  select(a.lane_id, { fly: false, fit: false, ship: id });
-}
-window.RadarBoard = { onAssetClick };
-
-/* The other way round: when the Action Hub opens by any path — a link, an
- * agent, "Plan recovery" — the column shows that shipment's route, so the
- * card and the column are never about two different things. */
+/* Keep the open route's shipment list in step with the map's assets. */
 withAgent((agent) => {
   agent.subscribe((st, prev) => {
     if (!state.board) return;
-    if (st.selection.id && st.selection.id !== (prev && prev.selection.id)) {
-      const a = st.assets.byId[st.selection.id];
-      if (a && (state.selected !== a.lane_id || $('panel-body').hidden)) {
-        select(a.lane_id, { fly: false, fit: false, ship: a.id });
-      }
-    }
     if (st.assets.items !== (prev && prev.assets.items) && state.selected && !$('panel-body').hidden) {
       renderShips(state.board.routes.find((r) => r.route_id === state.selected));
-      renderFromMap();
     }
   });
 });
@@ -1077,22 +1033,23 @@ function renderResponse(r) {
 function renderRActions(r) {
   const actions = r.actions || [];
   if (!actions.length) {
-    $('r-actions').innerHTML = `
-      <div class="response-empty">
-        No option on this route currently saves more than it costs.
-        That is a real answer, not a gap — it is what lets you stop worrying
-        about this one.
-      </div>`;
+    $('r-actions').innerHTML = '<div class="response-empty">No option worth its cost right now.</div>';
     return;
   }
+  // What to do, what it costs, what it saves, by when — as numbers. The
+  // whole sentence is the tooltip.
   $('r-actions').innerHTML = actions.map((a) => `
-    <div class="act${a.customer_priority === 'A' ? ' is-key' : ''}">
-      <div class="act-sentence">${esc(a.sentence)}</div>
-      <div class="act-meta">
-        ${priBadge(a.customer_priority)}
-        ${esc(a.shipment_id)} · ${esc(a.customer)} · lead ${hours(a.lead_time_hours)} ·
-        needs ${Math.round(a.min_hours)} h · lever held by <b>${esc(a.owner)}</b>
+    <div class="act${a.customer_priority === 'A' ? ' is-key' : ''}" title="${esc(a.sentence)}">
+      <div class="act-top">
+        <b class="act-label">${esc(a.label)}</b>
+        <span class="act-when">decide in ${hours(a.lead_time_hours)}</span>
       </div>
+      <div class="act-nums">
+        <span><i>Cost</i> ${chf(a.cost_chf)}</span>
+        <span><i>Net benefit</i> ${chf(a.value_chf)}</span>
+        <span><i>Takes</i> ${Math.round(a.min_hours)} h</span>
+      </div>
+      <div class="act-meta">${priBadge(a.customer_priority)} ${esc(a.shipment_id)} · ${esc(a.customer)} · by ${esc(a.owner)}</div>
     </div>`).join('');
 }
 
@@ -1101,10 +1058,9 @@ function renderRContacts(r) {
   const out = [];
 
   const card = (p) => `
-    <div class="contact">
+    <div class="contact" title="${esc(p.why || '')}">
       <div class="contact-top"><span class="contact-name">${esc(p.name)}</span></div>
       <div class="contact-role">${esc(p.role)}</div>
-      ${p.why ? `<div class="contact-why">${esc(p.why)}</div>` : ''}
       <div class="contact-links">
         ${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
         ${p.phone ? `<span>${esc(p.phone)}</span>` : ''}
@@ -1121,27 +1077,23 @@ function renderRContacts(r) {
     </div>`;
   };
 
-  if (resp.route_manager) {
-    out.push(group('Route manager', 'runs this corridor', [resp.route_manager]));
-  }
-  out.push(group('Convene', `${r.level_label} draws these in`, resp.standing_teams));
-  out.push(group('Seniors', 'above the standing teams', resp.seniors));
-  out.push(group('Alternate vendors on this route', 'at nodes this lane uses', resp.vendors));
-  out.push(group('Carriers', 'running this route\'s modes', resp.carriers));
+  if (resp.route_manager) out.push(group('Route manager', '', [resp.route_manager]));
+  out.push(group('Teams to convene', r.level_label, resp.standing_teams));
+  out.push(group('Seniors', '', resp.seniors));
+  out.push(group('Vendors on this route', '', resp.vendors));
+  out.push(group('Carriers', '', resp.carriers));
 
   // Declared alternatives. An empty list means "none configured" and is shown
   // as exactly that — never a silent zero, and never a claim that no
   // alternative exists in the world.
   const routing = resp.alternate_routing || [];
   out.push(`<div class="cgroup">
-    <div class="cgroup-head"><span>Alternate routing</span>
-      <span>declared on this route's nodes</span></div>
+    <div class="cgroup-head"><span>Alternate routing</span></div>
     ${routing.length
       ? routing.map((x) => `<div class="altroute">
           <b>${esc(x.node_name)}</b> → ${x.alternatives.map((a) => esc(a.name)).join(', ')}
         </div>`).join('')
-      : `<div class="altroute">No alternative route configured for the nodes on
-          this route. That is a gap in the profile, not a finding that none exists.</div>`}
+      : '<div class="altroute">None configured for this route.</div>'}
   </div>`);
 
   $('r-contacts').innerHTML = out.join('');
@@ -1149,27 +1101,24 @@ function renderRContacts(r) {
 
 function renderREscalate(r) {
   const resp = r.response || {};
-  const esc_ = resp.escalation || {};
+  const step = resp.escalation || {};
   const c = LEVEL_COLOR[r.level];
-
   let html = `
-    <div class="esc-card" style="border-left-color:${c}">
-      <div class="esc-level" style="color:${c}">
-        ${esc(r.level_label)} · escalation level ${esc(esc_.level ?? '—')}
-      </div>
-      <div class="esc-body">${esc(r.directive)} — ${esc(r.reason)}</div>
-      ${esc_.notify && esc_.notify.length ? `<div class="esc-list">
-        Notify: <b>${esc_.notify.map(esc).join(', ')}</b>
-        ${esc_.acknowledge_within_hours
-          ? ` · acknowledge within ${esc_.acknowledge_within_hours} h` : ''}
-      </div>` : ''}
-      ${esc_.note ? `<div class="contact-why">${esc(esc_.note)}</div>` : ''}
+    <div class="esc-card" style="border-left-color:${c}" title="${esc(step.note || '')}">
+      <div class="esc-level" style="color:${c}">Escalation level ${esc(step.level ?? '—')}</div>
+      <ul class="esc-list">
+        ${step.notify && step.notify.length ? `<li>Notify <b>${step.notify.map(esc).join(', ')}</b></li>` : ''}
+        ${step.acknowledge_within_hours ? `<li>Acknowledge within ${step.acknowledge_within_hours} h</li>` : ''}
+      </ul>
     </div>`;
-
   if (resp.approval) {
-    html += `<div class="esc-card" style="border-left-color:${LEVEL_COLOR.yellow}">
-      <div class="esc-level" style="color:${LEVEL_COLOR.yellow}">Spend approval</div>
-      <div class="esc-body">${esc(resp.approval.note)}</div>
+    const a = resp.approval;
+    html += `<div class="esc-card" style="border-left-color:${LEVEL_COLOR.yellow}" title="${esc(a.note)}">
+      <div class="esc-level" style="color:${LEVEL_COLOR.yellow}">Needs approval</div>
+      <ul class="esc-list">
+        <li>${esc(a.approver)} releases spend above ${chf(a.limit_chf)}</li>
+        <li>This option: ${chf(a.cost_chf)}</li>
+      </ul>
     </div>`;
   }
   $('r-escalate').innerHTML = html;
@@ -1205,11 +1154,6 @@ async function primeCompose(r) {
   } catch (err) {
     $('send-body').value = `could not build the summary — ${err.message}`;
   }
-}
-
-function showRTab(name) {
-  document.querySelectorAll('.rtab').forEach((t) => t.classList.toggle('is-on', t.dataset.tab === name));
-  document.querySelectorAll('.rpanel').forEach((p) => p.classList.toggle('is-on', p.dataset.panel === name));
 }
 
 function initResponseTabs() {
@@ -1300,19 +1244,27 @@ function renderAllHands() {
   if (!host || !h) return;
   const tone = { convene: 'red', watch: 'yellow', normal: 'green' }[h.posture] || 'blue';
   const c = LEVEL_COLOR[tone];
+  const fmt = (x) => (x.unit === 'chf' ? chf(x.value) : x.value);
+  const lim = (x) => (x.limit == null ? '—' : x.unit === 'chf' ? chf(x.limit) : x.limit);
+  const checks = (h.checks || []).map((x) => `
+    <tr class="${x.crossed ? 'is-crossed' : ''}">
+      <td>${esc(x.label)}</td><td class="num">${fmt(x)}</td>
+      <td class="num muted">limit ${lim(x)}</td>
+      <td class="ah-mark">${x.crossed ? '✓ crossed' : ''}</td>
+    </tr>`).join('');
   const people = (h.attendees || []).map((a) =>
     `<span class="ah-person" title="${esc(a.role)}">${esc(a.function)}</span>`).join('');
   const cards = (h.levers || []).map((l) => `
     <section class="ah-card">
-      <div class="ah-card-head"><b>${esc(l.function)}</b><span>${esc(l.lever)}</span></div>
+      <div class="ah-card-head"><b>${esc(l.function)}</b>
+        <span title="${esc(l.basis || '')}">${esc(l.lever)}${l.basis ? ' ⓘ' : ''}</span></div>
       <p class="ah-sum">${esc(l.summary)}</p>
+      ${l.note ? `<p class="ah-note">${esc(l.note)}</p>` : ''}
       ${(l.items || []).length ? `<ul class="ah-items">${l.items.map((i) => `
-        <li${i.route_id ? ` data-route="${esc(i.route_id)}" tabindex="0"` : ''}>
-          ${i.priority === 'A' ? priBadge('A') : ''}
-          <span class="ah-text">${esc(i.text)}</span>
+        <li${i.route_id ? ` data-route="${esc(i.route_id)}" tabindex="0"` : ''} title="${esc(i.hint || '')}">
+          <span class="ah-text">${i.priority === 'A' ? '★ ' : ''}${esc(i.text)}</span>
           ${i.detail ? `<span class="ah-detail">${esc(i.detail)}</span>` : ''}
         </li>`).join('')}</ul>` : ''}
-      ${l.basis ? `<p class="ah-basis">${esc(l.basis)}</p>` : ''}
     </section>`).join('');
   host.innerHTML = `
     <div class="ah-head" style="border-left-color:${c}">
@@ -1324,15 +1276,14 @@ function renderAllHands() {
       <div class="ah-cadence">
         <span class="ah-k">Next</span>
         <span class="ah-v">${esc(h.next_label)}</span>
+        <span class="ah-was">${esc(h.change)}</span>
       </div>
-      <p class="ah-change">${esc(h.change)}</p>
-      ${(h.triggers || []).length ? `<ul class="ah-triggers">${h.triggers.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+      ${checks ? `<table class="ah-checks">${checks}</table>` : ''}
       <div class="ah-people"><span class="ah-k">In the room</span>${people}</div>
     </div>
     ${keyAccountsHTML()}
     ${cards}
-    <p class="ah-foot">Proposals from this board, for the room to accept or reject. Nothing
-      here is booked, ordered or approved.</p>`;
+    <p class="ah-foot">Proposals only — nothing is booked or approved.</p>`;
   host.querySelectorAll('li[data-route]').forEach((li) => {
     const go = () => {
       openPanelTab('routes');
@@ -1366,11 +1317,11 @@ function keyAccountsHTML() {
   const rows = (state.board && state.board.key_accounts) || [];
   if (!rows.length) return '';
   return `<section class="ah-card ah-keys-card">
-    <div class="ah-card-head"><b>${priBadge('A')} Key accounts at risk</b><span>served first</span></div>
+    <div class="ah-card-head"><b>★ Key accounts at risk</b><span>served first</span></div>
     <ul class="ah-items">${rows.map((k) => `
-      <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0">
-        <span class="ah-text"><b>${esc(k.customer)}</b> · ${esc(k.shipment_id)} · decide in ${hours(k.lead_time_hours)}</span>
-        <span class="ah-detail">${esc(k.route)} · ${esc(siteName(k.site))} · ${esc(k.action || 'no option worth its cost')}</span>
+      <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0" title="${esc(k.route)}">
+        <span class="ah-text"><b>${esc(k.customer)}</b> · decide in ${hours(k.lead_time_hours)}</span>
+        <span class="ah-detail">${esc(k.shipment_id)} · ${esc(siteName(k.site))} · ${esc(k.action || 'no option worth its cost')}</span>
       </li>`).join('')}</ul>
   </section>`;
 }
@@ -1382,80 +1333,54 @@ function carrierHTML(c) {
   if (!c) return '';
   const patterns = c.patterns || [];
   const singles = c.singles || [];
+  const orders = (p) => (p.notices || []).map((n) =>
+    `${n.order_id} +${Math.round(n.hours)} h${n.reason ? ` (${n.reason})` : ''}`).join('\n');
   const row = (p, raised) => `
-    <div class="cs-row${raised ? ' is-raised' : ''}">
+    <div class="cs-row${raised ? ' is-raised' : ''}" title="${esc(orders(p))}">
       <span class="cs-count">${p.orders}</span>
-      <span><b>${esc(p.carrier_name)}</b> at ${esc(p.node_name)}
-        <span class="muted">— ${p.orders} order${p.orders === 1 ? '' : 's'} moved, on average ${Math.round(p.mean_hours)} h later</span>
-        <span class="cs-notes">${(p.notices || []).slice(0, 5).map((n) =>
-          `${esc(n.order_id)} ${esc(n.planned_departure.slice(5, 16).replace('T', ' '))} → ${esc(n.new_departure.slice(5, 16).replace('T', ' '))}${n.reason ? ` (${esc(n.reason)})` : ''}`).join(' · ')}</span>
-      </span>
+      <span><b>${esc(p.carrier_name.replace(' (synthetic stand-in)', ''))}</b> · ${esc(p.node_name)}
+        <span class="muted">· avg +${Math.round(p.mean_hours)} h</span></span>
     </div>`;
   return `
     <section class="cs">
-      <p class="sig-head"><b>Carriers pushing out orders</b> — often the first sign, before any
-        announcement. Raised when ${esc(c.rule || 'a pattern forms')}.</p>
-      ${patterns.length ? patterns.map((p) => row(p, true)).join('')
-        : '<p class="sig-note">No pattern this week.</p>'}
-      ${singles.length ? `<p class="cs-sub">Watched, not raised (${singles.length})</p>${singles.map((p) => row(p, false)).join('')}` : ''}
-      ${c.synthetic ? '<p class="sig-src">Booking changes generated from the SYNTHETIC book. A carrier export at config/carrier_notices.csv replaces them.</p>' : ''}
+      <p class="sig-head" title="Raised when ${esc(c.rule || 'a pattern forms')}"><b>Carrier push-outs</b>
+        <span class="muted">· early warning ⓘ</span>${c.synthetic ? ' <span class="pill">synthetic</span>' : ''}</p>
+      ${patterns.length ? patterns.map((p) => row(p, true)).join('') : '<p class="sig-note">None this week.</p>'}
+      ${singles.length ? `<p class="cs-sub">Watching</p>${singles.map((p) => row(p, false)).join('')}` : ''}
     </section>`;
 }
 
 function signalsHTML(data) {
   const m = data.model;
-  const widest = Math.max(...data.stages.map((s) => s.count), 1);
-
-  const funnel = data.stages.map((s) => `
-    <div class="sig-stage">
+  const widest = Math.max(...data.stages.map((st) => st.count), 1);
+  const funnel = data.stages.map((st) => `
+    <div class="sig-stage" title="${esc(st.note)}">
       <div class="sig-stage-top">
-        <span>${esc(s.label)}</span>
-        <span class="sig-count">${s.count}${
-          s.removed ? `<i>−${s.removed}</i>` : ''}</span>
+        <span>${esc(st.label)}</span>
+        <span class="sig-count">${st.count}${st.removed ? `<i>−${st.removed}</i>` : ''}</span>
       </div>
-      <div class="sig-bar"><span style="width:${Math.round(s.count / widest * 100)}%"></span></div>
-      <div class="sig-rule">${esc(s.note)}</div>
+      <div class="sig-bar"><span style="width:${Math.round(st.count / widest * 100)}%"></span></div>
     </div>`).join('');
-
   const rows = data.signals.slice(0, 40).map((row) => `
-    <div class="sig-row sig-row--${esc(row.state)}">
+    <div class="sig-row sig-row--${esc(row.state)}" title="${esc(row.why || '')}">
       <span class="sig-state">${esc(row.state)}</span>
       <span>
         <span class="sig-title">${esc(row.title)}</span>
-        <span class="sig-why">${esc(row.why || '')}</span>
-        ${row.source ? `<span class="sig-src">${esc(row.source)}${
-          row.tier ? ` · tier ${row.tier}` : ''}${
+        ${row.source ? `<span class="sig-src">${esc(row.source)}${row.tier ? ` · tier ${row.tier}` : ''}${
           row.inferred ? ' · inferred' : ''}</span>` : ''}
       </span>
     </div>`).join('');
-
+  const rec = m.recording && m.recording.available
+    ? ` · replaying ${m.recording.entries} recorded answers` : '';
   return `
-    <div class="sig-model ${m.status === 'connected' ? 'is-on' : ''}">
-      <b>${m.status === 'connected'
-        ? `Reading: ${esc(m.model)}`
-        : 'No model connected'}</b>
-      <span>${esc(m.detail)}</span>
-      ${m.status === 'connected' ? `
-        <span class="sig-src">triage ${esc(m.triage)} · extract ${esc(m.extract)}</span>`
-        : `<span class="sig-src">The deterministic filter below still runs.
-           It is arithmetic, not judgement, and costs nothing either way.</span>`}
-      ${m.recording && m.recording.available ? `
-        <span class="sig-replay">Replaying ${m.recording.entries} recorded
-          answer(s) from ${esc(m.recording.models.join(', '))}, recorded
-          ${esc(m.recording.recorded_at.slice(0, 10))}. Shown as recordings,
-          not as live reads.</span>` : ''}
-    </div>
-
+    <p class="sig-model-line${m.status === 'connected' ? ' is-on' : ''}" title="${esc(m.detail)}">
+      <b>Model:</b> ${m.status === 'connected' ? esc(m.model) : 'none connected'}${rec}</p>
     <div class="sig-funnel">${funnel}</div>
-
     <div class="sig-rows">
-      <p class="sig-head">${data.counts.events} event(s) survived ·
-        ${data.counts.dropped} dropped by the filter ·
-        ${data.counts.unpromoted} seen but not trusted</p>
+      <p class="sig-head">${data.counts.events} kept · ${data.counts.dropped} dropped ·
+        ${data.counts.unpromoted} not trusted</p>
       ${rows}
-    </div>
-
-    <p class="sig-note">${esc(m.funnel_note || '')}</p>`;
+    </div>`;
 }
 
 function renderFilters() {
@@ -1511,7 +1436,7 @@ function renderTable() {
       </span>
       <span class="rli-name">${esc(r.name)}</span>
       ${focusBadge(r)}
-      <span class="rli-driver">${esc(r.events[0] ? r.events[0].title : 'no event recorded')}</span>
+      <span class="rli-driver" title="${esc(r.events[0] ? r.events[0].title : '')}">${esc(r.events[0] ? r.events[0].title : 'no event')}</span>
       <span class="rli-foot">
         <span>${r.shipments_at_risk} of ${r.shipments} shipments${
           key ? ` · <b class="rli-key">★ ${key} key account${key === 1 ? '' : 's'}</b>` : ''}</span>
@@ -1529,16 +1454,15 @@ function renderTable() {
   const mine = deskRoutes().length;
   state.listSubtitle =
     `${rows.length} of ${mine} route${mine === 1 ? '' : 's'}${state.site ? ` from ${siteName(state.site)}` : ''} · ` +
-    'ranked by level, then CHF within the level';
+    'most urgent first';
   const count = $('panel-list-count');
   const onRoutes = !$('rlist').hidden;
   if (count && onRoutes) count.textContent = state.listSubtitle;
 
   const f = state.board.funnel;
   $('ranked-foot').innerHTML =
-    `Measured this run: ${f.raw_observations} raw observations → ` +
-    `${f.after_resolution} distinct events → ${f.gated_hits} gate hits across ` +
-    `${f.shipments_touched} of ${state.board.shipments_total} shipments.`;
+    `${f.raw_observations.toLocaleString('en-CH')} signals → ${f.after_resolution} events → ` +
+    `${f.shipments_touched} of ${state.board.shipments_total} shipments hit`;
 }
 
 function markTableRow(routeId) {

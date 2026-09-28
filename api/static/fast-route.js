@@ -84,9 +84,7 @@ function render() {
         <div class="act-list" id="acts">
           ${options.length
             ? options.map((o, i) => FastUI.optionHTML(o, i === 0)).join('')
-            : `<p class="note-row">Nothing on this lane both holds the date and
-               pays for itself. The honest next step is to tell the customer and
-               re-agree the date.</p>`}
+            : '<p class="note-row">No option makes the date and pays — tell the customer and re-agree the date.</p>'}
         </div>
         <div id="undo"></div>
       </div>
@@ -115,10 +113,9 @@ function foldsHTML(row) {
       <div class="fold__body">
         ${customers.length
           ? `<p>${customers.map(FastUI.esc).join(' · ')}</p>`
-          : '<p class="note-row">No customer recorded against the affected consignments.</p>'}
+          : '<p class="note-row">No customer recorded.</p>'}
         ${row.causes && row.causes.length > 1
-          ? `<p class="note-row">More than one thing is hitting this lane:
-             ${row.causes.map(FastUI.esc).join('; ')}.</p>` : ''}
+          ? `<ul class="note-row">${row.causes.map((c) => `<li>${FastUI.esc(c)}</li>`).join('')}</ul>` : ''}
       </div>
     </details>
 
@@ -136,8 +133,7 @@ function foldsHTML(row) {
              </table>`
           : '<p class="note-row">Nothing was discarded on cost.</p>'}
         ${row.expired
-          ? `<p class="note-row">${row.expired} option(s) have already expired on
-             this lane — they needed more notice than is left.</p>` : ''}
+          ? `<p class="note-row">${row.expired} expired — not enough notice left.</p>` : ''}
       </div>
     </details>
 
@@ -153,7 +149,7 @@ function foldsHTML(row) {
                      <td>${FastUI.esc(e.executed_at)}</td>
                      <td>${e.undone ? 'pulled back' : 'running'}</td></tr>`).join('')}
              </table>`
-          : '<p class="note-row">Nothing has been executed on this lane yet.</p>'}
+          : '<p class="note-row">Nothing run yet.</p>'}
       </div>
     </details>
 
@@ -166,8 +162,7 @@ function foldsHTML(row) {
                    <strong>${FastUI.esc(i.headline)}</strong>
                    <div class="when">${FastUI.esc(i.at)}</div>
                    <div>${FastUI.esc(i.detail || '')}</div></li>`).join('')}</ul>`
-          : `<p class="note-row">Nothing reported from the road. Whoever is with
-             a consignment can file in four taps at <code>/driver</code>.</p>`}
+          : '<p class="note-row">No field report yet — file one at <a href="/driver">/driver</a>.</p>'}
       </div>
     </details>`;
 }

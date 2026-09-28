@@ -92,6 +92,9 @@ def test_the_meeting_goes_from_biweekly_to_daily(config):
     assert calm["next_at"].startswith("2026-09-29T09:00")
     assert {a["function"] for a in crisis["attendees"]} == {
         "Supply Chain", "Procurement", "Manufacturing", "Controlling"}
+    # The rule's tests come as rows, so the room reads a table.
+    assert [c["label"] for c in crisis["checks"]] == [
+        "Expected loss", "Customers exposed", "Decisions due in 48 h"]
 
 
 def test_watch_meets_sooner_but_not_daily(config):
@@ -109,7 +112,8 @@ def test_controlling_raises_the_limit_only_in_a_crisis(config):
         {"label": "Charter", "shipment_id": "S2", "customer": "c", "cost_chf": 80000.0,
          "lead_time_hours": 5, "customer_priority": "B"}]}]
     crisis = desk._controlling(routes, config, "convene")
-    assert crisis["active"] and len(crisis["items"]) == 1 and "1 still do" in crisis["summary"]
+    assert crisis["active"] and len(crisis["items"]) == 1
+    assert "10,000 → 50,000" in crisis["summary"] and "Frees 1 of 2" in crisis["note"]
     assert not desk._controlling(routes, config, "normal")["active"]
 
 

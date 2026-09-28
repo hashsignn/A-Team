@@ -211,15 +211,11 @@ def meeting(verdict: ConveneVerdict, config: Config, clock: Clock) -> dict:
     at = next_meeting(posture, config, clock)
     regular = next_meeting("normal", config, clock)
     if posture == "convene":
-        change = (f"From {cadence_words(normal)} to {cadence_words(days)}: the convene rule "
-                  + ("the team agreed is crossed." if verdict.rule_agreed
-                     else "is crossed (the rule itself is still a proposal)."))
+        change = "Convene rule crossed" + ("" if verdict.rule_agreed else " (rule not yet agreed)")
     elif posture == "watch":
-        change = (f"From {cadence_words(normal)} to {cadence_words(days)}: half-way to the convene "
-                  "rule. Meet sooner, so the day it is crossed is not the first time the room "
-                  "sees it.")
+        change = "Half-way to the convene rule: meet sooner"
     else:
-        change = f"No change: {cadence_words(normal)}, as planned."
+        change = "As planned"
     return {
         "posture": posture,
         "cadence_days": days,
@@ -233,7 +229,23 @@ def meeting(verdict: ConveneVerdict, config: Config, clock: Clock) -> dict:
         "attendees": attendees(config),
         "rule_agreed": verdict.rule_agreed,
         "triggers": list(verdict.triggers_fired),
+        "checks": rule_checks(verdict, config),
     }
+
+
+def rule_checks(verdict: ConveneVerdict, config: Config) -> list[dict]:
+    """The convene rule's three tests as rows — value, limit, crossed —
+    so the room reads a table, not three sentences."""
+    limits = (config.scoring.get("convene_rule") or {}).get("thresholds") or {}
+    rows = [
+        ("Expected loss", verdict.exposure_chf, limits.get("exposure_chf"), "chf"),
+        ("Customers exposed", verdict.contracts_exposed, limits.get("contracts_exposed"), "n"),
+        ("Decisions due in 48 h", verdict.shipments_needing_decision,
+         limits.get("shipments_needing_decision"), "n"),
+    ]
+    return [{"label": label, "value": value, "limit": limit, "unit": unit,
+             "crossed": limit is not None and value >= limit}
+            for label, value, limit, unit in rows]
 
 
 # =====================================================================
@@ -287,18 +299,18 @@ def _supply_chain(routes: list[dict], config: Config) -> dict:
                if (a["shipment_id"], a["label"]) not in seen
                and not seen.add((a["shipment_id"], a["label"]))]
     first = min((a["lead_time_hours"] for a in actions if a["lead_time_hours"] is not None), default=None)
-    items = [{"text": f"{a['label']} — {a['shipment_id']} for {a['customer']}",
-              "detail": a["route"], "priority": a.get("customer_priority", "B"),
+    items = [{"text": f"{a['label']} · {a['shipment_id']}",
+              "detail": f"{a['customer']} · {a['route']}", "priority": a.get("customer_priority", "B"),
               "route_id": a["route_id"], "lead_time_hours": a["lead_time_hours"]}
              for a in actions[:6]]
     return {
         "function": "Supply Chain", "id": "FN_SUPPLY_CHAIN",
         "lever": "Move the freight",
-        "summary": (f"{len(actions)} recovery action(s) open on the urgent routes"
-                    + (f"; the first closes in {first:.0f} h." if first is not None else ".")
-                    if actions else "No recovery action worth its cost on the urgent routes."),
+        "summary": ((f"{len(actions)} actions open"
+                     + (f" · first closes in {first:.0f} h" if first is not None else ""))
+                    if actions else "No action worth its cost"),
         "items": items,
-        "basis": "The actions on each route page, key accounts first, then the nearest deadline.",
+        "basis": "The route actions: key accounts first, then the nearest deadline.",
     }
 
 
@@ -346,28 +358,23 @@ def _procurement(at_risk: list[tuple[Shipment, ShipmentRisk]], lanes: dict, calm
     items = []
     for g in sorted(groups.values(), key=lambda g: (-g["key_accounts"], -g["value_chf"])):
         items.append({
-            "text": (f"Source {len(g['orders'])} order(s) from {g['to_site']} instead of "
-                     f"{g['from_site']}, via {g['route']}"),
-            "detail": (f"{g['in_time']} of {len(g['orders'])} would still make the promised date "
-                       f"if handed over within {HANDOVER_HOURS:.0f} h · "
-                       f"CHF {g['value_chf']:,.0f} of goods · "
-                       + ", ".join(sorted(g["customers"]))),
+            "text": f"{g['to_site']} instead of {g['from_site']} · {len(g['orders'])} orders",
+            "detail": (f"{g['in_time']}/{len(g['orders'])} on time · CHF {g['value_chf']:,.0f} · "
+                       f"via {g['route']}"),
+            "hint": ", ".join(sorted(g["customers"])),
             "priority": "A" if g["key_accounts"] else "B",
             "route_id": g["route_id"], "orders": g["orders"],
         })
     return {
         "function": "Procurement", "id": "FN_PROCUREMENT",
         "lever": "Find another source",
-        "summary": (f"{sum(len(g['orders']) for g in groups.values())} at-risk order(s) could come "
-                    f"from another site whose own route is calm." if groups else
-                    "No other site serves these destinations on a calm route."),
+        "summary": (f"{sum(len(g['orders']) for g in groups.values())} orders can ship from "
+                    "another site, on time" if groups else "No other site can serve these on time"),
         "items": items[:6],
-        "basis": ("Same destination, a different site, a route at Watch or quieter, arriving "
-                  f"by the promised date; handover {HANDOVER_HOURS:.0f} h is assumed"
-                  + (f" ({missing} more order(s) have another source that would still be late)"
-                     if missing else "")
-                  + ". Raw-material suppliers are not in this model: Procurement's own list "
-                    "would go in config/desk.yaml."),
+        "basis": (f"Same destination, another site, a calm route, on time. Handover "
+                  f"{HANDOVER_HOURS:.0f} h assumed."
+                  + (f" {missing} more would still be late." if missing else "")
+                  + " Raw-material suppliers are not modelled."),
     }
 
 
@@ -394,27 +401,24 @@ def _manufacturing(at_risk: list[tuple[Shipment, ShipmentRisk]], lanes: dict, co
         if g["days"] <= 0:
             continue
         late = math.ceil(g["days"])
-        text = (f"Bring the next {g['product']} run at {g['site']} forward by {late} day(s)"
+        text = (f"{g['product'].capitalize()} at {g['site']}: {late} days sooner"
                 if late <= MAX_PULL_DAYS else
-                f"Bring the next {g['product']} run at {g['site']} forward as far as it goes "
-                f"(up to {MAX_PULL_DAYS} days) — the orders are expected {late} days late, "
-                "more than a faster run recovers alone; pair it with another source")
+                f"{g['product'].capitalize()} at {g['site']}: as early as possible")
         items.append({
             "text": text,
-            "detail": (f"{g['orders']} late order(s), {g['key_accounts']} of them key accounts · "
-                       f"CHF {g['value_chf']:,.0f} of goods · " + ", ".join(sorted(g["customers"]))),
+            "detail": (f"{g['orders']} late orders · {g['key_accounts']} key accounts · "
+                       f"expected {late} days late · CHF {g['value_chf']:,.0f}"),
+            "hint": ", ".join(sorted(g["customers"])),
             "priority": "A" if g["key_accounts"] else "B",
         })
     return {
         "function": "Manufacturing", "id": "FN_MANUFACTURING",
         "lever": "Increase production speed",
-        "summary": (f"{len(items)} product run(s) whose orders are expected late: an earlier batch "
-                    "rebuilds the stock the delay eats." if items else
-                    "No order on the urgent routes is expected late."),
+        "summary": (f"{len(items)} product runs to bring forward" if items else
+                    "No order on the urgent routes runs late"),
         "items": items[:6],
-        "basis": ("Days forward = the expected lateness if nobody acts (Monte Carlo), rounded up; "
-                  f"beyond {MAX_PULL_DAYS} days a faster run is not assumed to recover it. Whether "
-                  "the line can run faster is Manufacturing's call."),
+        "basis": (f"Days = expected lateness if nobody acts. Beyond {MAX_PULL_DAYS} days, pair it "
+                  "with another source. Line capacity is Manufacturing's call."),
     }
 
 
@@ -440,27 +444,25 @@ def _controlling(routes: list[dict], config: Config, posture: str) -> dict:
     freed = [a for a in above if a["cost_chf"] <= raised]
     still = [a for a in above if a["cost_chf"] > raised]
     rule = config.desk.get("crisis_authority") or {}
-    if posture == "convene" and not above:
-        summary = (f"Raise the planner's limit from CHF {normal:,.0f} to CHF {raised:,.0f} for "
-                   "the crisis. No action on the board is above today's limit yet; the raised "
-                   "limit is headroom for spot capacity and expediting as the crisis develops.")
-    elif posture == "convene":
-        summary = (f"Raise the planner's limit from CHF {normal:,.0f} to CHF {raised:,.0f} for "
-                   f"the crisis: {len(freed)} of {len(above)} action(s) above today's limit then "
-                   "need no approval queue"
-                   + (f"; {len(still)} still do." if still else "."))
+    if posture == "convene":
+        summary = f"Raise the planner limit: CHF {normal:,.0f} → {raised:,.0f}"
+        note = (f"Frees {len(freed)} of {len(above)} actions from approval"
+                + (f" · {len(still)} still need it" if still else "")
+                if above else "No action is above today's limit yet")
     elif posture == "watch":
-        summary = (f"Agree the crisis limit now (CHF {raised:,.0f}, normally CHF {normal:,.0f}) so it "
-                   "is ready the day the rule is crossed.")
+        summary = f"Agree a crisis limit now: CHF {raised:,.0f}"
+        note = f"Normally CHF {normal:,.0f}"
     else:
-        summary = f"Normal limit CHF {normal:,.0f}; no crisis limit proposed."
-    items = [{"text": f"{a['label']} — CHF {a['cost_chf']:,.0f}",
-              "detail": f"{a['shipment_id']} for {a['customer']} · within the crisis limit",
+        summary = f"Limit CHF {normal:,.0f}"
+        note = "No crisis limit"
+    items = [{"text": f"{a['label']} · CHF {a['cost_chf']:,.0f}",
+              "detail": f"{a['shipment_id']} · {a['customer']}",
               "priority": a.get("customer_priority", "B")} for a in freed[:6]]
     return {
         "function": "Controlling", "id": "FN_CONTROLLING",
         "lever": "Raise authority limits",
         "summary": summary,
+        "note": note,
         "items": items,
         "limit_chf": normal, "crisis_limit_chf": raised,
         "active": posture == "convene",

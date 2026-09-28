@@ -102,7 +102,7 @@ function headlineHTML(row) {
       <div class="act-list" id="acts">
         ${options.length
           ? options.map((o, i) => FastUI.optionHTML(o, i === 0)).join('')
-          : '<p class="note-row">No option on this lane currently holds the date and pays for itself. That is a real answer, not a gap.</p>'}
+          : '<p class="note-row">No option makes the date and pays for itself.</p>'}
       </div>
       <div id="undo"></div>
     </div>`;
@@ -125,7 +125,7 @@ function queueHTML(queue, more) {
       <span class="qrow__when">${FastUI.hoursShort(row.hours_left)}</span>
       <span>
         <span class="qrow__name">${FastUI.esc(row.name)}</span>
-        <span class="qrow__sub">${FastUI.esc(row.cause || '')}</span>
+        <span class="qrow__sub" title="${FastUI.esc(row.cause || '')}">${FastUI.esc(row.cause || '')}</span>
       </span>
       <span class="qrow__count">${row.shipments_at_risk}/${row.shipments_total}</span>
       <span class="qrow__best">${row.best ? FastUI.esc(row.best.label) : 'tell the customer'}</span>
@@ -133,8 +133,7 @@ function queueHTML(queue, more) {
     </a>`).join('');
 
   const tail = more > 0
-    ? `<p class="note-row">${more} more lane(s) are off plan and none of them
-       need a decision today.</p>`
+    ? `<p class="note-row">${more} more off plan · none due today</p>`
     : '';
   return `<h3>Then these</h3>${rows}${tail}`;
 }
@@ -158,8 +157,7 @@ function foldsHTML(data) {
              <td>${FastUI.esc(v.vetoed_because)}</td>
            </tr>`).join('')}
        </table>
-       <p class="note-row">Shown so the decision can be defended, not to be
-       acted on. Each of these would take the consignment into a loss.</p>`
+       <p class="note-row">Each would make the consignment lose money.</p>`
     : '<p class="note-row">Nothing was discarded on cost.</p>';
 
   const feedBody = incidents.length
@@ -170,8 +168,7 @@ function foldsHTML(data) {
            <div class="when">${FastUI.esc(i.at)} · ${FastUI.esc(i.label)}</div>
            <div>${FastUI.esc(i.detail || '')}</div>
          </li>`).join('')}</ul>`
-    : `<p class="note-row">Nothing has come in from the road or from an
-       integration this session. Reports land here the moment they are filed.</p>`;
+    : '<p class="note-row">Nothing reported yet.</p>';
 
   return `
     <details class="fold">
@@ -354,9 +351,8 @@ document.addEventListener('toggle', async (event) => {
                  <td>${FastUI.esc(m.body.action || m.body.type)} —
                      ${FastUI.esc(m.body.shipment_id || '')}</td></tr>`).join('')}
          </table>
-         <p class="note-row">These were recorded, not sent: the channel is not
-         wired. Set its URL variable to make it a real send.</p>`
-      : '<p class="note-row">Nothing recorded. Either nothing has run, or every channel is live.</p>';
+         <p class="note-row">Recorded, not sent — the channel is not wired.</p>`
+      : '<p class="note-row">Nothing recorded.</p>';
   } catch {
     box.innerHTML = '<p class="note-row">Could not read the outbox.</p>';
   }

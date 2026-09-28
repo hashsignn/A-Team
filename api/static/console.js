@@ -71,10 +71,7 @@ function render() {
       <p class="cause">${esc(c.reason)}</p>
     </div>
 
-    <p class="cons-freeform">Nothing here runs in order. Jump to any stage on
-      the bar above, act on the whole lane, or act on one consignment from its
-      own row — the stages are a record of what has been settled, not a
-      sequence you have to walk.</p>
+    <p class="cons-freeform" title="The stages record what has been settled, not a sequence you have to walk.">Any order — jump to a stage above, or act on one consignment from its row.</p>
 
     <dl class="cons-facts">
       <div class="cons-fact"><dt>Directive</dt><dd style="font-size:15px">${esc(c.directive)}</dd></div>
@@ -122,9 +119,7 @@ function flowHTML(f) {
     <section class="flow" id="flow" aria-label="Response path">
       <header class="flow-head">
         <h3>Response path</h3>
-        <p>Horizon suggests the next action from the risk and impact on this
-          lane. Complete a block and it turns green; the next one opens. Any
-          other branch can be chosen at any time.</p>
+        <p>Suggested next step first · done steps turn green · switch branch any time</p>
       </header>
 
       ${f.caution ? `<p class="cons-caution flow-caution"><b>Not confirmed.</b>
@@ -186,7 +181,7 @@ function blockHTML(s, n) {
           <span class="block-state">${esc(FLOW_WORD[s.state] || '')}</span>
         </div>
         ${open ? `
-          <p class="block-why">${esc(s.why)}</p>
+          <p class="block-why" title="${esc(s.why)}">${esc(s.why)}</p>
           <dl class="block-facts">
             <div><dt>Contact</dt><dd><b>${esc(c.name || '—')}</b>${c.role ? ` · ${esc(c.role)}` : ''}
               ${tel || mail ? `<br>${[tel, mail].filter(Boolean).join(' · ')}` : ''}</dd></div>

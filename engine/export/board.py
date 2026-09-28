@@ -340,9 +340,8 @@ def _real_data(lane: dict, context: RunContext) -> dict:
         "notes": [dict(n) for n in route.notes],
         # What stays assumed on every route, focus or not: the export does not
         # carry it. Said on the card so "real data" is never read as "all of it".
-        "assumed": ["the site and port (chosen from public sources, not confirmed by Sika)",
-                    "consignment values", "promised dates",
-                    "capacity and price of the operators"],
+        "assumed": ["site and port (public sources, not confirmed by Sika)",
+                    "consignment values", "promised dates", "operator capacity and price"],
     }
 
 

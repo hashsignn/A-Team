@@ -400,3 +400,9 @@
   .flow { padding: 14px; }
   .block { grid-template-columns: 22px 1fr; padding: 10px; }
 }
+
+/* A step's reason: one line on the card, the rest on hover. */
+.block-why {
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  cursor: help;
+}

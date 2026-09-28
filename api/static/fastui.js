@@ -112,7 +112,7 @@ const FastUI = (() => {
         <span>
           <span class="act__label">${esc(option.label)}</span>
           <span class="act__meta">${esc(meta)}${esc(covers)}</span>
-          <span class="act__why">${why}</span>
+          <span class="act__why" title="${why}">${why}</span>
           ${fleet}
         </span>
         <span class="act__go">${own ? 'Do it' : 'Who to call'}</span>

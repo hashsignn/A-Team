@@ -377,7 +377,7 @@ def asset_detail(board: dict, context: RunContext, shipment_id: str) -> dict | N
         last_sync, sync_source = observed["observed_at"], "field report"
     else:
         position = {**planned, "source": "schedule", "accuracy_m": None}
-        last_sync, sync_source = as_of.isoformat(), "schedule at the board's as-of"
+        last_sync, sync_source = as_of.isoformat(), "schedule"
 
     boxes = manifest.containers(shipment)
     remaining_risks = _remaining(context, shipment, leg_index)
@@ -539,9 +539,9 @@ def _logs(context: RunContext, shipment: Shipment, where: dict, status: dict,
         "kind": "schedule",
         "level": status["level"],
         "title": f"{status['label']} — {PHASE_LABEL[phase]}",
-        "detail": detail + " No GPS/AIS feed is connected: this position is where the plan "
-                           "puts it, not a fix.",
-        "source": "schedule, at the board's as-of",
+        # No GPS/AIS feed is connected: the position is the plan's, not a fix.
+        "detail": detail + " Planned position — no GPS feed.",
+        "source": "schedule",
     })
 
     out.sort(key=lambda e: e["at"], reverse=True)

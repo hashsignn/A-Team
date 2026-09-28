@@ -42,7 +42,7 @@
         <span><i class="veh-key veh-key--ok"></i> on plan</span>
         <span><i class="veh-key veh-key--risk"></i> decision needed</span>
         <span><i class="veh-key veh-key--hit"></i> already hit</span>
-        <span class="muted">click one for its ID and what was reported</span>
+        <span class="muted">click one for details</span>
       </div>
     </div>
     <div class="convoy" id="convoy"></div>
@@ -71,7 +71,7 @@
   <section class="rt-block" id="rt-judge-block" hidden>
     <div class="rt-block-head">
       <h2>How each event is judged</h2>
-      <span class="block-note">time each shipment survives vs the delay if it hits</span>
+      <span class="block-note">delay if it hits vs time to spare</span>
     </div>
     <div id="rt-judge"></div>
   </section>
@@ -86,9 +86,7 @@
       <div class="mx-legend">
         <span><i class="mx-dot mx-dot--solid"></i> options still open</span>
         <span><i class="mx-dot mx-dot--hollow"></i> too late to act</span>
-        <span class="mx-explain">the last column is impact we can size for
-          events nobody publishes odds on — a strike ballot has no
-          percentage, a gauge reading does</span>
+        <span class="mx-explain" title="Impact we can size for events nobody publishes odds on — a strike ballot has no percentage, a gauge reading does.">last column: no published odds ⓘ</span>
         <span class="mx-ramp-key">
           <i class="mx-sw mx-sw--low"></i><i class="mx-sw mx-sw--mid"></i><i
              class="mx-sw mx-sw--high"></i><i class="mx-sw mx-sw--top"></i>
@@ -115,7 +113,7 @@
         <div class="rt-radar-pane">
           <h3 class="rt-radar-h">
             Measured
-            <em>gauges and forecasts — a level you can read today</em>
+            <em>gauges &amp; forecasts</em>
           </h3>
           <div class="evm-radar evm-radar--pane">
             <svg id="rt-radar-measured" role="img"
@@ -127,7 +125,7 @@
         <div class="rt-radar-pane">
           <h3 class="rt-radar-h">
             Reported
-            <em>strikes, closures, regulation — no gauge, only occurrence</em>
+            <em>strikes, closures, rules</em>
           </h3>
           <div class="evm-radar evm-radar--pane">
             <svg id="rt-radar-reported" role="img"

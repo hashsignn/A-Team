@@ -130,13 +130,13 @@
         <div class="kv">
           <div><div class="k">${esc(crew.role)}</div>
             <div class="v">${esc(crew.name)}</div>
-            <div class="s">${crew.verified ? 'verified driver credential' : 'synthetic roster — no TMS connected'}</div></div>
+            <div class="s">${crew.verified ? 'verified' : 'synthetic'}</div></div>
           <div><div class="k">Live GPS</div>
             <div class="v mono">${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}</div>
-            <div class="s">${pos.source === 'schedule' ? 'where the plan puts it' : `field report${pos.accuracy_m ? ` ±${Math.round(pos.accuracy_m)} m` : ''}`}${d.drift_km != null ? ` · ${d.drift_km} km off plan` : ''}</div></div>
+            <div class="s">${pos.source === 'schedule' ? 'planned position' : `field report${pos.accuracy_m ? ` ±${Math.round(pos.accuracy_m)} m` : ''}`}${d.drift_km != null ? ` · ${d.drift_km} km off plan` : ''}</div></div>
           <div><div class="k">Last sync</div>
             <div class="v mono">${esc(when(d.last_sync))} UTC</div>
-            <div class="s">${esc(d.last_sync_source)}</div></div>
+            <div class="s" title="${esc(d.last_sync_source)}">${esc(String(d.last_sync_source || '').split(/[,(]/)[0])}</div></div>
           <div><div class="k">Heading · leg</div>
             <div class="v">${Math.round(d.heading_deg)}° · ${d.leg.index + 1}/${d.leg.count} ${esc(d.leg.mode)}</div>
             <div class="s">${esc(d.leg.from_name)} → ${esc(d.leg.to_name)}</div></div>
@@ -166,9 +166,9 @@
           <span class="ours" style="width:${pct(l.ours_teu)}"></span>
           ${l.usable_teu != null ? `<em style="left:${pct(l.usable_teu)}" title="usable at current draught"></em>` : ''}
         </div>
-        ${l.usable_teu != null ? `<p class="chart-note">Usable at the current draught: ${l.usable_teu} TEU (red mark) — a low-water derate, not a stoppage.</p>` : ''}
+        ${l.usable_teu != null ? `<p class="chart-note" title="A low-water derate, not a stoppage.">Usable now: ${l.usable_teu} TEU (red mark)</p>` : ''}
         <div class="boxes">${boxes}</div>
-        <p class="chart-note">${d.containers.length} container(s) · synthetic manifest, ISO 6346 ids · deadline per box</p>
+        <p class="chart-note" title="Synthetic manifest, ISO 6346 ids, a deadline per box">${d.containers.length} containers · synthetic</p>
       </section>`;
     }
 
@@ -196,12 +196,12 @@
       const colour = (l) => (l === 'red' || l === 'yellow' || l === 'green' ? statusColour(l) : tokenOf('--accent'));
       return `
       <section class="hsec" data-sec="logs">
-        <h4>Status log <span>why it is ${esc(d.status.label.toLowerCase())}</span></h4>
+        <h4>Status log</h4>
         <div class="logs">${d.logs.map((l) => `
           <div class="log" style="--c:${colour(l.level)}">
             <div class="log-top"><span class="tag">${esc(l.kind)}</span><b>${esc(l.title)}</b></div>
             <div class="log-time">${esc(when(l.at))} UTC</div>
-            ${l.detail ? `<div class="log-detail">${esc(l.detail)}</div>` : ''}
+            ${l.detail ? `<div class="log-detail" title="${esc(l.detail)}">${esc(l.detail)}</div>` : ''}
             <div class="log-src">${esc(l.source)}</div>
           </div>`).join('')}</div>
       </section>`;
@@ -247,9 +247,9 @@
       <section class="hsec" data-sec="risk">
         <h4>Route hazards <span>${n ? `${n} on the legs ahead` : 'none on the legs ahead'}</span></h4>
         <div class="risk-two">
-          <div>${matrix(d.matrix)}${d.matrix.unsourced ? '<p class="chart-note">Hatched: probability could not be sourced, so it is not placed on the axis.</p>' : ''}</div>
+          <div>${matrix(d.matrix)}${d.matrix.unsourced ? '<p class="chart-note">Hatched: no sourced probability</p>' : ''}</div>
           <div><div class="radar-wrap"><canvas id="hub-radar" aria-label="Risk radar"></canvas></div>
-            <p class="chart-note">0–100 from hours of expected delay; hover a spoke for the hours.</p></div>
+            <p class="chart-note">Hover a spoke for hours of delay</p></div>
         </div>
       </section>`;
     }
@@ -319,7 +319,7 @@
           <span class="rbadge" style="--c:${altColour(c.rank)}">${esc(c.badge || `#${c.rank}`)}</span>
           <span class="alt-label">${esc(c.label)}</span>
           <span class="alt-delta">${esc(c.delta.text)}</span>
-          <span class="alt-notes">ETA ${esc(when(c.eta))} · ${Math.round(c.km).toLocaleString()} km · setup ${c.setup_hours} h${c.lever ? ` (${esc(c.lever.replace(/_/g, ' '))})` : ''}${c.touches.length ? ` · still meets ${esc(c.touches.map((t) => t.title).join('; '))}` : ''}${c.notes.length ? ` · ${esc(c.notes.join(' '))}` : ''}${c.beats_original ? '' : ' · scores worse than staying'}</span>
+          <span class="alt-notes" title="${esc([c.touches.length ? `Still passes: ${c.touches.map((t) => t.title).join('; ')}` : '', ...c.notes].filter(Boolean).join('\n'))}">ETA ${esc(when(c.eta))} · ${Math.round(c.km).toLocaleString()} km · setup ${c.setup_hours} h${c.touches.length ? ` · ${c.touches.length} hazard${c.touches.length === 1 ? '' : 's'} left` : ''}${c.beats_original ? '' : ' · worse than staying'}</span>
         </button>`).join('');
       return `
       <section class="hsec" data-sec="routes">
@@ -360,9 +360,8 @@
           <thead><tr><th>Option</th><th>Arrives</th><th>Cost</th><th>CO₂e</th><th>vs plan</th></tr></thead>
           <tbody>${rows.map(row).join('')}</tbody>
         </table>
-        <p class="chart-note">✓ meets the committed date (${esc(when(d.committed).slice(0, 10))}).
-          ${greenest ? `🌿 lowest CO₂e that still arrives on time: <b>${esc(greenest.id === 'ORIGINAL' ? 'the plan' : greenest.label)}</b>.` : 'No option meets the committed date, so none is highlighted.'}
-          CO₂e = ${d.tonnes} t × km × factor — ${esc(d.carbon.source)}, ${esc(d.carbon.method)}; the leg after the factory gate, where Sika's Carbon Compass stops. Not part of the ranking score.</p>`;
+        <p class="chart-note" title="CO₂e = ${d.tonnes} t × km × factor — ${esc(d.carbon.source)}, ${esc(d.carbon.method)}. The leg after the factory gate. Not part of the ranking score.">
+          ✓ on time (by ${esc(when(d.committed).slice(0, 10))})${greenest ? ` · 🌿 lowest CO₂e on time: <b>${esc(greenest.id === 'ORIGINAL' ? 'the plan' : greenest.label)}</b>` : ''} ⓘ</p>`;
     }
 
     function split(s) {
@@ -467,7 +466,7 @@
       <details class="journal"><summary>Actions on this map (${s.journal.length}) — planner or agent</summary>
         <ol>${recent.map((j) => `<li><span class="who">${esc(j.actor)}</span> ${esc(j.summary || j.action)}</li>`).join('')}</ol>
       </details>
-      <p class="chart-note">Advisory. The tool proposes; the planner decides. Nothing here books or sends.</p>`;
+      <p class="chart-note">Advisory — nothing here books or sends.</p>`;
     }
 
     // ---------------------------------------------------------------
@@ -527,10 +526,10 @@
           ${c.portal && /^https?:\/\//i.test(c.portal) ? `<a href="${esc(c.portal)}" target="_blank" rel="noopener noreferrer">⇱ ${v.checked_against ? 'Website' : 'Dispatch portal'}</a>` : ''}
           ${!c.phone && !c.email && !c.portal ? '<span class="muted">No contact on file.</span>' : ''}
         </div>
-        ${v.checked_against && /^https?:\/\//i.test(v.checked_against) ? `<p class="chart-note">A real operator. ${v.note ? esc(v.note) + ' ' : ''}Checked ${esc(v.checked || '')} against <a href="${esc(v.checked_against)}" target="_blank" rel="noopener noreferrer">its published page</a>; services change, so confirm before booking.</p>` : ''}
+        ${v.checked_against && /^https?:\/\//i.test(v.checked_against) ? `<p class="chart-note" title="${esc(v.note || '')}">Real operator · checked ${esc(v.checked || '')} · <a href="${esc(v.checked_against)}" target="_blank" rel="noopener noreferrer">source</a> · confirm before booking</p>` : ''}
         <div class="k muted" style="font-size:10px;letter-spacing:.06em">AVAILABLE NOW</div>
         <div class="vcap">${v.capacity ? `${v.capacity.available} ${esc(v.capacity.unit)}` : 'Not on file'}
-          <small>${v.capacity ? ` · snapshot from ${esc(v.source)}` : ` · ${esc(v.source)} carries no capacity — call to confirm`}</small></div>
+          <small>${v.capacity ? ` · from ${esc(v.source)}` : ' · capacity unknown — call'}</small></div>
         <p class="chart-note">${esc(v.modes.join(' · '))} · ADR ${v.adr_certified === true ? 'yes' : v.adr_certified === false ? 'no' : 'unknown'} · reefer ${v.reefer === true ? 'yes' : v.reefer === false ? 'no' : 'unknown'} · serves ${Math.round(v.service_radius_km)} km</p>
         <h4 style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:10px">Serviceable routes</h4>
         <div class="vroutes">${v.serviceable.length ? v.serviceable.map((r) => `
@@ -539,7 +538,7 @@
             <span><span class="verdict">${r.ok ? 'Can cover' : 'Cannot'}</span> — ${esc(r.label)}</span>
             ${r.reasons.length ? `<span class="why">${esc(r.reasons.join(' · '))}</span>` : ''}
           </div>`).join('') : '<p class="chart-note">No recovery routes to cover for this asset.</p>'}</div>
-        <p class="chart-note">The app composes; it does not book. Contact the partner to confirm.</p>`;
+        <p class="chart-note">Not booked from here — call to confirm.</p>`;
     }
 
     // ---------------------------------------------------------------
