@@ -153,6 +153,40 @@ def main() -> int:
             page.check("#vp-show")
             page.click(".vp-close")
 
+        # ---- context layers: only around what is selected -------------------
+        idle = page.evaluate("window.__fleetmap.querySourceFeatures('ctx-points').length")
+        check(idle == 0 and page.locator("#ctx-filter").is_hidden(),
+              "[context] ports/inventory/vendors drawn with nothing selected",
+              "no context layers while nothing is selected")
+        target = page.evaluate("""(() => { const a = MapAgent.getState().assets.items
+            .find(x => x.phase === 'in_transit' && x.mode !== 'sea'); return a ? a.id : null; })()""")
+        if target:
+            page.evaluate(f"MapAgent.selectAsset('{target}')")
+            page.wait_for_function("MapAgent.getState().context.status === 'ready'", timeout=30_000)
+            page.wait_for_timeout(1_200)
+            ticks = page.locator("#ctx-filter .ctx-tick").count()
+            drawn = page.evaluate("""(() => ({ points: window.__fleetmap.querySourceFeatures('ctx-points').length,
+                links: window.__fleetmap.querySourceFeatures('ctx-links').length }))()""")
+            check(ticks == 5 and drawn["points"] > 0 and drawn["links"] > 0,
+                  f"[context] selecting {target} drew {drawn} with {ticks} ticks",
+                  f"context around {target}: 5 ticks, places and road/rail drawn")
+            page.locator('#ctx-filter .ctx-tick:has(input[data-layer="links"])').click()
+            page.wait_for_timeout(400)
+            off = page.evaluate("window.__fleetmap.querySourceFeatures('ctx-links').length")
+            check(off == 0, "[context] the Road & rail tick did not hide the links",
+                  "each tick hides its layer")
+            page.locator('#ctx-filter .ctx-tick:has(input[data-layer="links"])').click()
+            page.evaluate("MapAgent.clearSelection()")
+            page.wait_for_timeout(600)
+            # Closing the vehicle leaves its route's layers if the route is
+            # open, and none otherwise.
+            left = page.evaluate("""(() => { const s = MapAgent.getState();
+                return { scope: s.context.scope, isolated: s.isolated, lane: s.focusLane }; })()""")
+            expected = {"kind": "route", "id": left["lane"]} if left["isolated"] and left["lane"] else None
+            check(left["scope"] == expected and page.locator("#ctx-filter").is_hidden() == (expected is None),
+                  f"[context] after closing the vehicle the layers show {left['scope']}, expected {expected}",
+                  "the layers follow the selection when it closes")
+
         # ---- reset bearing and view --------------------------------------
         page.evaluate("window.__fleetmap.jumpTo({bearing: 40})")
         page.locator(".maplibregl-ctrl-compass").click()

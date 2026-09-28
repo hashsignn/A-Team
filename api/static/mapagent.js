@@ -85,6 +85,7 @@
     async function selectAsset(id, m) {
       const n = nextSeq();
       store.dispatch({ type: T.ASSET_SELECT, id, seq: n, meta: meta(m, `select ${id}`) });
+      loadContext({ shipment: id }, { actor: (m && m.actor) || DEFAULT_ACTOR });
       let detail = null;
       try {
         detail = await fetchJson(`/api/map/assets/${enc(id)}${query()}`);
@@ -104,7 +105,44 @@
 
     function clearSelection(m) {
       store.dispatch({ type: T.SELECTION_CLEAR, meta: meta(m, 'close the Action Hub') });
+      // The layers follow what is still selected: the open route, or nothing.
+      if (s().isolated && s().focusLane) loadContext({ route: s().focusLane });
+      else clearContext();
       return Promise.resolve(s().selection);
+    }
+
+    // ---------------------------------------------------------------
+    // Context layers: what is around the selected shipment, route or
+    // customer (engine/fleet/context.py). Loaded on selection, cleared when
+    // nothing is selected, so the map never shows them unasked.
+    // ---------------------------------------------------------------
+    async function loadContext(scope, m) {
+      const kind = ['shipment', 'route', 'customer'].find((k) => scope && scope[k]);
+      if (!kind) return clearContext(m);
+      const cur = s().context;
+      if (cur.scope && cur.scope.kind === kind && cur.scope.id === scope[kind]
+          && (cur.status === 'ready' || cur.status === 'loading')) return cur;
+      const n = nextSeq();
+      store.dispatch({ type: T.CONTEXT_REQUEST, scope: { kind, id: scope[kind] }, seq: n,
+        meta: meta(m, `show what is around ${kind} ${scope[kind]}`, { journal: false }) });
+      try {
+        const data = await fetchJson(`/api/map/context${query({ [kind]: scope[kind] })}`);
+        store.dispatch({ type: T.CONTEXT_SUCCESS, seq: n, data });
+      } catch (err) {
+        store.dispatch({ type: T.CONTEXT_FAILURE, seq: n, error: String(err.message || err) });
+      }
+      return s().context;
+    }
+    function clearContext(m) {
+      store.dispatch({ type: T.CONTEXT_CLEAR, meta: meta(m, 'hide the context layers', { journal: false }) });
+      return Promise.resolve(s().context);
+    }
+    function setContextLayers(patch, m) {
+      store.dispatch({ type: T.CONTEXT_LAYERS, patch: patch || {}, meta: meta(m, 'context layers') });
+      return Promise.resolve(s().context.layers);
+    }
+    function showCustomer(name, m) {
+      return loadContext({ customer: name }, m);
     }
 
     // ---------------------------------------------------------------
@@ -252,6 +290,14 @@
         type: T.LANE_FOCUS, routeId, fit: !!(opts && opts.fit), isolate: !!(opts && opts.isolate),
         meta: meta(m, `focus lane ${routeId}`, { journal: false }),
       });
+      // An opened route shows what is around it, unless one of its vehicles
+      // is selected (that vehicle's context is the more specific one).
+      const sel = s().selection.id && s().assets.byId[s().selection.id];
+      if (routeId && opts && opts.isolate) {
+        if (!sel || sel.lane_id !== routeId) loadContext({ route: routeId });
+      } else if (!routeId && !s().selection.id) {
+        clearContext();
+      }
       return Promise.resolve(s().focusLane);
     }
     function setView(view, m) {
@@ -290,6 +336,10 @@
       ['selectVendor', 'Open a partner card (null closes it).', { vendorId: 'partner id' }],
       ['focusLane', 'Highlight a lane on the map; {fit: true} as the third argument also frames it, {isolate: true} hides every other lane.', { routeId: 'lane id' }],
       ['setView', "Switch the left pane between 'map' and 'globe'.", { view: "'map' | 'globe'" }],
+      ['loadContext', 'Show what is around a shipment, route or customer: ports, inventories, local vendors, road and rail links, nearby and available.', { scope: '{shipment: id} | {route: lane id} | {customer: name}' }],
+      ['clearContext', 'Hide the context layers.', {}],
+      ['setContextLayers', 'Tick a context layer on or off.', { patch: '{ports?, inventories?, vendors?, links?, nearby?: boolean}' }],
+      ['showCustomer', 'Show what is around one customer\'s freight.', { name: 'customer name' }],
       ['showVolumeSignals', 'Show or hide the blue unusual-volume layer, and open or close its panel.', { patch: '{show?: boolean, open?: boolean}' }],
       ['volumeSignals', 'List the routes whose flow had a burst of small orders: day, orders against the usual, share smaller than usual.', {}],
       ['setFilter', 'Filter assets by status, lane or customer tier, or include booked freight.', { patch: '{showBooked?, statuses?: {green,yellow,red}, lanes?: [lane ids] | null, priorities?: [A|B|C] | null}' }],
@@ -312,6 +362,7 @@
       queryVendors, selectVendor,
       focusLane, setView, setFilter,
       showVolumeSignals, volumeSignals,
+      loadContext, clearContext, setContextLayers, showCustomer,
       getState: () => store.getState(),
       subscribe: (fn) => store.subscribe(fn),
       journal: () => store.getState().journal.slice(),

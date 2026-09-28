@@ -922,6 +922,28 @@ def map_assets(
     return JSONResponse(assets_mod.fleet_assets(board, _context(as_of, shipments)))
 
 
+@app.get("/api/map/context")
+def map_context(
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+    shipment: str | None = Query(None),
+    route: str | None = Query(None),
+    customer: str | None = Query(None),
+) -> JSONResponse:
+    """What is around one shipment, route or customer: ports, inventories,
+    local vendors, road and rail links, and what is nearby and available
+    (engine/fleet/context.py). The map draws it only while one is selected."""
+    from engine.fleet import context as context_mod  # noqa: PLC0415
+
+    board = _board(as_of, shipments)
+    try:
+        out = context_mod.build(board, _context(as_of, shipments), shipment_id=shipment,
+                                route_id=route, customer=customer)
+    except context_mod.ContextError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return JSONResponse(out)
+
+
 @app.get("/api/map/assets/{shipment_id}")
 def map_asset(
     shipment_id: str,

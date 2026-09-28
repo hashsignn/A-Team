@@ -75,6 +75,20 @@
       <g transform="translate(10.5 10.5) scale(0.96)" fill="#ffffff">${glyph}</g></svg>`;
   }
 
+  /* The context layers' icons: a category colour and a white glyph, so they
+   * read as places, not vehicles, and never as a ladder colour. */
+  const CTX = {
+    ports: { colour: '#1d4e89', glyph: '<circle cx="12" cy="5.2" r="2.1" fill="none" stroke="#fff" stroke-width="2"/><path d="M12 7.3V19.5M8 10.6h8M5 13.6c.3 3.6 3.3 5.9 7 5.9s6.7-2.3 7-5.9" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>' },
+    inventories: { colour: '#8a5a2b', glyph: '<path d="M3.8 9.6L12 4.3l8.2 5.3V19.6H3.8z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M8 19.6v-5.8h8v5.8M8 16.7h8" fill="none" stroke="#fff" stroke-width="1.8"/>' },
+    vendors: { colour: '#4b4f5c', glyph: '<rect x="3.8" y="7.6" width="16.4" height="11.6" rx="2" fill="none" stroke="#fff" stroke-width="2"/><path d="M9.2 7.6V5.4h5.6v2.2M3.8 12.6h16.4" fill="none" stroke="#fff" stroke-width="2"/>' },
+  };
+  function placeSvg(kind) {
+    const c = CTX[kind];
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+      <rect x="2" y="2" width="32" height="32" rx="9" fill="${c.colour}" stroke="#ffffff" stroke-width="2.5"/>
+      <g transform="translate(6 6)">${c.glyph}</g></svg>`;
+  }
+
   function loadImage(svg) {
     return new Promise((resolve, reject) => {
       const img = new Image(44, 44);
@@ -400,6 +414,13 @@
           }));
         }
       }
+      for (const kind of Object.keys(CTX)) {
+        const name = `ctx-${kind}`;
+        jobs.push(loadImage(placeSvg(kind)).then((img) => {
+          if (map.hasImage(name)) map.removeImage(name);
+          map.addImage(name, img, { pixelRatio: 2 });
+        }));
+      }
       await Promise.all(jobs);
     }
 
@@ -411,6 +432,9 @@
       map.addSource('alts', { type: 'geojson', data: empty });
       map.addSource('split', { type: 'geojson', data: empty });
       map.addSource('surges', { type: 'geojson', data: empty });
+      map.addSource('ctx-reach', { type: 'geojson', data: empty });
+      map.addSource('ctx-links', { type: 'geojson', data: empty });
+      map.addSource('ctx-points', { type: 'geojson', data: empty });
       map.addSource('assets', {
         type: 'geojson', data: empty, cluster: true,
         clusterRadius: 46, clusterMaxZoom: CLUSTER_MAX_ZOOM,
@@ -434,6 +458,29 @@
       map.addLayer({ id: 'surge-line', type: 'line', source: 'surges',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': tokenOf('--lvl-blue'), 'line-width': 2.6, 'line-opacity': 0.9 } });
+      // Context layers (engine/fleet/context.py), under the vehicles: the
+      // reach circle, road and rail from the freight, then the places.
+      map.addLayer({ id: 'ctx-reach-fill', type: 'fill', source: 'ctx-reach',
+        paint: { 'fill-color': tokenOf('--calm') || '#1f7a4a', 'fill-opacity': 0.05 } });
+      map.addLayer({ id: 'ctx-reach-line', type: 'line', source: 'ctx-reach',
+        paint: { 'line-color': tokenOf('--calm') || '#1f7a4a', 'line-width': 1.4, 'line-opacity': 0.7,
+          'line-dasharray': [2, 2] } });
+      map.addLayer({ id: 'ctx-road', type: 'line', source: 'ctx-links', filter: ['==', ['get', 'mode'], 'road'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#5b6475', 'line-width': 2.2, 'line-opacity': 0.8 } });
+      map.addLayer({ id: 'ctx-rail', type: 'line', source: 'ctx-links', filter: ['==', ['get', 'mode'], 'rail'],
+        paint: { 'line-color': '#5b6475', 'line-width': 2.2, 'line-opacity': 0.8,
+          'line-dasharray': [0.6, 1.4], 'line-offset': 4 } });
+      map.addLayer({ id: 'ctx-halo', type: 'circle', source: 'ctx-points', filter: ['==', ['get', 'nearby'], true],
+        paint: { 'circle-radius': 17, 'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': tokenOf('--calm') || '#1f7a4a', 'circle-stroke-width': 2.5 } });
+      map.addLayer({ id: 'ctx-icons', type: 'symbol', source: 'ctx-points',
+        layout: {
+          'icon-image': ['get', 'icon'],
+          'icon-size': ['case', ['==', ['get', 'role'], 'alternative'], 1.05, 0.85],
+          'icon-allow-overlap': true, 'icon-ignore-placement': true,
+        },
+        paint: { 'icon-opacity': ['case', ['==', ['get', 'available'], false], 0.42, 1] } });
       map.addLayer({ id: 'radius-fill', type: 'fill', source: 'radius',
         paint: { 'fill-color': tokenOf('--accent'), 'fill-opacity': 0.05 } });
       map.addLayer({ id: 'radius-line', type: 'line', source: 'radius',
@@ -484,6 +531,17 @@
     // Interaction — every one of these is a MapAgent call
     // ---------------------------------------------------------------
     function bindInteractions(map) {
+      map.on('click', 'ctx-icons', (e) => {
+        const f = e.features && e.features[0];
+        const x = f && view.ctxIndex && view.ctxIndex.get(f.properties.id);
+        if (!x) return;
+        if (view.ctxPopup) view.ctxPopup.remove();
+        view.ctxPopup = new root.maplibregl.Popup({ closeButton: true, className: 'ctx-pop', maxWidth: '280px', offset: 14 })
+          .setLngLat([x.lon, x.lat]).setHTML(contextCard(x, store.getState())).addTo(map);
+        view.ctxPopup._id = x.id;
+      });
+      map.on('mouseenter', 'ctx-icons', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'ctx-icons', () => { map.getCanvas().style.cursor = ''; });
       const tip = $('map-tip');
       const place = (e) => {
         const r = el.getBoundingClientRect();
@@ -624,6 +682,10 @@
       if (!view.ready) return;
       const map = view.map;
       if (volumeChanged) renderVolumeLayer(state);
+      const ctxChanged = force || !prev || state.context !== prev.context
+        || state.vendors !== prev.vendors || state.selection.id !== prev.selection.id;
+      if (ctxChanged) renderContextPanel(state);
+      if (ctxChanged) renderContext(state);
 
       if (force || !prev || state.assets.meta !== prev.assets.meta) ensureBasemap(state.assets.meta);
 
@@ -664,7 +726,8 @@
       if (force || routeData) renderRoutes(state);
       else if (state.routing.hovered !== prev.routing.hovered
                || state.routing.chosen !== prev.routing.chosen) emphasise(state);
-      if (force || !prev || state.vendors !== prev.vendors || state.routing.data !== (prev && prev.routing.data)) renderVendors(state);
+      if (force || !prev || state.vendors !== prev.vendors || state.routing.data !== (prev && prev.routing.data)
+          || state.context.layers !== prev.context.layers) renderVendors(state);
     }
 
     /* Frame a lane the planner picked from the list — once, gently, and
@@ -827,7 +890,8 @@
     function renderVendors(state) {
       const map = view.map;
       const data = state.vendors.data;
-      const live = data && state.selection.id && data.shipment_id === state.selection.id;
+      const live = data && state.selection.id && data.shipment_id === state.selection.id
+        && state.context.layers.vendors;
       map.getSource('radius').setData(fc(live
         ? [circlePolygon(data.center.lat, data.center.lon, data.radius_km)] : []));
 
@@ -980,6 +1044,114 @@
         agent.focusLane(b.dataset.lane, undefined, { fit: true })));
     }
 
+    // ---------------------------------------------------------------
+    // Context layers — what is around the selected shipment, route or
+    // customer: ports, inventories, vendors, road and rail, nearby and
+    // available. One tick each; nothing drawn while nothing is selected.
+    // ---------------------------------------------------------------
+    const CTX_TICKS = [
+      ['ports', 'Ports'], ['inventories', 'Inventory'], ['vendors', 'Vendors'],
+      ['links', 'Road & rail'], ['nearby', 'Nearby & available'],
+    ];
+    const CTX_SWATCH = {
+      ports: `<i class="ctx-sw" style="background:${CTX.ports.colour}"></i>`,
+      inventories: `<i class="ctx-sw" style="background:${CTX.inventories.colour}"></i>`,
+      vendors: `<i class="ctx-sw" style="background:${CTX.vendors.colour}"></i>`,
+      links: '<i class="ctx-sw ctx-sw--line"></i>',
+      nearby: '<i class="ctx-sw ctx-sw--ring"></i>',
+    };
+
+    function contextItems(state, all) {
+      const d = state.context.data;
+      if (!d) return [];
+      const on = all ? { ports: true, inventories: true, vendors: true, nearby: true } : state.context.layers;
+      const near = new Set(on.nearby ? d.layers.nearby : []);
+      // The Action Hub already pins the selected vehicle's partners; the
+      // same partner is not drawn twice.
+      const hub = state.vendors.data && state.selection.id && state.vendors.data.shipment_id === state.selection.id
+        ? new Set(state.vendors.data.vendors.map((v) => v.id)) : new Set();
+      const out = [];
+      for (const kind of ['ports', 'inventories', 'vendors']) {
+        if (!on[kind]) continue;
+        for (const x of d.layers[kind]) {
+          if (kind === 'vendors' && hub.has(x.id)) continue;
+          // The route's own ports are already marked by the journey.
+          if (kind === 'ports' && x.role === 'on_route') continue;
+          out.push({ ...x, layer: kind, nearby: near.has(x.id) });
+        }
+      }
+      return out;
+    }
+
+    function renderContext(state) {
+      const map = view.map;
+      const d = state.context.data;
+      const on = state.context.layers;
+      const items = contextItems(state);
+      map.getSource('ctx-points').setData(fc(items.map((x) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [x.lon, x.lat] },
+        properties: { id: x.id, layer: x.layer, icon: `ctx-${x.layer}`, role: x.role,
+          available: x.available === false ? false : x.available === true ? true : null,
+          nearby: x.nearby },
+      }))));
+      map.getSource('ctx-links').setData(fc(d && on.links
+        ? d.layers.links.map((l) => line(l.path, { id: l.id, mode: l.mode, to: l.to })) : []));
+      map.getSource('ctx-reach').setData(fc(d && on.nearby
+        ? [circlePolygon(d.origin.lat, d.origin.lon, d.reach_km)] : []));
+      view.ctxIndex = new Map(items.map((x) => [x.id, x]));
+      if (view.ctxPopup && (!d || !view.ctxIndex.has(view.ctxPopup._id))) {
+        view.ctxPopup.remove();
+        view.ctxPopup = null;
+      }
+    }
+
+    function renderContextPanel(state) {
+      const host = $('ctx-filter');
+      if (!host) return;
+      const d = state.context.data;
+      host.hidden = !state.context.scope;
+      if (!state.context.scope) { host.innerHTML = ''; return; }
+      // Counts of what is drawn, whatever is ticked; the Action Hub's own
+      // partner pins count as vendors.
+      const all = contextItems(state, true);
+      const hubVendors = state.vendors.data && state.selection.id
+        && state.vendors.data.shipment_id === state.selection.id ? state.vendors.data.vendors.length : 0;
+      const counts = d ? {
+        ports: all.filter((x) => x.layer === 'ports').length,
+        inventories: all.filter((x) => x.layer === 'inventories').length,
+        vendors: all.filter((x) => x.layer === 'vendors').length + hubVendors,
+        links: d.layers.links.length,
+        nearby: all.filter((x) => x.nearby).length,
+      } : {};
+      host.innerHTML = CTX_TICKS.map(([k, label]) => `
+        <label class="ctx-tick${state.context.layers[k] ? ' is-on' : ''}" title="${esc(label)}">
+          <input type="checkbox" data-layer="${k}" ${state.context.layers[k] ? 'checked' : ''}>
+          ${CTX_SWATCH[k]}<span>${esc(label)}</span><b>${d ? counts[k] : '…'}</b>
+        </label>`).join('');
+      host.querySelectorAll('input[data-layer]').forEach((box) => box.addEventListener('change', () =>
+        agent.setContextLayers({ [box.dataset.layer]: box.checked })));
+    }
+
+    function contextCard(x, state) {
+      const links = (state.context.data.layers.links || []).filter((l) => l.to === x.id);
+      const how = links.map((l) => `<span class="ctx-how">${l.mode === 'rail' ? '┅' : '━'} ${esc(l.mode)} ${
+        esc(l.km)} km · ${esc(l.hours)} h</span>`).join('');
+      const c = x.contact || {};
+      const reach = [
+        c.email ? `<a class="ctx-act" href="mailto:${esc(c.email)}" title="${esc(c.email)}" aria-label="Email">${CHANNEL.email}</a>` : '',
+        c.phone ? `<a class="ctx-act" href="tel:${esc(String(c.phone).replace(/\s+/g, ''))}" title="${esc(c.phone)}" aria-label="Call">${CHANNEL.phone}</a>` : '',
+        c.portal ? `<a class="ctx-act" href="${esc(c.portal)}" target="_blank" rel="noopener" title="${esc(c.portal)}" aria-label="Website">${CHANNEL.portal}</a>` : '',
+      ].join('');
+      const state_ = x.available === false ? '<span class="ctx-no">✕</span>' : x.nearby ? '<span class="ctx-yes">●</span>' : '';
+      return `<div class="ctx-card">
+        <b>${state_}${esc(x.name)}</b>
+        <span class="ctx-meta">${esc(x.distance_km)} km · ${esc(x.detail || '')}</span>
+        ${how}
+        ${reach ? `<span class="ctx-reachrow">${reach}</span>` : ''}
+      </div>`;
+    }
+
     function renderLegend(state) {
       const busy = $('map-busy');
       if (busy) {
@@ -1027,6 +1199,9 @@
       }
       map.setPaintProperty('lanes', 'line-color', tokenOf('--map-lane'));
       map.setPaintProperty('surge-glow', 'line-color', tokenOf('--lvl-blue'));
+      map.setPaintProperty('ctx-reach-fill', 'fill-color', tokenOf('--calm') || '#1f7a4a');
+      map.setPaintProperty('ctx-reach-line', 'line-color', tokenOf('--calm') || '#1f7a4a');
+      map.setPaintProperty('ctx-halo', 'circle-stroke-color', tokenOf('--calm') || '#1f7a4a');
       map.setPaintProperty('surge-line', 'line-color', tokenOf('--lvl-blue'));
       map.setPaintProperty('route-original', 'line-color', tokenOf('--map-original'));
       map.setPaintProperty('alt-casing', 'line-color', tokenOf('--map-casing'));

@@ -259,3 +259,24 @@ test('unusual volume: the warned routes arrive with the assets, the layer and pa
   assert.equal(agent.getState(), before);
   assert.ok(agent.journal().some((j) => j.actor === 'LAYA' && j.summary === 'unusual volume'));
 });
+
+test('context layers: loaded on selection, one tick each, cleared when nothing is selected', async () => {
+  const context = { scope: { kind: 'shipment', id: 'A' }, counts: { ports: 1 },
+    layers: { ports: [{ id: 'P' }], inventories: [], vendors: [], links: [], nearby: [] } };
+  const url = '/api/map/context?shipments=150&shipment=A';
+  const { agent, server } = setup({ [url]: () => context });
+  await agent.loadAssets();
+  await agent.selectAsset('A');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(server.calls.some((c) => c.url === url));
+  assert.equal(agent.getState().context.status, 'ready');
+  assert.equal(agent.getState().context.data.layers.ports[0].id, 'P');
+  await agent.setContextLayers({ ports: false });
+  assert.equal(agent.getState().context.layers.ports, false);
+  const before = agent.getState();
+  await agent.setContextLayers({ ports: false });   // no change, same state object
+  assert.equal(agent.getState(), before);
+  await agent.clearSelection();
+  assert.equal(agent.getState().context.scope, null);
+  assert.equal(agent.getState().context.data, null);
+});

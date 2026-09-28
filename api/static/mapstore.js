@@ -50,6 +50,11 @@
     VENDORS_FAILURE: 'map/vendors/failure',
     VENDOR_SELECT: 'map/vendor/select',
     VOLUME_SET: 'map/volume/set',
+    CONTEXT_REQUEST: 'map/context/request',
+    CONTEXT_SUCCESS: 'map/context/success',
+    CONTEXT_FAILURE: 'map/context/failure',
+    CONTEXT_CLEAR: 'map/context/clear',
+    CONTEXT_LAYERS: 'map/context/layers',
   };
 
   const JOURNAL_MAX = 200;
@@ -65,6 +70,14 @@
       // The blue "unusual volume" layer: routes whose flow had a burst of
       // small orders. show: drawn on the map; open: the panel listing them.
       volume: { show: true, open: false },
+      // What is around the selected shipment, route or customer: ports,
+      // inventories, vendors, road and rail, nearby and available
+      // (engine/fleet/context.py). Nothing is drawn while nothing is
+      // selected; `layers` are the planner's ticks, one per layer.
+      context: {
+        scope: null, status: 'idle', seq: 0, data: null, error: null,
+        layers: { ports: true, inventories: true, vendors: true, links: true, nearby: true },
+      },
       // lanes: the routes the board's own filters leave (site, customers,
       // levels) — null is every lane. priorities: customer tiers to show
       // (desk.yaml), null is all. One mechanism, so the map and the list
@@ -149,6 +162,29 @@
             statuses: { ...state.filters.statuses, ...(a.patch.statuses || {}) },
           },
         };
+
+      case T.CONTEXT_REQUEST: {
+        const same = state.context.scope && a.scope
+          && state.context.scope.kind === a.scope.kind && state.context.scope.id === a.scope.id;
+        return { ...state, context: { ...state.context, scope: a.scope, status: 'loading', seq: a.seq,
+          data: same ? state.context.data : null, error: null } };
+      }
+      case T.CONTEXT_SUCCESS:
+        if (a.seq !== state.context.seq) return state;
+        return { ...state, context: { ...state.context, status: 'ready', data: a.data, error: null } };
+      case T.CONTEXT_FAILURE:
+        if (a.seq !== state.context.seq) return state;
+        return { ...state, context: { ...state.context, status: 'error', data: null, error: a.error } };
+      case T.CONTEXT_CLEAR:
+        if (!state.context.scope && !state.context.data) return state;
+        return { ...state, context: { ...state.context, scope: null, status: 'idle', data: null, error: null,
+          seq: state.context.seq + 1 } };
+      case T.CONTEXT_LAYERS: {
+        const next = { ...state.context.layers };
+        for (const k of Object.keys(next)) if (a.patch[k] != null) next[k] = !!a.patch[k];
+        if (Object.keys(next).every((k) => next[k] === state.context.layers[k])) return state;
+        return { ...state, context: { ...state.context, layers: next } };
+      }
 
       case T.VOLUME_SET: {
         const show = a.patch.show != null ? !!a.patch.show : state.volume.show;

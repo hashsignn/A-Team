@@ -1357,12 +1357,17 @@ function showCustomer(r, name, anchor) {
     ${tier.rule ? `<p class="cc2-row"><span>${esc(tier.label || '')}</span> ${esc(tier.rule)}</p>` : ''}
     <div class="dt-orders">${chips}</div>`;
   card.hidden = false;
+  // The map shows what is around this customer's freight while the card is open.
+  withAgent((agent) => agent.showCustomer(name));
   const box = anchor.getBoundingClientRect();
   const w = Math.min(340, window.innerWidth - 24);
   card.style.width = `${w}px`;
   card.style.left = `${Math.max(12, Math.min(box.left - w - 12, window.innerWidth - w - 12))}px`;
   card.style.top = `${Math.max(12, Math.min(box.top - 20, window.innerHeight - card.offsetHeight - 12))}px`;
-  card.querySelector('.cc2-x').addEventListener('click', () => { card.hidden = true; });
+  card.querySelector('.cc2-x').addEventListener('click', () => {
+    card.hidden = true;
+    withAgent((agent) => agent.loadContext({ route: r.route_id }));
+  });
   card.querySelectorAll('[data-order]').forEach((b) => b.addEventListener('click', () => {
     card.hidden = true;
     planRecovery(b.dataset.order);
