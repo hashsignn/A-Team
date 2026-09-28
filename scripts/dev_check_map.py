@@ -118,9 +118,7 @@ def main() -> int:
               .length; })()""")
         check(mismatch == 0, f"[icons] {mismatch} vehicle(s) not in their route's ladder colour",
               "vehicles coloured by their route's ladder level")
-        # The convene posture lives at the top of the right column now; what
-        # matters is that nothing of it is drawn over the vehicles.
-        check(page.evaluate("document.querySelector('.globe-wrap #posture') === null"),
+        check(page.locator("#posture").is_hidden(),
               "[chrome] the convene strip is drawn over the map", "no convene strip over the map")
         check(page.locator("#map-legend").count() == 0,
               "[legend] a map legend is back beside the ladder",
@@ -170,17 +168,18 @@ def main() -> int:
         # second click on the same shipment opens it.
         page.mouse.click(target["x"], target["y"])
         page.wait_for_timeout(900)
-        first = page.evaluate("""(() => ({
-            panel: !document.getElementById('panel-body').hidden,
-            hub: !document.getElementById('hub').hidden,
-            marked: (document.querySelector('.dship-row.is-focus') || {}).dataset?.ship || null,
-            lane: MapAgent.getState().focusLane }))()""")
+        first = page.evaluate("""(() => {
+            const note = document.getElementById('d-from-map');
+            return { panel: !document.getElementById('panel-body').hidden,
+                     hub: !document.getElementById('hub').hidden,
+                     note: note && !note.hidden ? note.innerText : '',
+                     plan: !!(note && note.querySelector('[data-plan]')) }; })()""")
         check(first["panel"] and not first["hub"],
               f"[route-first] first click did not open the route alone: {first}",
               "first click on a shipment opens its route, not the recovery card")
-        check(first["marked"] == target["id"],
-              f"[route-first] {target['id']} not marked in the route's shipment list ({first['marked']})",
-              f"{target['id']} marked in the route's shipment list")
+        check(target["id"] in first["note"] and first["plan"],
+              f"[route-first] the route does not offer {target['id']}'s recovery: {first['note']!r}",
+              f"the route says it was opened from {target['id']}, with Plan recovery one click away")
         page.mouse.click(target["x"], target["y"])
         page.wait_for_function("MapAgent.getState().selection.status === 'ready'", timeout=30_000)
         page.wait_for_function("MapAgent.getState().routing.status === 'ready' "

@@ -319,16 +319,44 @@ def _desk(page, check) -> None:
     page.select_option("#f-site", "")
     page.click("#f-cust button[data-cust='']")
     page.wait_for_timeout(600)
-    if page.evaluate("state.board.key_accounts.length"):
-        check(page.locator("#keyacc .ka-row").count() > 0, "[desk] key accounts at risk not listed",
-              f"{page.locator('#keyacc .ka-row').count()} key-account order(s) at risk listed on every site")
+    # The filters sit in one slim row inside the existing layout: the route
+    # list must still own the column. (The first version stacked four boxes
+    # above it and left no route on a laptop screen.)
+    room = page.evaluate("""(() => { const r = document.getElementById('rlist').getBoundingClientRect();
+        const panel = document.getElementById('panel').getBoundingClientRect();
+        return Math.round(r.height / panel.height * 100); })()""")
+    check(room >= 55, f"[layout] the route list has only {room}% of the column",
+          f"the route list keeps {room}% of the column")
+    # And on the screens the board is actually shown on: a Windows laptop at
+    # 125% scaling, and a 1366 x 768 one. This check did not exist when a
+    # layout that left no route visible there was shipped.
+    kept = page.viewport_size
+    for w, h in ((1536, 730), (1366, 640)):
+        page.set_viewport_size({"width": w, "height": h})
+        page.wait_for_timeout(500)
+        seen = page.evaluate("""(() => [...document.querySelectorAll('#rlist .rli')].filter(e => {
+            const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight - 60; }).length)()""")
+        links = page.evaluate("""(() => ['link-fast', 'link-profile'].every(id => {
+            const r = document.getElementById(id).getBoundingClientRect();
+            return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }))()""")
+        check(seen >= 2 and links, f"[layout] at {w}x{h}: {seen} route card(s) begin on screen, "
+              f"header links {'visible' if links else 'CUT OFF'}",
+              f"at {w}x{h}: {seen} route cards on screen, Act fast and Risk profile visible")
+    page.set_viewport_size(kept)
+    page.wait_for_timeout(300)
 
     page.click(".ptab[data-ptab='allhands']")
     page.wait_for_timeout(400)
     cards = page.locator("#allhands .ah-card").count()
     text = page.locator("#allhands").inner_text()
-    check(cards == 4 and all(f in text for f in ("Supply Chain", "Procurement", "Manufacturing", "Controlling")),
-          f"[all-hands] {cards} function card(s)", "all-hands: cadence, the room, and 4 function levers")
+    keys = page.evaluate("state.board.key_accounts.length")
+    check(cards == 4 + (1 if keys else 0)
+          and all(f in text for f in ("Supply Chain", "Procurement", "Manufacturing", "Controlling")),
+          f"[all-hands] {cards} card(s)", "all-hands: cadence, the room, and 4 function levers")
+    if keys:
+        check(page.locator("#allhands .ah-keys-card li").count() == keys,
+              "[all-hands] key-account orders at risk not listed",
+              f"all-hands lists the {keys} key-account order(s) at risk, first")
     page.click(".ptab[data-ptab='signals']")
     _settle(page, "document.querySelector('#siglist .cs') !== null", 20_000)
     check(page.locator("#siglist .cs").count() == 1, "[signals] no carrier push-out section",

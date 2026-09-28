@@ -244,30 +244,15 @@ function markCust() {
 function applyDesk() {
   markCust();
   writeDesk();
-  const mine = deskRoutes();
-  const siteLabel = state.site ? siteName(state.site) : 'all sites';
-  const custLabel = state.cust === 'A' ? 'key accounts' : state.cust === 'AB' ? 'key and standard customers' : 'all customers';
-  const site = (state.board.sites || []).find((x) => x.id === state.site);
-  $('desk-scope').innerHTML = `Showing <b>${mine.length}</b> route${mine.length === 1 ? '' : 's'} from <b>${esc(siteLabel)}</b>, ${esc(custLabel)}${
-    site && site.planner ? ` · planner ${esc(site.planner)}` : ''}`;
   renderLadder(state.board.levels);
   refreshPaths();
   renderTable();
-  renderKeyAccounts();
   syncMapFilters();
   if (state.selected && !visibleRoutes().some((r) => r.route_id === state.selected)) {
     state.selected = null;
     refreshPaths();
     showRouteList();
   }
-}
-
-function setStep(n) {
-  document.querySelectorAll('#steps li').forEach((li) => {
-    const k = Number(li.dataset.step);
-    li.classList.toggle('is-on', k === n);
-    li.classList.toggle('is-done', k < n);
-  });
 }
 
 async function fetchBoard({ as_of, shipments }) {
@@ -363,7 +348,7 @@ function applyBoard(board) {
     `${board.as_of_label} · ${board.shipments_total} shipments (synthetic) · ` +
     `${board.variables_total} risk variables · ${board.routes.length} routes`;
 
-  renderPosture(board.posture, board.all_hands);
+  renderPosture(board.posture);
   initDesk();
   initPanelTabs();
   renderAllHands();
@@ -378,7 +363,6 @@ function applyBoard(board) {
    * before being asked, and picking a lane is one click from there. */
   $('panel-body').hidden = true;
   $('panel-list').hidden = false;
-  setStep(2);
 
   /* Re-measure now that the ladder has rendered. The first measurement runs
    * before the level chips exist, so it reads a header one row shorter than
@@ -454,9 +438,8 @@ document.addEventListener('themechange', () => {
   refreshMarkers();
   renderLadder(state.board.levels);
   renderTable();
-  renderKeyAccounts();
   renderAllHands();
-  renderPosture(state.board.posture, state.board.all_hands);
+  renderPosture(state.board.posture);
   // Re-select rather than re-render: the detail panel draws an SVG radar in
   // band colours, and the cheapest correct way to repaint it is the path that
   // already knows how to build it. `fly: false` keeps the camera where it is.
@@ -758,34 +741,15 @@ function nodeTip(n) {
 // ===============================================================
 // Ladder & posture
 // ===============================================================
-/* The convene posture, as one line at the top of the right column. Clicking
- * it opens the all-hands: the posture is only useful next to what the room
- * does about it. */
-function renderPosture(p, hands) {
+/* The convene strip, on the globe's lane view (it sits over the map's
+ * vehicles otherwise). The cadence it implies is on the All-hands tab. */
+function renderPosture(p) {
   const tone = { convene: 'red', watch: 'yellow', normal: 'green' }[p.posture] || 'blue';
   const c = LEVEL_COLOR[tone];
-  const el = $('posture');
-  el.hidden = false;
-  el.style.borderLeftColor = c;
-  // Two short lines, not the full paragraph: what was crossed, and what the
-  // room does about it. The whole headline is one click away.
-  const fired = hands && hands.triggers && hands.triggers.length ? hands.triggers[0] : null;
-  const what = fired
-    ? `${hands.rule_agreed ? 'Convene rule crossed' : 'Proposed convene rule crossed'}: ${fired}`
-    : p.headline;
-  const meet = hands
-    ? `All-hands ${esc(hands.cadence_label)}${hands.changed ? ` (normally ${esc(hands.normal_label)})` : ''} · next ${esc(hands.next_label)}`
-    : '';
-  el.innerHTML =
+  $('posture').style.borderLeftColor = c;
+  $('posture').innerHTML =
     `<span class="posture-label" style="color:${c}">${esc(p.posture)}</span>
-     <span class="posture-text">${esc(what)}<span class="posture-meet">${meet}</span></span>
-     <span class="posture-go" aria-hidden="true">›</span>`;
-  el.setAttribute('aria-label', `${p.posture}: ${p.headline}`);
-  el.title = `${p.headline}\n\nClick: the all-hands — cadence, who is in the room, each function's levers.`;
-  if (!el.dataset.bound) {
-    el.dataset.bound = '1';
-    el.addEventListener('click', () => { showRouteList(); openPanelTab('allhands'); });
-  }
+     <span class="posture-text">${esc(p.headline)}</span>`;
 }
 
 const LADDER_SKELETON = [
@@ -869,11 +833,12 @@ function select(routeId, { fly, fit, ship } = {}) {
   state.shipFocus = ship || null;
 
   refreshPaths();
+  // Opened from the map: land on the actions, where its recovery is offered.
+  if (ship) showRTab('actions');
   renderDetail(r);
   renderResponse(r);
   markTableRow(routeId);
   linkOps(routeId);
-  setStep(3);
   // Highlight the lane on the 2D map too. Framed only when the pick came
   // from the list (`fit`) and the lane is off screen; a click on the map
   // itself never moves it — the planner is already looking there.
@@ -938,6 +903,7 @@ function renderDetail(r) {
 
   renderAlloc(r);
   renderShips(r);
+  renderFromMap();
 
   // No radar, no event list, no matrix here. They were on this panel AND on
   // the route page AND in a modal — three copies of three charts, none big
@@ -953,6 +919,12 @@ function renderAlloc(r) {
   const site = r.site || {};
   const port = r.real_data && r.real_data.port && r.real_data.port.name;
   const customers = r.customers || [];
+  const keys = customers.filter((c) => c.priority === 'A').length;
+  $('d-alloc').innerHTML =
+    `<span><i>Ships from</i> <b>${esc(site.name || '—')}</b></span>
+     ${port ? `<span><i>Leaves by</i> <b>${esc(port)}</b></span>` : ''}
+     <span><i>Serves</i> <b>${customers.length}</b> customer${customers.length === 1 ? '' : 's'}${
+       keys ? `, <b>${keys}</b> key account${keys === 1 ? '' : 's'}` : ''}</span>`;
   const rows = customers.map((c) => `
     <tr class="${c.at_risk ? 'is-risk' : ''}">
       <td>${esc(c.name)}</td>
@@ -960,15 +932,33 @@ function renderAlloc(r) {
       <td class="num">${c.at_risk} of ${c.shipments}</td>
       <td class="num">${c.expected_loss_chf > 0 ? chf(c.expected_loss_chf) : '—'}</td>
     </tr>`).join('');
-  $('d-alloc').innerHTML = `
-    <div class="alloc-line">
-      <span><i>Ships from</i> <b>${esc(site.name || '—')}</b>${site.planner ? ` <span class="muted">· ${esc(site.planner)}</span>` : ''}</span>
-      ${port ? `<span><i>Leaves by</i> <b>${esc(port)}</b></span>` : ''}
-      <span><i>Serves</i> <b>${customers.length}</b> customer${customers.length === 1 ? '' : 's'}</span>
-    </div>
-    ${customers.length ? `<table class="alloc-tab">
+  $('d-cust').innerHTML = customers.length ? `<table class="alloc-tab">
       <thead><tr><th>Customer</th><th>Importance</th><th>At risk</th><th>If nobody acts</th></tr></thead>
-      <tbody>${rows}</tbody></table>` : ''}`;
+      <tbody>${rows}</tbody></table>` : '';
+}
+
+/* Opened by clicking a shipment on the map: say so, and put its recovery
+ * options one click away, above the route's own actions. */
+function renderFromMap() {
+  const box = $('d-from-map');
+  if (!box) return;
+  const id = state.shipFocus;
+  const agent = window.MapAgent;
+  const a = id && agent && agent.getState().assets.byId[id];
+  if (!a) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `<span>Opened from <b>${esc(a.id)}</b> on the map · ${esc(a.customer)} ${priBadge(a.customer_priority)}
+      <span class="muted">· ${esc(a.status_label)}</span></span>
+    <button type="button" class="ctl ctl--mini ctl--primary" data-plan="${esc(a.id)}">Plan recovery</button>`;
+  box.querySelector('[data-plan]').addEventListener('click', () => planRecovery(a.id));
+}
+
+function planRecovery(id) {
+  state.shipFocus = id;
+  withAgent((agent) => {
+    agent.setView('map');
+    agent.selectAsset(id);
+  });
 }
 
 /* The route's shipments, from the map's own asset list, so the list here
@@ -992,10 +982,7 @@ function renderShips(r) {
     host.innerHTML = '<p class="muted dship-note">No shipment on this route is under way or staged.</p>';
     return;
   }
-  const hint = state.shipFocus
-    ? `<p class="dship-hint">Opened from the map: <b>${esc(state.shipFocus)}</b> is marked below.
-        <b>Plan recovery</b> shows the ways round.</p>` : '';
-  host.innerHTML = `<h4>Shipments on this route <span class="muted">· ${items.length}</span></h4>${hint}
+  host.innerHTML = `<h4>Shipments on this route <span class="muted">· ${items.length}</span></h4>
     <div class="dship-list">${items.map((a) => `
       <div class="dship-row${a.id === state.shipFocus ? ' is-focus' : ''}${a.status !== 'green' ? ' is-late' : ''}" data-ship="${esc(a.id)}">
         <span class="dship-main">
@@ -1006,16 +993,9 @@ function renderShips(r) {
           ${a.status !== 'green' ? 'Plan recovery' : 'Show'}</button>
       </div>`).join('')}</div>`;
   host.querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => {
-    const id = b.dataset.plan;
-    state.shipFocus = id;
-    host.querySelectorAll('.dship-row').forEach((row) => row.classList.toggle('is-focus', row.dataset.ship === id));
-    withAgent((agent) => {
-      agent.setView('map');
-      agent.selectAsset(id);
-    });
+    host.querySelectorAll('.dship-row').forEach((row) => row.classList.toggle('is-focus', row.dataset.ship === b.dataset.plan));
+    planRecovery(b.dataset.plan);
   }));
-  const focus = host.querySelector('.dship-row.is-focus');
-  if (focus) focus.scrollIntoView({ block: 'nearest' });
 }
 
 /* ROUTE FIRST, from the map. A click on a shipment whose route is not the
@@ -1029,6 +1009,7 @@ function onAssetClick(id) {
   if (open) {
     state.shipFocus = id;
     renderShips(state.board.routes.find((r) => r.route_id === a.lane_id));
+    renderFromMap();
     agent.selectAsset(id);
     return;
   }
@@ -1050,6 +1031,7 @@ withAgent((agent) => {
     }
     if (st.assets.items !== (prev && prev.assets.items) && state.selected && !$('panel-body').hidden) {
       renderShips(state.board.routes.find((r) => r.route_id === state.selected));
+      renderFromMap();
     }
   });
 });
@@ -1225,6 +1207,11 @@ async function primeCompose(r) {
   }
 }
 
+function showRTab(name) {
+  document.querySelectorAll('.rtab').forEach((t) => t.classList.toggle('is-on', t.dataset.tab === name));
+  document.querySelectorAll('.rpanel').forEach((p) => p.classList.toggle('is-on', p.dataset.panel === name));
+}
+
 function initResponseTabs() {
   const back = $('d-back');
   if (back) back.addEventListener('click', showRouteList);
@@ -1279,7 +1266,8 @@ function openPanelTab(name) {
   tabs.querySelectorAll('.ptab').forEach((t) => t.classList.toggle('is-on', t.dataset.ptab === name));
   const routes = name === 'routes';
   $('rlist').hidden = !routes;
-  $('keyacc').hidden = !routes || !(state.board && state.board.key_accounts.length);
+  $('deskrow').hidden = !routes;
+  if (!routes) showHowto(false);
   $('allhands').hidden = name !== 'allhands';
   $('siglist').hidden = name !== 'signals';
   $('f-all').hidden = !routes;
@@ -1292,7 +1280,7 @@ function openPanelTab(name) {
   // other number on the page.
   $('panel-list-count').textContent = {
     routes: state.listSubtitle || '',
-    allhands: 'The cross-functional meeting: how often it sits now, who is in it, and what each function can pull',
+    allhands: 'How often the cross-functional meeting sits now, and what each function can pull',
     signals: 'What arrived, what the filter removed, and what read the rest',
   }[name];
   if (name === 'signals' && !signalsLoaded) loadSignals();
@@ -1341,43 +1329,18 @@ function renderAllHands() {
       ${(h.triggers || []).length ? `<ul class="ah-triggers">${h.triggers.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
       <div class="ah-people"><span class="ah-k">In the room</span>${people}</div>
     </div>
+    ${keyAccountsHTML()}
     ${cards}
     <p class="ah-foot">Proposals from this board, for the room to accept or reject. Nothing
       here is booked, ordered or approved.</p>`;
   host.querySelectorAll('li[data-route]').forEach((li) => {
-    const go = () => { openPanelTab('routes'); select(li.dataset.route, { fly: true, fit: true }); };
+    const go = () => {
+      openPanelTab('routes');
+      select(li.dataset.route, { fly: true, ship: li.dataset.ship || null });
+    };
     li.addEventListener('click', go);
     li.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
   });
-}
-
-/* Key accounts at risk, on every site. Shown whatever site is picked: those
- * contracts are kept whatever the crisis, so a planner at Stuttgart still
- * sees the Düdingen key account going late — marked as another desk's. */
-function renderKeyAccounts() {
-  const host = $('keyacc');
-  const rows = (state.board && state.board.key_accounts) || [];
-  const onRoutes = !$('rlist').hidden;
-  host.hidden = !rows.length || !onRoutes;
-  if (!rows.length) { host.innerHTML = ''; return; }
-  const open = host.dataset.open !== 'false';
-  host.innerHTML = `<details${open ? ' open' : ''}>
-    <summary>${priBadge('A')} <b>${rows.length}</b> key-account order${rows.length === 1 ? '' : 's'} at risk
-      <span class="muted">— served first, shown on every site</span></summary>
-    ${rows.map((k) => `
-      <button type="button" class="ka-row" data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}"
-              style="--lvl:${LEVEL_COLOR[k.level] || 'var(--muted)'}">
-        <span class="ka-when" style="color:${LEVEL_COLOR[k.level] || 'inherit'}">${hours(k.lead_time_hours)}</span>
-        <span class="ka-main"><b>${esc(k.customer)}</b> · ${esc(k.shipment_id)}
-          <span class="muted">${esc(k.route)}${state.site && k.site !== state.site ? ` · ${esc(siteName(k.site))} desk` : ''}</span></span>
-        <span class="ka-act">${esc(k.action || 'no option worth its cost')}</span>
-      </button>`).join('')}
-  </details>`;
-  host.querySelector('details').addEventListener('toggle', (e) => {
-    host.dataset.open = String(e.target.open);
-  });
-  host.querySelectorAll('.ka-row').forEach((b) => b.addEventListener('click', () =>
-    select(b.dataset.route, { fly: true, fit: true, ship: b.dataset.ship })));
 }
 
 async function loadSignals() {
@@ -1395,6 +1358,21 @@ async function loadSignals() {
   } catch (err) {
     host.innerHTML = `<p class="sig-note">Could not read it — ${esc(err.message)}</p>`;
   }
+}
+
+/* The key-account orders at risk, for the room: those contracts are kept
+ * whatever the crisis, so they are read out first. */
+function keyAccountsHTML() {
+  const rows = (state.board && state.board.key_accounts) || [];
+  if (!rows.length) return '';
+  return `<section class="ah-card ah-keys-card">
+    <div class="ah-card-head"><b>${priBadge('A')} Key accounts at risk</b><span>served first</span></div>
+    <ul class="ah-items">${rows.map((k) => `
+      <li data-route="${esc(k.route_id)}" data-ship="${esc(k.shipment_id)}" tabindex="0">
+        <span class="ah-text"><b>${esc(k.customer)}</b> · ${esc(k.shipment_id)} · decide in ${hours(k.lead_time_hours)}</span>
+        <span class="ah-detail">${esc(k.route)} · ${esc(siteName(k.site))} · ${esc(k.action || 'no option worth its cost')}</span>
+      </li>`).join('')}</ul>
+  </section>`;
 }
 
 /* Carriers pushing out orders — the signal Sika said arrives before any
@@ -1521,13 +1499,6 @@ function renderTable() {
   // top of a list they were halfway down.
   const keep = list.scrollTop;
 
-  const customersLine = (r) => {
-    const cs = r.customers || [];
-    if (!cs.length) return '';
-    const shown = cs.slice(0, 2).map((c) => `${esc(c.name)}${c.priority === 'A' ? ' ★' : ''}`).join(', ');
-    return `<span class="rli-cust">For ${shown}${cs.length > 2 ? ` +${cs.length - 2}` : ''}</span>`;
-  };
-
   list.innerHTML = rows.length ? rows.map((r) => {
     const key = keyAtRisk(r);
     return `
@@ -1540,11 +1511,10 @@ function renderTable() {
       </span>
       <span class="rli-name">${esc(r.name)}</span>
       ${focusBadge(r)}
-      ${key ? `<span class="rli-key">★ ${key} key-account order${key === 1 ? '' : 's'} at risk</span>` : ''}
       <span class="rli-driver">${esc(r.events[0] ? r.events[0].title : 'no event recorded')}</span>
-      ${customersLine(r)}
       <span class="rli-foot">
-        <span>${r.shipments_at_risk} of ${r.shipments} shipments</span>
+        <span>${r.shipments_at_risk} of ${r.shipments} shipments${
+          key ? ` · <b class="rli-key">★ ${key} key account${key === 1 ? '' : 's'}</b>` : ''}</span>
         <span>${r.exposure_chf > 0 ? chf(r.exposure_chf) : '—'}</span>
       </span>
     </button>`;
@@ -1552,14 +1522,14 @@ function renderTable() {
       these filters. Try <b>All</b> customers, or <b>All levels</b>.</p>`;
 
   list.querySelectorAll('.rli').forEach((li) => {
-    li.addEventListener('click', () => select(li.dataset.route, { fly: true, fit: true }));
+    li.addEventListener('click', () => select(li.dataset.route, { fly: true }));
   });
   list.scrollTop = keep;
 
   const mine = deskRoutes().length;
   state.listSubtitle =
     `${rows.length} of ${mine} route${mine === 1 ? '' : 's'}${state.site ? ` from ${siteName(state.site)}` : ''} · ` +
-    'ranked by how soon someone must decide, then CHF';
+    'ranked by level, then CHF within the level';
   const count = $('panel-list-count');
   const onRoutes = !$('rlist').hidden;
   if (count && onRoutes) count.textContent = state.listSubtitle;
@@ -1587,27 +1557,22 @@ function showRouteList() {
   $('panel-body').hidden = true;
   $('panel-list').hidden = false;
   $('panel').scrollTop = 0;
-  setStep(2);
 }
 
-/* How the board works, in three lines — open on a first visit, one click
- * away after. The review's first word was that it was not self-explanatory. */
-function initHowto() {
+/* How the board works, in three lines — a card over the list, opened and
+ * closed by the planner. It used to open by itself and push the list off a
+ * laptop screen. */
+function showHowto(on) {
   const box = $('howto');
   const btn = $('btn-help');
-  let seen = false;
-  try { seen = localStorage.getItem('radar.howto') === 'seen'; } catch { seen = false; }
-  const show = (on) => {
-    box.hidden = !on;
-    btn.classList.toggle('is-on', on);
-    btn.setAttribute('aria-pressed', String(on));
-  };
-  show(!seen);
-  btn.addEventListener('click', () => show(box.hidden));
-  $('howto-close').addEventListener('click', () => {
-    show(false);
-    try { localStorage.setItem('radar.howto', 'seen'); } catch { /* private window */ }
-  });
+  if (!box || !btn) return;
+  box.hidden = !on;
+  btn.classList.toggle('is-on', on);
+  btn.setAttribute('aria-pressed', String(on));
+}
+function initHowto() {
+  $('btn-help').addEventListener('click', () => showHowto($('howto').hidden));
+  $('howto-close').addEventListener('click', () => showHowto(false));
 }
 
 boot().catch((err) => {

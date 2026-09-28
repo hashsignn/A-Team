@@ -299,52 +299,15 @@ p { margin: 0; }
 }
 
 .topbar {
-  /* Two fixed rows, drawn complete on the first paint. The old single row
-     wrapped when the ladder arrived and pushed the page down a line. */
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 26px 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 26px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--plane) 82%, transparent);
   backdrop-filter: blur(8px);
-}
-.topbar-row {
-  display: flex; align-items: center; gap: 20px;
-  min-height: 38px;
-}
-.topbar-row > .brand { flex: 0 1 auto; min-width: 0; }
-.topbar-row > .asof { margin-left: auto; }
-.topbar-links { display: flex; align-items: center; gap: 8px; flex: none; }
-.topbar-links .ctl, .asof label, .asof .ctl { white-space: nowrap; }
-.brand-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brand > div { min-width: 0; }
-.topbar-links .themes { margin-left: 6px; }
-
-/* ---- the desk bar: whose board this is ---- */
-.deskbar { gap: 16px; min-height: 44px; }
-.desk-fld { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); flex: none; }
-.desk-fld > span:first-child {
-  font-size: 10px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
-}
-.desk-fld select {
-  font: inherit; font-size: 12.5px; color: var(--text-primary);
-  background: var(--surface-1); border: 1px solid var(--border-strong);
-  border-radius: 7px; padding: 6px 9px; min-width: 190px;
-}
-.desk-fld select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
-.seg button {
-  font: inherit; font-size: 11.5px; color: var(--text-secondary);
-  background: var(--surface-1); border: 0; padding: 6px 10px; cursor: pointer;
-  border-left: 1px solid var(--border); white-space: nowrap;
-}
-.seg button:first-child { border-left: 0; }
-.seg button.is-on { background: var(--accent); color: var(--accent-contrast); }
-.desk-scope {
-  font-size: 11.5px; color: var(--text-secondary); line-height: 1.35;
-  flex: 1 1 auto; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 .brand { display: flex; align-items: center; gap: 13px; }
@@ -378,7 +341,7 @@ p { margin: 0; }
 .stage.is-loading { cursor: progress; }
 
 /* ---- ladder ---- */
-.ladder { display: flex; gap: 6px; flex-wrap: nowrap; flex: none; }
+.ladder { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .rung {
   display: flex; align-items: center; gap: 8px;
@@ -394,10 +357,7 @@ p { margin: 0; }
 
 .rung-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .rung-name { font-size: 11.5px; font-weight: 600; letter-spacing: .02em; }
-.rung-count {
-  font-family: var(--mono); font-size: 11.5px; color: var(--muted);
-  display: inline-block; min-width: 2ch;   /* "–" then "12": same width */
-}
+.rung-count { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 .rung-when { font-size: 10px; color: var(--muted); display: block; margin-top: 1px; }
 
 /* ---- body split ---- */
@@ -429,24 +389,20 @@ p { margin: 0; }
 .globe-overlay--bl { bottom: 18px; left: 20px; }
 
 .posture {
-  display: flex; align-items: flex-start; gap: 11px;
-  margin: 10px 16px 0;
-  padding: 10px 13px;
+  display: inline-flex; align-items: flex-start; gap: 11px;
+  max-width: 620px;
+  padding: 11px 15px;
   border: 1px solid var(--border);
   border-left-width: 3px;
   border-radius: 9px;
-  background: var(--surface-2);
-  font: inherit; text-align: left; color: inherit; cursor: pointer;
-  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
+  backdrop-filter: blur(6px);
 }
-.posture:hover { border-color: var(--border-strong); }
-.posture-meet { display: block; margin-top: 3px; font-weight: 600; color: var(--text-primary); }
-.posture-go { margin-left: auto; font-size: 18px; line-height: 1; color: var(--muted); }
 .posture-label {
   font-size: 10px; font-weight: 700; letter-spacing: .12em;
   text-transform: uppercase; white-space: nowrap; padding-top: 1px;
 }
-.posture-text { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+.posture-text { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
 
 .globe-hint {
   font-size: 11.5px; color: var(--muted);
@@ -508,7 +464,7 @@ p { margin: 0; }
 .panel-list-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 14px;
-  padding: 12px 22px 10px;
+  padding: 20px 22px 14px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -569,8 +525,7 @@ p { margin: 0; }
 }
 .rli-real.is-full { background: var(--accent); color: var(--accent-contrast); }
 .rli-real.is-none { color: var(--muted); border-color: var(--border); }
-.plh-ctl { display: flex; gap: 6px; align-items: flex-start; flex: none; }
-.plh-ctl .ctl { white-space: nowrap; }
+.plh-ctl { display: flex; gap: 6px; align-items: flex-start; }
 #f-focus.is-on { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 
 /* ---- right column, state 2: one route ---- */
@@ -2066,7 +2021,12 @@ body.has-modal { overflow: hidden; }
   padding: 4px 0; margin-right: 14px;
   border: 0; border-bottom: 2px solid transparent;
   background: none; font: inherit; font-size: 15px; font-weight: 600;
-  color: var(--muted); cursor: pointer;
+  color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+/* Three tabs on a laptop-width column: a size down, so they stay on one
+   line beside the level filters instead of wrapping into two. */
+@media (max-width: 1500px) {
+  .ptab { font-size: 13.5px; margin-right: 11px; }
 }
 .ptab.is-on { color: var(--text-primary); border-bottom-color: var(--accent); }
 .ptab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -2360,44 +2320,51 @@ button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -
 .rt-pre-switch { color: var(--lvl-yellow); font-size: 12.5px; }
 @media (max-width: 760px) { .rt-pre { font-size: 11.5px; } }
 
-
 /* ============================================================
-   CLIENT REVIEW, SEPT 2026 — sites, customers, route first
+   CLIENT REVIEW, SEPT 2026 — sites, customers, all-hands
+   Added INTO the existing layout, never on top of it: one slim filter
+   row above the list, tabs for everything else. The first attempt stacked
+   four boxes above the list and, on a laptop screen, left no route on it.
    ============================================================ */
 
-/* ---- where you are ---- */
-.steps {
-  display: flex; gap: 6px; list-style: none; margin: 0; padding: 12px 16px 0;
-  flex: 0 0 auto;
+/* ---- the filter row: site and customers ---- */
+.deskrow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 22px; border-bottom: 1px solid var(--border);
+  flex: 0 0 auto; position: relative;
 }
-.steps li {
-  flex: 1 1 0; display: flex; align-items: center; gap: 7px;
-  font-size: 11.5px; color: var(--muted);
-  padding: 6px 9px; border-radius: 7px; border: 1px solid var(--border);
+.desk-fld { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
+.desk-fld > span:first-child { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+#f-site, .desk-fld select {
+  font: inherit; font-size: 12px; color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: 7px; padding: 4px 7px; max-width: 175px;
 }
-.steps li b {
-  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
-  font-size: 10.5px; background: var(--surface-2); color: var(--muted);
+#f-site:focus, .desk-fld select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap;
+  background: var(--surface-1); border: 0; border-left: 1px solid var(--border);
+  padding: 4px 8px; cursor: pointer;
 }
-.steps li.is-done { color: var(--text-secondary); }
-.steps li.is-done b { background: var(--border-strong); color: var(--surface-1); }
-.steps li.is-on { color: var(--text-primary); border-color: var(--accent); font-weight: 600; }
-.steps li.is-on b { background: var(--accent); color: var(--accent-contrast); }
+.seg button:first-child { border-left: 0; }
+.seg button.is-on { background: var(--accent); color: var(--accent-contrast); }
+#btn-help.is-on { border-color: var(--accent); color: var(--accent); }
+#btn-help { margin-left: auto; width: 26px; justify-content: center; font-weight: 700; }
+.rung-count { display: inline-block; min-width: 2ch; }
 
-.panel { position: relative; }
-/* In the list, above the tabs: it can never cover a control, and it is gone
-   the moment a route is open. */
+/* Opened by a click, over the list, closed by a click. It never opens on
+   its own and never pushes anything down. */
+.panel-list { position: relative; }
 .howto {
-  margin: 10px 16px 0; flex: 0 0 auto;
-  padding: 11px 14px; border-radius: 9px;
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface-1));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  position: absolute; z-index: 6; left: 16px; right: 16px; top: 100px;
+  padding: 12px 14px; border-radius: 9px; box-shadow: var(--shadow-2);
+  background: var(--surface-1); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   font-size: 12px; line-height: 1.5;
 }
-.howto ol { margin: 6px 0 6px 18px; padding: 0; }
+.howto ol { margin: 0 0 6px 18px; padding: 0; }
 .howto li { margin: 3px 0; }
 .howto .ctl { margin-top: 6px; }
-#btn-help.is-on { border-color: var(--accent); color: var(--accent); }
 
 /* ---- importance badges: accent, never a level colour ---- */
 .pri {
@@ -2408,74 +2375,48 @@ button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -
 .pri-A { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 .pri-C { border-style: dashed; }
 
-/* ---- the list ---- */
-.rli-site {
-  font-size: 10.5px; color: var(--muted); margin-right: auto; margin-left: 8px;
-  white-space: nowrap;
-}
-.rli-key {
-  justify-self: start; font-size: 10.5px; font-weight: 700; color: var(--accent);
-}
-.rli-cust { font-size: 11px; color: var(--muted); }
+/* ---- route cards: which site, which key accounts ---- */
+.rli-site { font-size: 10.5px; color: var(--muted); margin-right: auto; margin-left: 8px; white-space: nowrap; }
+.rli-key { justify-self: start; font-size: 10.5px; font-weight: 700; color: var(--accent); }
 .rlist-empty { padding: 26px 22px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; }
-.skeleton {
-  height: 92px; margin: 12px 22px; border-radius: 8px;
-  background: linear-gradient(90deg, var(--surface-2), var(--grid), var(--surface-2));
-  opacity: .6;
-}
 
-/* ---- key accounts at risk, on every site ---- */
-.keyacc { border-bottom: 1px solid var(--border); flex: 0 0 auto; max-height: 150px; overflow-y: auto; }
-.keyacc summary {
-  padding: 10px 22px; font-size: 12px; cursor: pointer; list-style-position: inside;
-}
-.ka-row {
-  display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 2px 10px;
-  width: 100%; text-align: left; padding: 8px 22px; border: 0;
-  border-left: 3px solid var(--lvl); background: transparent;
-  font: inherit; font-size: 12px; color: inherit; cursor: pointer;
-}
-.ka-row:hover { background: var(--surface-2); }
-.ka-when { font-family: var(--mono); font-weight: 700; grid-row: span 2; font-size: 11.5px; }
-.ka-main .muted { display: block; font-size: 11px; }
-.ka-act { font-size: 11px; color: var(--text-secondary); }
-
-/* ---- route detail: who it is for ---- */
-.alloc { padding: 0 22px 12px; }
+/* ---- route view ---- */
 .alloc-line {
-  display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px;
-  padding: 10px 12px; border-radius: 8px; background: var(--surface-2);
+  display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px;
+  padding: 8px 22px 2px; color: var(--text-secondary);
 }
 .alloc-line i { font-style: normal; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 3px; }
-.alloc-tab { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+.alloc-line b { color: var(--text-primary); }
+.frommap {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 12px; padding: 8px 10px; margin-bottom: 10px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.frommap .ctl { white-space: nowrap; flex: none; }
+.act.is-key { border-left: 3px solid var(--accent); }
+.alloc-tab { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 14px; }
 .alloc-tab th {
   text-align: left; font-size: 10px; font-weight: 600; letter-spacing: .05em;
   text-transform: uppercase; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--border);
 }
 .alloc-tab td { padding: 5px 6px; border-bottom: 1px solid var(--grid); }
 .alloc-tab tr.is-risk td:first-child { font-weight: 600; }
-
-.dship { padding: 0 22px 12px; }
 .dship h4 { font-size: 12px; margin: 4px 0 8px; }
 .dship-note { font-size: 12px; }
-.dship-hint {
-  font-size: 11.5px; padding: 7px 10px; margin-bottom: 8px; border-radius: 7px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
-}
-.dship-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
-/* A shipment's own delay is said in words: the board has one colour key,
-   the ladder, and a second set of dots here would be a second key. */
+.dship-list { border: 1px solid var(--border); border-radius: 8px; }
+/* A shipment's own delay is said in words: the ladder is the board's one
+   colour key, and a second set of dots here would be a second key. */
 .dship-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
   padding: 7px 10px; border-bottom: 1px solid var(--grid); font-size: 12px;
 }
 .dship-row:last-child { border-bottom: 0; }
-.dship-row.is-late .dship-status { color: var(--text-primary); font-weight: 600; }
 .dship-row .muted { display: block; font-size: 11px; }
+.dship-row.is-late .dship-status { color: var(--text-primary); font-weight: 600; }
 .dship-row.is-focus { background: color-mix(in srgb, var(--accent) 12%, var(--surface-1)); box-shadow: inset 3px 0 0 var(--accent); }
-.act.is-key { border-left: 3px solid var(--accent); }
 
-/* ---- the all-hands ---- */
+/* ---- the all-hands tab ---- */
 .ah-head {
   margin: 14px 22px 10px; padding: 12px 14px; border: 1px solid var(--border);
   border-left: 3px solid; border-radius: 9px; background: var(--surface-2);
@@ -2500,8 +2441,9 @@ button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -
 .ah-detail { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .ah-basis { font-size: 10.5px; color: var(--muted); margin-top: 7px; line-height: 1.45; }
 .ah-foot { margin: 4px 22px 16px; font-size: 11px; color: var(--muted); }
+.ah-keys { margin: 0 22px 10px; }
 
-/* ---- carriers pushing out orders ---- */
+/* ---- carriers pushing out orders (Signals tab) ---- */
 .cs { padding: 12px 22px 4px; border-bottom: 1px solid var(--border); }
 .cs-row { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 7px 0; font-size: 12px; }
 .cs-count {
@@ -2511,10 +2453,3 @@ button.gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: -
 .cs-row.is-raised .cs-count { background: var(--lvl-yellow); color: #111; }
 .cs-notes { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 3px; }
 .cs-sub { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
-
-/* Narrow screens: the desk bar wraps, but as rows of its own, not into the
-   ladder. */
-@media (max-width: 1280px) {
-  .deskbar { flex-wrap: wrap; }
-  .desk-scope { flex-basis: 100%; order: 3; }
-}
