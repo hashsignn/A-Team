@@ -260,7 +260,8 @@ def about_route(board: dict, r: dict, q: str, tree_for: TreeFor | None) -> dict:
         if tree:
             for o in (tree.get("keep") or {}).get("options", [])[:3]:
                 lines.append(f"• {o['label']}: {o['on_time']}/{o['orders']} on time, "
-                             f"+{chf(o['cost_chf'])}, closes {_fmt_iso(o.get('closes_at'))}")
+                             f"+{chf(o['cost_chf'])}"
+                             + (f", closes {_fmt_iso(o['closes_at'])}" if o.get("closes_at") else ""))
             for s in tree.get("sources") or []:
                 lines.append(f"• Other site: {s['label']}, {s['on_time']}/{s['orders']} on time")
     lines += [f"• {x}" for x in _tree_lines(board, tree)]
@@ -342,8 +343,12 @@ def about_order(board: dict, order_id: str, tree_for: TreeFor | None) -> dict:
                 if row:
                     word = {"kept": "keeps its date by a new way", "reduced": "will be late; cut the damage",
                             "told": "will be late; tell the customer", "absorbed": "buffers absorb it"}
+                    said = word.get(row["branch"], row["branch"])
+                    if row["branch"] == "kept" and row.get("way"):
+                        said = ("keeps its date as planned" if row["way"] == "Stay as planned"
+                                else f"keeps its date by {row['way']}")
                     lines.append(f"• {chf(row['loss_chf'])} at risk, {row['p_late']:.0%} chance late, "
-                                 f"about {row['late_days']:.1f} days · {word.get(row['branch'], row['branch'])}")
+                                 f"about {row['late_days']:.1f} days · {said}")
                     if row.get("due"):
                         lines.append(f"• Promised for {_fmt_iso(row['due'])}")
                 elif not risky:

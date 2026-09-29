@@ -13,11 +13,18 @@ answers the one it is for:
 
     What is happening?            the events on the route
     Who is hit?                   orders touched; those the buffers absorb
-    Can we still keep the dates?  YES: the route alternatives that land on
-                                  time (delivery-first optimiser), compared
-                                  NO:  what reduces the damage (playbook), and
+    Can we still keep the dates?  YES: the ways that land on time, from each
+                                  order's own recovery routes, compared
+                                  NO:  what reduces the damage (playbook, and
+                                  ways that are faster but still late), and
                                   for the rest, tell the customer
     Who needs to know?            the escalation step and the summary
+
+The ways are each order's recovery routes (engine/fleet/reroute.py), the
+engine the Action Hub's "Plan recovery" and the per-shipment tree use. They
+know where the freight is now: a barge already above Kaub cannot be re-sent
+via Genoa, which a route-level plan from the plant would still offer. One
+engine, so the route panel, the Action Hub and a shipment's branch agree.
 
 Every order at risk lands in exactly one branch: kept on time, damage
 reduced, customer told, or absorbed. Nothing here is decided: it is the same
@@ -85,65 +92,106 @@ def _place(context: RunContext, node_id: str) -> dict:
             "kind": node.kind.value}
 
 
-_WATER = {"seaport", "chokepoint"}
+def _recoveries(context: RunContext, board: dict, ids: set[str]) -> dict[str, dict | None]:
+    """Each order's recovery routes, from where its freight is now."""
+    from engine.fleet import reroute  # noqa: PLC0415
+    return {sid: reroute.recovery(board, context, sid) for sid in sorted(ids)}
 
 
-def _line(context: RunContext, node_ids: list[str], modes: list[str]) -> list[list[float]]:
-    """The path of a way to move the freight, as [lon, lat] points for the
-    map: each leg by the same geometry the board draws lanes with (sea legs
-    through their chokepoints), its mode read from what it joins."""
-    from engine.schemas import Mode  # noqa: PLC0415
+def _leg_place(context: RunContext, end: dict) -> dict:
+    """A leg's end as a place on the map; the live location has no node."""
+    if end.get("id"):
+        place = _place(context, end["id"])
+        if place["lat"] is not None:
+            return place
+    return {"id": end.get("id"), "name": end.get("name"), "lat": end.get("lat"),
+            "lon": end.get("lon"), "kind": ""}
 
-    land = [m for m in ("rail", "road", "barge") if m in (modes or [])] or ["road"]
-    out: list[list[float]] = []
-    for a, b in zip(node_ids, node_ids[1:], strict=False):
-        try:
-            na, nb = context.network.node(a), context.network.node(b)
-        except KeyError:
+
+def _ways(context: RunContext, recs: dict[str, dict | None], only: set[str],
+          on_time: bool) -> list[dict]:
+    """The orders' recovery routes as options: the same way, in the same
+    words, on several orders is one option carrying them all. ``on_time``
+    picks the ways that land by the promised date, or else those faster than
+    the plan but still late."""
+    from engine.export.shipment import late_days  # noqa: PLC0415
+
+    groups: dict[str, dict] = {}
+    for sid in sorted(only):
+        rec = recs.get(sid)
+        if not rec:
             continue
-        mode = "sea" if na.kind.value in _WATER and nb.kind.value in _WATER else land[0]
-        try:
-            geometry = context.network.geometry(a, b, Mode(mode))
-        except (KeyError, ValueError):
-            continue
-        points = [[round(p.lon, 4), round(p.lat, 4)] for p in geometry.path]
-        out.extend(points[1:] if out else points)
+        plan = rec.get("original") or {}
+        for c in rec.get("candidates") or []:
+            if bool(c.get("meets_commitment")) is not on_time:
+                continue
+            if not on_time and float(c.get("hours") or 0) >= float(plan.get("hours") or 0):
+                continue   # late, and no sooner than staying: it helps nobody
+            legs = c.get("legs") or []
+            g = groups.get(c["label"])
+            if g is None:
+                new_modes = [leg["mode"] for leg in legs if leg.get("new")]
+                g = groups[c["label"]] = {
+                    "id": f"way:{c['label']}",
+                    "label": c["label"],
+                    "kind": "reroute",
+                    "path": ([_leg_place(context, legs[0]["from"])]
+                             + [_leg_place(context, leg["to"]) for leg in legs]) if legs else [],
+                    # The map draws [lon, lat]; the recovery engine sends [lat, lon].
+                    "line": [[pt[1], pt[0]] for pt in c.get("path") or []],
+                    "modes": list(dict.fromkeys(new_modes or [leg["mode"] for leg in legs])),
+                    "shipment_ids": [], "orders": 0, "on_time": 0, "cost_chf": 0.0,
+                    "starts_in_h": 0.0, "done_in_h": 0.0, "late_after_days": 0.0,
+                    "owner": c.get("owner") or "us",
+                    "detail": f"{float(c.get('km') or 0):,.0f} km, setup "
+                              f"{float(c.get('setup_hours') or 0):.0f} h",
+                    "capacity_note": None, "window_h": None, "best": False,
+                }
+            g["shipment_ids"].append(sid)
+            g["orders"] += 1
+            g["on_time"] += int(bool(c.get("meets_commitment")))
+            extra = max(0.0, float((c.get("delta") or {}).get("cost_chf") or 0))
+            g["cost_chf"] = round(g["cost_chf"] + extra, 2)
+            g["starts_in_h"] = max(g["starts_in_h"], float(c.get("setup_hours") or 0))
+            g["done_in_h"] = max(g["done_in_h"], float(c.get("hours") or 0))
+            g["late_after_days"] = max(g["late_after_days"],
+                                       late_days(c.get("eta"), rec.get("committed")))
+            if (c.get("owner") or "us") != "us":
+                g["owner"] = c["owner"]
+            if on_time:
+                # Open for as long as its slack to the promise, the tightest
+                # order deciding: start later and that order misses its date.
+                slack = (datetime.fromisoformat(rec["committed"])
+                         - datetime.fromisoformat(c["eta"])).total_seconds() / 3600.0
+                g["window_h"] = slack if g["window_h"] is None else min(g["window_h"], slack)
+    out = sorted(groups.values(), key=lambda g: (-g["on_time"], -g["orders"], g["cost_chf"],
+                                                 g["starts_in_h"], g["label"]))
+    for g in out:
+        g["window_h"] = round(max(0.0, g["window_h"]), 1) if g["window_h"] is not None else None
+        g["starts_in_h"] = round(g["starts_in_h"], 1)
+        g["done_in_h"] = round(g["done_in_h"], 1)
+        g["late_after_days"] = round(g["late_after_days"], 1)
+    if on_time and out:
+        out[0]["best"] = True
     return out
 
 
-def _route_options(detail: dict | None, context: RunContext, on_time: bool) -> list[dict]:
-    """The optimiser's ways to move the freight: those that land every order
-    they carry on time (on_time=True), or those that are faster but still
-    late (on_time=False)."""
-    if not detail:
-        return []
-    out = []
-    for i, o in enumerate(detail.get("options") or []):
-        if not (o.get("restores_delivery") and o.get("executable")):
-            continue
-        if bool(o.get("on_time")) is not on_time:
-            continue
-        out.append({
-            "id": o["option_id"],
-            "label": o["label"],
-            "kind": o["kind"],
-            "path": [_place(context, n) for n in o.get("route") or []],
-            "line": _line(context, list(o.get("route") or []), list(o.get("modes") or [])),
-            "modes": list(o.get("modes") or []),
-            "shipment_ids": list(o.get("shipment_ids") or []),
-            "orders": int(o.get("shipments") or 0),
-            "on_time": int(o.get("on_time_shipments") or 0),
-            "cost_chf": round(float(o.get("cost_chf") or 0.0), 2),
-            "starts_in_h": o.get("hours_to_start"),
-            "done_in_h": o.get("hours_to_resolve"),
-            "late_after_days": o.get("days_late_after"),
-            "owner": o.get("owner"),
-            "detail": o.get("detail", ""),
-            "capacity_note": o.get("capacity_note"),
-            "window_h": o.get("window_hours"),
-            "best": i == 0 and on_time,
-        })
-    return out
+def _stay_way(ids: list[str]) -> dict:
+    """The orders whose plan already lands by the promised date: kept by
+    staying as planned, at no cost. It never closes; it only gets later if
+    the events do."""
+    return {"id": "way:stay", "label": "Stay as planned", "kind": "stay", "path": [], "line": [],
+            "modes": [], "shipment_ids": ids, "orders": len(ids), "on_time": len(ids),
+            "cost_chf": 0.0, "starts_in_h": 0.0, "done_in_h": None, "late_after_days": 0.0,
+            "owner": "us", "detail": "The plan already lands by the promised date.",
+            "capacity_note": None, "window_h": None, "best": False}
+
+
+def _more(recs: dict[str, dict | None], shown: list[dict]) -> int:
+    """The other ways that were checked and are not shown: slower, dearer, or
+    late with no time gained."""
+    seen = {c["label"] for rec in recs.values() if rec for c in rec.get("candidates") or []}
+    return len(seen - {o["label"] for o in shown})
 
 
 def _closes_at(now: datetime, window_h: float | None) -> str | None:
@@ -296,28 +344,35 @@ def _group_actions(actions: list[dict], keep: set[str]) -> list[dict]:
     return out
 
 
-def build(context: RunContext, route: dict, detail: dict | None,
-          board: dict | None = None) -> dict:
-    """The tree for one board route. ``detail`` is the delivery-first
-    optimiser's view of it (engine/fast/view.route_detail), or None when that
-    engine finds nothing to do on it. ``board`` supplies the other-site
-    sources (the all-hands Procurement lever)."""
+def build(context: RunContext, route: dict, board: dict) -> dict:
+    """The tree for one board route. ``board`` is the board it is on: the
+    recovery routes read the shipments' status from it, and it supplies the
+    other-site sources (the all-hands Procurement lever)."""
     risks = _risks_on(context, route["route_id"])
     all_parts = _parts_on(context, route["route_id"])
     absorbed = sorted(sid for sid, r in risks.items() if r["loss_chf"] < ABSORBED_CHF)
     material = {sid: r for sid, r in risks.items() if r["loss_chf"] >= ABSORBED_CHF}
 
-    keep_options = _route_options(detail, context, on_time=True)
+    recs = _recoveries(context, board, set(material))
+    keep_options = _ways(context, recs, set(material), on_time=True)
+    by_way = {sid for o in keep_options for sid in o["shipment_ids"]}
+    # An order whose plan lands on time is kept by staying, when no other
+    # way already carries it.
+    staying = sorted(sid for sid, rec in recs.items()
+                     if rec and (rec.get("original") or {}).get("meets_commitment")
+                     and sid not in by_way)
+    if staying:
+        keep_options.append(_stay_way(staying))
+        if len(keep_options) == 1:
+            keep_options[0]["best"] = True
     kept = sorted({sid for o in keep_options for sid in o["shipment_ids"]} & set(material))
     rest = set(material) - set(kept)
 
-    # For the orders no alternative keeps on time: the playbook's actions,
-    # and the optimiser's ways that are faster but still late.
+    # For the orders nothing keeps on time: the playbook's actions, and the
+    # recovery routes that are faster but still late.
     reduce_options = _group_actions(route.get("actions") or [], set(kept))
-    for o in _route_options(detail, context, on_time=False):
-        ids = sorted(set(o["shipment_ids"]) & rest)
-        if ids:
-            reduce_options.append({**o, "shipment_ids": ids, "orders_n": len(ids), "route": True})
+    for o in _ways(context, recs, rest, on_time=False):
+        reduce_options.append({**o, "orders_n": o["orders"], "route": True})
     reduced = sorted(({o["shipment_id"] for g in reduce_options if not g.get("route")
                        for o in g["orders"]}
                       | {sid for g in reduce_options if g.get("route") for sid in g["shipment_ids"]})
@@ -357,9 +412,10 @@ def build(context: RunContext, route: dict, detail: dict | None,
     # is less than the cheapest way costs for certain. Paying CHF 5,000 to
     # protect CHF 800 of expected loss is not a recommendation.
     stay_loss = round(sum(v for k, v in parts.items() if k != "penalty_if_counted"), 2)
-    stay_best = bool(need and keep_options
+    moving = [o for o in keep_options if o["kind"] != "stay"]
+    stay_best = bool(need and moving
                      and all(r["p_late"] < 0.5 for r in material.values())
-                     and stay_loss < min(o["cost_chf"] for o in keep_options))
+                     and stay_loss < min(o["cost_chf"] for o in moving))
     if stay_best:
         for o in keep_options:
             o["best"] = False
@@ -380,7 +436,7 @@ def build(context: RunContext, route: dict, detail: dict | None,
         "exposure_chf": stay_loss,
         "baseline": True,
         "best": stay_best,
-    }] + [{**o, "baseline": False} for o in keep_options] + [
+    }] + [{**o, "baseline": False} for o in moving] + [
         {**o, "orders": o["orders_n"], "baseline": False}
         for o in reduce_options if o.get("route")]
 
@@ -397,6 +453,8 @@ def build(context: RunContext, route: dict, detail: dict | None,
             "tier": priority_of(r["customer"], context.config),
             "loss_chf": round(r["loss_chf"], 2), "p_late": round(r["p_late"], 2),
             "late_days": round(r["late_days"], 1), "branch": branch.get(sid, "absorbed"),
+            # The way that keeps it, when one does: the first option carrying it.
+            "way": next((o["label"] for o in keep_options if sid in o["shipment_ids"]), None),
             "due": sh.otif_committed_date.isoformat() if sh else None,
             "value_chf": round(sh.value_chf, 2) if sh else None,
         })
@@ -428,7 +486,7 @@ def build(context: RunContext, route: dict, detail: dict | None,
                 "absorbed": len(absorbed), "need": need,
                 "exposure_chf": route.get("exposure_chf", 0.0)},
         "keep": {"answer": answer, "kept": kept, "options": keep_options, "stay_best": stay_best,
-                 "more": max(0, int((detail or {}).get("options_total") or 0) - len(keep_options))},
+                 "more": _more(recs, keep_options + [g for g in reduce_options if g.get("route")])},
         "reduce": {"orders": reduced, "options": reduce_options},
         "tell": {"orders": [{"shipment_id": sid, "customer": material[sid]["customer"],
                              "late_days": round(material[sid]["late_days"], 1),

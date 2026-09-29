@@ -76,9 +76,6 @@ _REPORT_FEED: list[dict] = []
 # simulation. Editing the profile changes the config, so it clears both.
 _RUNS: dict[tuple[str, int], RunContext] = {}
 _BOARDS: dict[tuple[str, int], dict] = {}
-# The delivery-first optimiser's lane summaries, for the decision tree: one
-# computation per board, not one per route clicked.
-_LANES: dict[tuple[str, int], list[dict]] = {}
 # The route decision trees, one per route per board: every shipment of a
 # route reads its branch, sign-off limit and clocks from the same tree.
 _TREES: dict[tuple[str, int, str], dict] = {}
@@ -146,7 +143,6 @@ def _invalidate() -> None:
     """
     _RUNS.clear()
     _BOARDS.clear()
-    _LANES.clear()
     _TREES.clear()
     _WAYS.clear()
 
@@ -266,19 +262,12 @@ def decision(
 
 
 def _tree(board: dict, route: dict, as_of: str, shipments: int) -> dict:
-    """One route's Action decision tree, the optimiser's lanes cached."""
+    """One route's Action decision tree, cached per board."""
     from engine.export import decision as decision_mod  # noqa: PLC0415
-    from engine.fast import view as fast_view  # noqa: PLC0415
 
-    context = _context(as_of, shipments)
-    key = (as_of, shipments)
     tree_key = (as_of, shipments, route["route_id"])
-    if tree_key in _TREES:
-        return _TREES[tree_key]
-    if key not in _LANES:
-        _LANES[key] = fast_view.route_summaries(context)
-    detail = next((row for row in _LANES[key] if row["route_id"] == route["route_id"]), None)
-    _TREES[tree_key] = decision_mod.build(context, route, detail, board)
+    if tree_key not in _TREES:
+        _TREES[tree_key] = decision_mod.build(_context(as_of, shipments), route, board)
     return _TREES[tree_key]
 
 

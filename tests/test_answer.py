@@ -14,7 +14,6 @@ import pytest
 from engine.clock import Clock
 from engine.export import decision
 from engine.export.board import build_board
-from engine.fast import view
 from engine.pipeline import RunOptions, run
 from engine.reason import answer, ask, llm
 
@@ -25,11 +24,9 @@ AS_OF = Clock.at("2026-09-26T23:00:00+00:00")
 def world():
     context = run(clock=AS_OF, options=RunOptions(shipment_count=150, seed=7))
     board = build_board(context)
-    lanes = {row["route_id"]: row for row in view.route_summaries(context)}
-
     def tree_for(route_id):
         route = next((r for r in board["routes"] if r["route_id"] == route_id), None)
-        return decision.build(context, route, lanes.get(route_id), board) if route else None
+        return decision.build(context, route, board) if route else None
 
     return board, tree_for
 

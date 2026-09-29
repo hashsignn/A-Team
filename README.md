@@ -1190,11 +1190,15 @@ planner does, one numbered step each, down one line
 5/6 Who needs to know        the escalation step; the summary to send
 ```
 
-Two engines answer the options, and each answers the question it is for:
-the delivery-first optimiser the routes that keep the date, the
-playbook the actions that reduce the damage otherwise. Every order at risk
-sits in exactly one branch, so the tab can no longer show one order under two
-answers (`tests/test_decision.py`). A click on an option opens it, with its
+The ways that keep the date are each order's own recovery routes, from
+where its freight is now (`engine/fleet/reroute.py`): the same engine as the
+Action Hub's **Plan recovery** and the per-shipment tree, so all three agree.
+The same way on several orders is one option; an order whose plan already
+lands on time is kept by **Stay as planned**. A barge already above Kaub is
+not offered a re-send from the plant. The playbook answers what reduces the
+damage otherwise, with the ways that are faster but still late. Every order
+at risk sits in exactly one branch, so the tab can no longer show one order
+under two answers (`tests/test_decision.py`). A click on an option opens it, with its
 orders, and draws its path on the map; **Compare routes** lays staying as
 planned and every alternative side by side: orders on time, lateness, extra
 cost, when it starts.
@@ -1255,9 +1259,10 @@ hours and minutes in the text colour, seconds in grey, "closed" in grey. No
 red, anywhere a deadline is shown (`api/static/clock.js`).
 
 - **A way closes** when starting it later would miss a promised date: the
-  optimiser's slack between arriving by that way, started now, and the
-  committed date (`window_hours` in `engine/fast/options.py`). A way that is
-  late anyway never closes; it only gets later.
+  slack between arriving by that way, started now, and the committed date.
+  On the route panel the tightest order on the way decides. A way that is
+  late anyway never closes; it only gets later, and neither does staying on
+  a plan that already lands on time.
 - **Contract clocks** start at each event's timestamp: the carrier must tell
   Sika (24 h), Sika may reroute at the agreed rate (48 h), the carrier's force
   majeure notice (72 h). These three are **assumed** and marked so in

@@ -1670,7 +1670,7 @@ function routeBody(r, o) {
 
 function yesHTML(r, d) {
   const opts = d.keep.options.map((o) => optionHTML({ ...o,
-    sum: `${o.on_time} of ${o.orders} on time · ${extra(o.cost_chf)} · starts in ${hours(o.starts_in_h)}` },
+    sum: `${o.on_time} of ${o.orders} on time · ${extra(o.cost_chf)}${o.kind === 'stay' ? '' : ` · starts in ${hours(o.starts_in_h)}`}` },
   routeBody(r, o))).join('');
   const stay = (d.compare || []).find((x) => x.baseline);
   const cheapest = Math.min(...d.keep.options.map((o) => o.cost_chf));
