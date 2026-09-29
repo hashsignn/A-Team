@@ -15,6 +15,31 @@ HOST="${OLLAMA_HOST:-http://localhost:11434}"
 
 up() { curl -fsS "$HOST/api/tags" >/dev/null 2>&1; }
 
+# As root no sudo is needed; a Codespace user has sudo without a password.
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
+
+# Ollama's Linux installer unpacks a .tar.zst, and a fresh Codespace has no
+# zstd, so the install stops with "This version requires zstd".
+need_zstd() {
+  command -v zstd >/dev/null 2>&1 && return 0
+  echo "Installing zstd (Ollama's installer needs it)..."
+  if command -v apt-get >/dev/null 2>&1; then
+    # One unreachable extra repository makes 'update' fail; zstd comes from
+    # the main one, so carry on and let the install say if it cannot.
+    $SUDO apt-get update -qq || true
+    $SUDO apt-get install -y -qq zstd
+  elif command -v dnf >/dev/null 2>&1; then
+    $SUDO dnf install -y zstd
+  elif command -v pacman >/dev/null 2>&1; then
+    $SUDO pacman -S --noconfirm zstd
+  fi
+  command -v zstd >/dev/null 2>&1 || {
+    echo "Could not install zstd. Install it with your package manager, then run this again."
+    exit 1
+  }
+}
+
 if ! command -v ollama >/dev/null 2>&1; then
   case "$(uname -s)" in
     Darwin)
@@ -26,6 +51,7 @@ if ! command -v ollama >/dev/null 2>&1; then
         exit 1
       fi ;;
     Linux)
+      need_zstd
       echo "Installing Ollama (free, from ollama.com; asks for sudo)..."
       curl -fsSL https://ollama.com/install.sh | sh ;;
     *)
