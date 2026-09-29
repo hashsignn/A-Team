@@ -1760,8 +1760,11 @@ test asserts *both* halves: no cargo risk, and a real delay.
 
 ## External sources, and the shock they exist to catch
 
-Nine feeds ship wired and on. **Every one is free, keyless, and needs no
-registration.** Nothing in the catalogue can cost money — a paid source cannot
+These feeds ship wired. **Every one is free, keyless, and needs no
+registration.** Bluesky is the social one: tier 3, so a single post is a
+reason to look, never a reason to believe, and it is capped at Watch until a
+second, independent source agrees. It ships off: turn it on with
+`bluesky_posts: {enabled: true}` in `sources.yaml` and `RADAR_ALLOW_NETWORK=1`. Nothing in the catalogue can cost money — a paid source cannot
 be enabled by editing config, and a test fails the build if one ever ships
 enabled.
 
@@ -1774,6 +1777,7 @@ enabled.
 | Autobahn A5 / A61 / A3 | infrastructure | 1 | report |
 | USGS earthquakes | force majeure | 1 | **instrument** |
 | Open-Meteo marine | climate | 1 | **instrument** |
+| **Bluesky** public posts search (social, off by default) | any | 3 | report |
 
 Three more — ENTSO-E, OpenSanctions and ReliefWeb (UN OCHA) — are free but
 need a free registration, so they ship **disabled** and say exactly which

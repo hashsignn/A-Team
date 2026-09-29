@@ -464,6 +464,47 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
 
     # =================================================================
+    # SOCIAL. Tier 3: volume is a reason to look, never a reason to believe.
+    # =================================================================
+    SourceSpec(
+        key="bluesky_posts",
+        label="Bluesky: public posts search (social)",
+        nature=Nature.REPORT,
+        source_tier=3,
+        url="https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
+        items_path="posts",
+        cost=Cost.FREE,
+        # OFF until turned on in sources.yaml (bluesky_posts: {enabled: true}):
+        # there is no recorded sample, so the stand-in board stays as recorded.
+        enabled=False,
+        params={
+            "q": '"port strike" OR "low water" OR "canal closed" OR "shipping disruption" OR "terminal closed"',
+            "sort": "latest",
+            "lang": "en",
+            "limit": "100",
+        },
+        headers={"Accept": "application/json"},
+        unlocks_if_connected=(
+            "Posts from crews, drivers and port workers, often hours before "
+            "the trade press. A single post is capped at Watch; a second, "
+            "independent source has to say the same before it moves a date."
+        ),
+        fields=FieldMap(
+            headline="record.text",
+            body="record.text",
+            published="record.createdAt",
+            identifier="uri",
+            source_name="const:Bluesky",
+        ),
+        builtin=True,
+        notes=(
+            "Free, no key: Bluesky's public AppView (AT Protocol). Turn it on "
+            "in sources.yaml and set RADAR_ALLOW_NETWORK=1. X / Twitter stays "
+            "absent: paid API."
+        ),
+    ),
+
+    # =================================================================
     # FREE, but needing a registration. OFF until somebody sets the variable.
     # =================================================================
     SourceSpec(
