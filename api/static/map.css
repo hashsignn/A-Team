@@ -660,3 +660,40 @@
 
 /* Under the ways: this shipment's own decision tree. */
 .hub-tree { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
+
+/* ---- the Action Hub, lighter: the vehicle at a glance -------------------
+   Its dates, legs and ranked ways are the shipment's card in the route
+   panel's Shipments tab; here is what only the map can say. */
+.hub-st { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 650; cursor: help;
+  color: var(--status-green); background: color-mix(in srgb, var(--status-green) 14%, transparent); }
+.hub-st--yellow { color: #b58105; background: color-mix(in srgb, var(--status-yellow) 18%, transparent); }
+.hub-st--red { color: var(--status-red); background: color-mix(in srgb, var(--status-red) 14%, transparent); }
+.hsec[data-sec="routes"] .alts { flex-direction: row; flex-wrap: wrap; }
+.hsec[data-sec="routes"] .alt { grid-template-columns: auto auto; align-items: center; padding: 6px 10px 6px 7px; }
+.hsec[data-sec="routes"] .alt-label { font-size: 13px; }
+.vtiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.vt { display: grid; grid-template-columns: 26px 1fr; grid-template-rows: auto auto; column-gap: 6px;
+  padding: 7px 9px; border-radius: 9px; background: var(--glass-inset); cursor: default; }
+.vt[title]:not([title=""]) { cursor: help; }
+.vt-i { grid-row: 1 / span 2; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.vt-i svg { width: 15px; height: 15px; fill: currentColor; }
+.vt-v { font-size: 13.5px; font-weight: 650; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vt-k { font-size: 11px; color: var(--muted); }
+.bxs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.bx { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 7px;
+  font-size: 12px; font-family: var(--mono); background: var(--glass-inset); cursor: help;
+  border: 1px solid color-mix(in srgb, var(--status-green) 40%, transparent); }
+.bx b { color: var(--status-green); }
+.bx.is-late { border-color: color-mix(in srgb, var(--status-red) 45%, transparent); }
+.bx.is-late b { color: var(--status-red); }
+.bx i { width: 6px; height: 6px; border-radius: 50%; background: var(--status-red); }
+.hfold > summary { list-style: none; cursor: pointer; }
+.hfold > summary::-webkit-details-marker { display: none; }
+.hfold > summary h4 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+.hfold > summary h4::after { content: '▸'; margin-left: auto; transition: transform .16s; }
+.hfold[open] > summary h4::after { transform: rotate(90deg); }
+.hfold > summary h4 span { text-transform: none; letter-spacing: 0; font-weight: 700; padding: 0 6px;
+  border-radius: 8px; background: var(--glass-inset); color: var(--text-secondary); }

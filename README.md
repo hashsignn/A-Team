@@ -281,7 +281,7 @@ work is actually split. Each point, and where it is answered:
 | Planners allocate work by **origin site**, not by route | *My site* in the header narrows everything: the list, the ladder counts, the map and the globe. Every route belongs to the site it ships from. Your choice is saved and kept in the URL (`?site=STU`). | `config.example/desk.yaml → sites`, `engine/desk.py` |
 | Filter by **customer importance**, so priority contracts are served whatever the crisis | *Customers*: all, key accounts, or key + standard. Key-account orders at risk are listed on every site's view. They come first in every list of actions, and get first claim on scarce recovery capacity. The optimiser never defers them. | `desk.yaml → customers`, `engine/fast/capacity.py` |
 | The board felt **"jumpy"** and it was unclear who things belong to | The header is built at its final size before any data arrives, so nothing moves when the counts land. The map moves only when you pick a route from the list. Each route says outright which site it ships from, which port it leaves by, and which customers it serves. | `api/static/index.html`, `app.js`, `mapview.js` |
-| **Click the route first**, then see the proposals | A click on a shipment on the map opens its route and marks the shipment. Recovery options open only after that: a second click, or *Plan recovery* on the shipment. The column shows *1 Your view → 2 Pick a route → 3 Act on it*. | `app.js → onAssetClick`, `mapview.js` |
+| **Click the route first**, then see the proposals | A click on a shipment on the map opens its route and marks the shipment. Recovery options open only after that: a second click, or a click on the shipment in the **Shipments** tab. The column shows *1 Your view → 2 Pick a route → 3 Act on it*. | `app.js → onAssetClick`, `mapview.js` |
 | Carriers **push out single orders** before any crisis is announced | Carrier booking changes are read. One carrier moving 3 or more orders at one place within 7 days is raised as a warning (`CAP_CARRIER_PUSHOUT`): no probability is invented, so its figures are "if it happens". Fewer moves are listed under *Signals* as watched. | `engine/ingest/pushouts.py`, `desk.yaml → carrier_pushouts` |
 | All-hands goes **from biweekly to daily** as a crisis looms | The *All-hands* tab shows the cadence the convene rule now calls for: every two weeks normally, weekly on Watch, daily on working days once the rule is crossed. It also shows the next sitting and who is in the room. | `engine/desk.py → meeting` |
 | **Procurement** finds other suppliers, **Manufacturing** runs faster, **Controlling** raises authority limits | One card per function, computed from the board and proposed, never pulled. **Procurement:** another site that serves the same destination on a calm route and still makes the promised date. **Manufacturing:** which product runs to bring forward, and by how many days. **Controlling:** the crisis approval limit (5× the delegated limit, capped at CHF 100k) and which actions it frees. | `engine/desk.py → levers` |
@@ -1398,14 +1398,31 @@ stay reserved. The input is the Monte Carlo's own do-nothing expected delay
 from the worst event touching the consignment — the board's float, not a new
 estimate (a test asserts it).
 
-### The Action Hub
+### The Shipments tab and the Action Hub: one shipment, two views, nothing twice
+
+The route panel has three tabs: **Act & escalate · Shipments · Customers &
+contacts**. In **Shipments**, a click anywhere on a row opens that shipment's
+glass card below it, and a second click closes it:
+
+- promised, as planned (✓/✗, days late), by the #1 way, CHF at risk
+- its legs as pills in the route page's three colours (clear, at risk, hit
+  now; one rule, `engine/export/route.leg_status`), the current leg ringed,
+  and how far along it is
+- its ways ranked: arrival ✓/✗, +CHF, CO₂e (🌿 lowest on time), days gained
+  against the plan; **Decision tree ↗** and **On map**
+
+**On map**, or a click on the vehicle on the map, opens the **Action Hub**:
+the vehicle, not the shipment. Its dates and ranked ways are the card's, so
+the Hub does not repeat them.
 
 Click an asset: a draggable glass card (`backdrop-filter: blur(10px)` over
-`rgba(255,255,255,0.8)`, the dark equivalent on Dark). Asset id, crew, the
-position and where it came from, last sync; capacity utilisation in TEU with
-the low-water derate marked; the containers with their own deadlines; original
-vs revised ETA; the status log — feed, field report and schedule entries kept
-apart, never blended; a **5×5 matrix** of the hazards on the legs still ahead
+`rgba(255,255,255,0.8)`, the dark equivalent on Dark). The ways as coloured
+badges that light up on the map, with the time, cost and risk sliders; four
+tiles for the position and where it came from, the leg, the last sync and the
+crew; the load in TEU with the low-water derate marked, and a chip per
+container (size, on time as planned, a red dot when critical); the split and
+the partners nearby. Folded away: the status log (feed, field report and
+schedule entries kept apart, never blended) and a **5×5 matrix** of the hazards on the legs still ahead
 (P(late) × the bill if late — the board's two axes, banded finer, unsourced
 probability in a hatched gutter, never at a guessed column); and a **radar**
 (Chart.js) of Weather, Geopolitics, Port Congestion, Route Infrastructure and

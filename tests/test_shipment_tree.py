@@ -296,3 +296,28 @@ def test_a_way_that_was_not_offered_is_refused_by_name(ships):
     with pytest.raises(HTTPException):
         book(sid, {})
     assert len(LEDGER) == 0
+
+
+# =====================================================================
+# The card's legs are the route page's row for that shipment
+# =====================================================================
+
+
+def test_a_shipments_legs_are_its_row_of_the_route_page(ships):
+    """The Shipments tab's card and the route page colour a leg by the same
+    rule (engine/export/route.leg_status), so they cannot disagree."""
+    from engine.export import route as route_mod  # noqa: PLC0415
+
+    board = main._board(AS_OF, SHIPMENTS)
+    context = main._context(AS_OF, SHIPMENTS)
+    views: dict[str, dict] = {}
+    for sid, d in ships.items():
+        journey = d["journey"]
+        assert journey and journey["legs"], sid
+        view = views.setdefault(d["route_id"], route_mod.route_view(board, context, d["route_id"]))
+        for leg in journey["legs"]:
+            assert leg["status"] in ("ok", "at_risk", "affected"), sid
+            row = next(v for v in view["legs"][leg["index"]]["vehicles"] if v["shipment_id"] == sid)
+            assert row["status"] == leg["status"], (sid, leg["index"])
+        p = journey["progress"]
+        assert 0 <= p["percent"] <= 100 and p["total_km"] >= p["remaining_km"] >= 0, sid

@@ -3391,3 +3391,78 @@ button.dt-order:hover { color: var(--text-primary); }
 /* Each shipment row opens its own branch of the decision tree. */
 .dship-acts { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .dship-tree { display: inline-grid; place-items: center; padding: 0 9px; }
+
+/* ---- the Shipments tab: a row opens its card, a second click closes it ---- */
+.rtab-n { display: inline-block; min-width: 18px; margin-left: 3px; padding: 0 5px; border-radius: 9px;
+  font-size: 11px; font-weight: 700; line-height: 17px; background: var(--surface-3); color: var(--text-secondary); }
+.rtab-n:empty { display: none; }
+.rpanel[data-panel="ships"] { padding: 12px 14px 18px; }
+.dship-item + .dship-item { border-top: 1px solid var(--grid); }
+.dship-item .dship-row { border-bottom: 0; cursor: pointer; }
+.dship-item .dship-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.dship-item .dship-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dship-caret { color: var(--muted); font-size: 12px; transition: transform .18s ease; }
+.dship-item.is-open .dship-caret { transform: rotate(90deg); color: var(--accent); }
+.dship-item.is-open .dship-row { background: color-mix(in srgb, var(--accent) 10%, var(--surface-1)); box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Glass, like the map's cards: the list shows through, the numbers read. */
+.scard {
+  margin: 2px 8px 10px; padding: 12px 12px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .14);
+  animation: scard-in .2s ease-out;
+}
+@keyframes scard-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .scard { animation: none; } .dship-caret { transition: none; } }
+.scard-wait { font-size: 13px; color: var(--muted); margin: 2px 0; }
+
+.stiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.stile { display: flex; flex-direction: column; gap: 1px; padding: 7px 9px; border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-1) 70%, transparent); }
+.stile b { font-size: 15.5px; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stile span { font-size: 11.5px; color: var(--text-secondary); }
+.stile--ok b { color: var(--status-green); }
+.stile--late b { color: var(--status-red); }
+.stile--best { background: color-mix(in srgb, var(--alt-1) 14%, transparent); }
+.stile--best b { color: var(--alt-1); }
+
+/* The legs, in the route page's three colours, the current one ringed. */
+.sjour { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 0 6px; }
+.sjour-from { font-size: 12px; font-weight: 650; color: var(--text-secondary); margin-right: 2px; }
+.sleg { --c: var(--status-green); display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 5px;
+  border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-primary);
+  background: color-mix(in srgb, var(--c) 16%, transparent); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.sleg--at_risk { --c: var(--status-yellow); }
+.sleg--affected { --c: var(--status-red); }
+.sleg .smode { width: 15px; height: 15px; fill: var(--c); flex: none; }
+.sleg.is-now { box-shadow: 0 0 0 2px var(--accent); }
+.sprog { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.sprog i { display: block; height: 100%; min-width: 3px; background: var(--accent); border-radius: 3px; }
+.sprog-n { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0 8px; font-size: 12px; color: var(--text-secondary); }
+.sprog-n b { color: var(--text-primary); }
+.skey { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.skey i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.skey .k-ok { background: var(--status-green); }
+.skey .k-risk { background: var(--status-yellow); margin-left: 4px; }
+.skey .k-hit { background: var(--status-red); margin-left: 4px; }
+
+/* The ways, ranked in the map's route colours: the Action Hub's "Plan recovery". */
+.sways { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.sways th { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 3px 4px; border-bottom: 1px solid var(--border); }
+.sways td { padding: 5px 4px; border-bottom: 1px solid var(--grid); }
+.sways tr:last-child td { border-bottom: 0; }
+.sways .num { text-align: right; }
+.sways .ok { color: var(--status-green); font-weight: 650; white-space: nowrap; }
+.sways .late { color: var(--status-red); font-weight: 650; white-space: nowrap; }
+.sways-name { font-weight: 600; color: var(--text-primary); }
+.sways tr.is-plan td { color: var(--muted); }
+.sways tr.is-plan .sways-name { font-weight: 500; }
+.sways tr.is-best td { background: color-mix(in srgb, var(--alt-1) 9%, transparent); }
+.srank { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  font-size: 11px; font-weight: 800; color: #fff; background: var(--c); }
+.srank--plan { background: var(--surface-3); color: var(--muted); }
+.scard-acts { display: flex; gap: 6px; margin-top: 10px; }
+.sways th, .sways .num { white-space: nowrap; }

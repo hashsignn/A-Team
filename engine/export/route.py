@@ -74,6 +74,74 @@ def _reports_for(shipment_id: str, context: RunContext) -> list[dict]:
     return out
 
 
+def leg_status(hit: bool, lead_time_hours: float | None, reports: list[dict]) -> str:
+    """The three colours: one rule, for the route page and a shipment's card."""
+    damaged = any(r.get("load_state") == "damaged" for r in reports)
+    stopped = any(r.get("status") in ("held", "stopped") for r in reports)
+    if damaged or (hit and lead_time_hours is not None and lead_time_hours <= 0):
+        return "affected"
+    if hit or stopped:
+        return "at_risk"
+    return "ok"
+
+
+def _soonest_risks(context: RunContext) -> dict[str, dict]:
+    """Per shipment, the SOONEST deadline across every event touching it:
+    that is the one that decides when somebody has to move."""
+    out: dict[str, dict] = {}
+    for assessment in context.result.assessments:
+        for risk in assessment.shipment_risks:
+            current = out.get(risk.shipment_id)
+            lead = risk.lead_time_hours
+            if lead is None:
+                continue
+            if current is None or lead < current["lead_time_hours"]:
+                out[risk.shipment_id] = {
+                    "lead_time_hours": lead,
+                    "actionability": getattr(risk, "actionability", None),
+                    "expected_loss_chf": getattr(risk, "expected_loss_chf", 0.0),
+                    "driving_event": assessment.event.title,
+                    "driving_event_id": assessment.event.event_id,
+                }
+    return out
+
+
+def _leg_km(context: RunContext, leg) -> float:
+    a_node = context.config.nodes.get(leg.from_node)
+    b_node = context.config.nodes.get(leg.to_node)
+    if a_node is None or b_node is None:
+        return 0.0
+    return round(haversine_km(Point(a_node.lat, a_node.lon), Point(b_node.lat, b_node.lon)), 1)
+
+
+def shipment_journey(context: RunContext, shipment_id: str) -> dict | None:
+    """One shipment's row of the route page: its legs, each in the colour the
+    route page gives it, and how far along it is."""
+    shipment = next((s for s in context.shipments if s.shipment_id == shipment_id), None)
+    if shipment is None:
+        return None
+    hit_legs = {h.leg_index for h in context.hits if h.shipment_id == shipment_id}
+    risk = _soonest_risks(context).get(shipment_id) or {}
+    reports = _reports_for(shipment_id, context)
+    moved = progress_mod.progress(shipment, context.config.nodes, context.clock.as_of)
+    return {
+        "legs": [{
+            "index": index,
+            "from": _node_name(context, own.from_node),
+            "to": _node_name(context, own.to_node),
+            "mode": own.mode.value,
+            "km": _leg_km(context, own),
+            "carrier": own.carrier,
+            "arrives": own.planned_arrive.isoformat(),
+            "status": leg_status(index in hit_legs, risk.get("lead_time_hours"), reports),
+        } for index, own in enumerate(shipment.legs)],
+        "progress": {k: moved.get(k) for k in ("percent", "travelled_km", "remaining_km", "total_km")},
+        "driving_event": risk.get("driving_event"),
+        "lead_time_hours": risk.get("lead_time_hours"),
+        "reports": len(reports),
+    }
+
+
 def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
     """The whole page, in one call."""
     route = next((r for r in board["routes"] if r["route_id"] == route_id), None)
@@ -87,23 +155,7 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             hits_by_shipment.setdefault(hit.shipment_id, set()).add(hit.leg_index)
 
     # Per-shipment figures, taken from the board rather than recomputed.
-    risk_by_shipment: dict[str, dict] = {}
-    for assessment in context.result.assessments:
-        for risk in assessment.shipment_risks:
-            current = risk_by_shipment.get(risk.shipment_id)
-            lead = risk.lead_time_hours
-            # Keep the SOONEST deadline across every event touching it: that
-            # is the one that decides when somebody has to move.
-            if lead is None:
-                continue
-            if current is None or lead < current["lead_time_hours"]:
-                risk_by_shipment[risk.shipment_id] = {
-                    "lead_time_hours": lead,
-                    "actionability": getattr(risk, "actionability", None),
-                    "expected_loss_chf": getattr(risk, "expected_loss_chf", 0.0),
-                    "driving_event": assessment.event.title,
-                    "driving_event_id": assessment.event.event_id,
-                }
+    risk_by_shipment = _soonest_risks(context)
 
     reports_cache = {s.shipment_id: _reports_for(s.shipment_id, context) for s in shipments}
 
@@ -119,15 +171,7 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             hit = index in hits_by_shipment.get(shipment.shipment_id, set())
             risk = risk_by_shipment.get(shipment.shipment_id)
             reports = reports_cache.get(shipment.shipment_id, [])
-            damaged = any(r.get("load_state") == "damaged" for r in reports)
-            stopped = any(r.get("status") in ("held", "stopped") for r in reports)
-
-            if damaged or (hit and risk and risk["lead_time_hours"] <= 0):
-                status = "affected"
-            elif hit or stopped:
-                status = "at_risk"
-            else:
-                status = "ok"
+            status = leg_status(hit, (risk or {}).get("lead_time_hours"), reports)
 
             moved = progress_mod.progress(shipment, context.config.nodes,
                                           context.clock.as_of)
@@ -160,15 +204,9 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             "at_risk": sum(1 for v in vehicles if v["status"] == "at_risk"),
             "ok": sum(1 for v in vehicles if v["status"] == "ok"),
         }
-        a_node = context.config.nodes.get(leg.from_node)
-        b_node = context.config.nodes.get(leg.to_node)
-        leg_km = (
-            haversine_km(Point(a_node.lat, a_node.lon), Point(b_node.lat, b_node.lon))
-            if a_node is not None and b_node is not None else 0.0
-        )
         legs.append({
             "index": index,
-            "km": round(leg_km, 1),
+            "km": _leg_km(context, leg),
             "from": leg.from_node,
             "to": leg.to_node,
             "from_name": _node_name(context, leg.from_node),

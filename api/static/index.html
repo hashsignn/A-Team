@@ -336,13 +336,14 @@
         </div>
 
 
-        <!-- Two tabs, not three. Escalation used to be its own tab, which
-             meant deciding what to do and telling people about it were two
-             different places — and the second one was the one people forgot.
-             They are the same job, so they are the same tab. -->
+        <!-- Deciding and telling people are one job, so one tab; the route's
+             shipments are the middle tab, each one opening its own card. -->
         <nav class="rtabs" id="rtabs" role="tablist">
           <button type="button" class="rtab is-on" data-tab="actions" role="tab">
             Act &amp; escalate
+          </button>
+          <button type="button" class="rtab" data-tab="ships" role="tab">
+            Shipments <span class="rtab-n" id="rtab-ships-n"></span>
           </button>
           <button type="button" class="rtab" data-tab="customers" role="tab">
             Customers &amp; contacts
@@ -397,12 +398,17 @@
             </details>
           </div>
 
+          <!-- SHIPMENTS: every shipment on the route. A click anywhere on one
+               opens its card below it (its legs, its ways, ranked); a second
+               click closes it. The vehicle itself is the map's Action Hub. -->
+          <div class="rpanel" data-panel="ships">
+            <div class="dship" id="d-ships"></div>
+          </div>
+
           <!-- CUSTOMERS & CONTACTS: who this route serves (a click on one opens
-               its card), every shipment on it, and who to call. One tab: they
-               answer the same question, who is involved. -->
+               its card) and who to call. -->
           <div class="rpanel" data-panel="customers">
             <div id="d-cust"></div>
-            <div class="dship" id="d-ships"></div>
             <h4 class="rp-h">Who to contact</h4>
             <div id="r-contacts"></div>
           </div>

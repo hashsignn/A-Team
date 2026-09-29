@@ -235,10 +235,14 @@ def main() -> int:
               f"clicked {target['id']} on the map — Action Hub opened")
         check(page.locator("#hub").is_visible(), "[hub] not visible after a click")
         hub_text = page.locator("#hub").inner_text()
-        for needle, what in (("TEU", "capacity"), ("PLANNED ARRIVAL", "original ETA"),
-                             ("EXPECTED NOW", "revised ETA"), ("POSITION (", "position"),
+        for needle, what in (("TEU", "capacity"), ("POSITION (", "position"),
                              ("LAST SYNC", "last sync"), ("STATUS LOG", "status log")):
             check(needle in hub_text.upper(), f"[hub] {what} missing from the card")
+        # The dates and the ranked ways are the shipment's card in the route
+        # panel; the Hub is the vehicle. Nothing is said in both.
+        for needle in ("PLANNED ARRIVAL", "EXPECTED NOW", "VS PLAN"):
+            check(needle not in hub_text.upper(), f"[hub] {needle!r} is repeated from the shipment card",
+                  f"hub does not repeat the shipment card ({needle.lower()})")
         # What to do comes first on the card: the ways round before the
         # vehicle's own details.
         order = page.evaluate("""(() => [...document.querySelectorAll('#hub-body [data-sec]')]

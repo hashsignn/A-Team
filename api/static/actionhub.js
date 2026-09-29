@@ -119,38 +119,37 @@
     // ---------------------------------------------------------------
     function head(d, s) {
       const st = d.status;
+      const lvl = routeLevel(s, d.shipment_id);
       $('hub-title').innerHTML = `
         <h3>${esc(d.asset.name)} <span class="hub-id">${esc(d.asset.asset_id)}</span>
-          <span class="st-chip" style="--c:${levelColour(routeLevel(s, d.shipment_id))}" title="The route's level on the ladder: how soon a decision on this lane is due"><i></i>${esc(LEVEL_LABEL[routeLevel(s, d.shipment_id)])} route</span></h3>
-        <p class="hub-sub">Carrying order <b>${esc(d.shipment_id)}</b> for ${esc(d.logistics.customer)} · ${esc(d.phase_label)}</p>`;
-      return `
-      <section class="hsec" data-sec="header">
-        <p class="hreason"><b>${esc(st.label)}:</b> ${esc(st.reason)}</p>
-      </section>`;
+          <span class="st-chip" style="--c:${levelColour(lvl)}" title="The route's level on the ladder: how soon a decision on this lane is due"><i></i>${esc(LEVEL_LABEL[lvl])} route</span></h3>
+        <p class="hub-sub"><b>${esc(d.shipment_id)}</b> · ${esc(d.logistics.customer)}
+          <span class="hub-st hub-st--${esc(st.level)}" title="${esc(st.reason)}">${esc(st.label)}</span></p>`;
+      return '';
     }
 
-    /* The vehicle itself: who drives it, where it is, where it is going.
-     * Below the ways round, which are what a planner opened the card for. */
+    /* The vehicle: who runs it, where it is, which leg, last heard of. Its
+     * dates and its legs are the shipment's card in the Shipments tab. */
+    const ICON = {
+      crew: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.5" r="3.3"/><path d="M3.5 17.5c.6-3.6 3.2-5.6 6.5-5.6s5.9 2 6.5 5.6z"/></svg>',
+      pin: '<svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M10 18.5s-5.8-6-5.8-10a5.8 5.8 0 0 1 11.6 0c0 4-5.8 10-5.8 10zm0-7.9a2.1 2.1 0 1 0 0-4.2 2.1 2.1 0 0 0 0 4.2z"/></svg>',
+      leg: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l6 15-6-3.6-6 3.6z"/></svg>',
+      sync: '<svg viewBox="0 0 20 20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 7.5A6.5 6.5 0 0 0 4.3 6M4 12.5A6.5 6.5 0 0 0 15.7 14M4 2.8V6.4h3.6M16 17.2v-3.6h-3.6"/></svg>',
+    };
     function vehicle(d) {
       const crew = d.asset.crew;
       const pos = d.position;
       const planned = pos.source === 'schedule';
+      const tile = (icon, v, k, title) => `<div class="vt" title="${esc(title || '')}"><span class="vt-i">${ICON[icon]}</span>
+        <span class="vt-v">${v}</span><span class="vt-k">${esc(k)}</span></div>`;
       return `
       <section class="hsec" data-sec="vehicle">
-        <h4>Vehicle</h4>
-        <div class="kv">
-          <div><div class="k">${esc(crew.role)}</div>
-            <div class="v">${esc(crew.name)}</div>
-            <div class="s">${crew.verified ? 'verified' : 'synthetic'}</div></div>
-          <div><div class="k">${planned ? 'Position (planned)' : 'Position (reported)'}</div>
-            <div class="v mono">${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}</div>
-            <div class="s">${planned ? 'from the schedule, no GPS feed' : `field report${pos.accuracy_m ? ` ±${Math.round(pos.accuracy_m)} m` : ''}`}${d.drift_km != null ? ` · ${d.drift_km} km off plan` : ''}</div></div>
-          <div><div class="k">Last sync</div>
-            <div class="v mono">${esc(when(d.last_sync))} UTC</div>
-            <div class="s" title="${esc(d.last_sync_source)}">${esc(String(d.last_sync_source || '').split(/[,(]/)[0])}</div></div>
-          <div><div class="k">Heading · leg</div>
-            <div class="v">${Math.round(d.heading_deg)}° · ${d.leg.index + 1}/${d.leg.count} ${esc(d.leg.mode)}</div>
-            <div class="s">${esc(d.leg.from_name)} → ${esc(d.leg.to_name)}</div></div>
+        <div class="vtiles">
+          ${tile('pin', `<span class="mono">${pos.lat.toFixed(2)}, ${pos.lon.toFixed(2)}</span>`, planned ? 'Position (planned)' : 'Position (reported)',
+            planned ? 'From the schedule: no GPS feed' : `Field report${pos.accuracy_m ? ` ±${Math.round(pos.accuracy_m)} m` : ''}${d.drift_km != null ? ` · ${d.drift_km} km off plan` : ''}`)}
+          ${tile('leg', `${Math.round(d.heading_deg)}° · ${d.leg.index + 1}/${d.leg.count}`, `Leg · ${d.leg.mode}`, `${d.leg.from_name} → ${d.leg.to_name}`)}
+          ${tile('sync', esc(when(d.last_sync).slice(4)), 'Last sync', d.last_sync_source)}
+          ${tile('crew', esc(crew.name), crew.role, crew.verified ? 'verified' : 'synthetic')}
         </div>
       </section>`;
     }
@@ -160,45 +159,20 @@
       const cap = l.capacity_teu;
       const pct = (x) => `${Math.min(100, (100 * x) / cap).toFixed(1)}%`;
       const boxes = d.containers.map((b) => `
-        <div class="box" title="${esc(b.content)} · ${b.gross_t} t${b.dangerous_goods ? ' · ADR' : ''}${b.temperature_controlled ? ' · temperature-controlled' : ''}">
-          <span class="mono">${esc(b.container_id)}</span>
-          <span>${b.size_ft}'</span>
-          <span>${b.priority === 'critical' ? '<b style="color:var(--status-red)">critical</b>' : 'standard'}</span>
-          <span class="${b.on_time_original ? 'ok' : 'late'}">${b.on_time_original ? 'on time' : 'late'} · ${esc(when(b.deadline).slice(4, 10))}</span>
-        </div>`).join('');
+        <span class="bx ${b.on_time_original ? 'is-ok' : 'is-late'}${b.priority === 'critical' ? ' is-crit' : ''}"
+              title="${esc(b.container_id)} · ${esc(b.content)} · ${b.gross_t} t${b.dangerous_goods ? ' · ADR' : ''}${b.temperature_controlled ? ' · reefer' : ''} · ${b.priority} · ${b.on_time_original ? 'on time' : 'late'} as planned, due ${esc(when(b.deadline).slice(4, 10))}">
+          ${b.priority === 'critical' ? '<i></i>' : ''}${b.size_ft}' <b>${b.on_time_original ? '✓' : '✗'}</b></span>`).join('');
       return `
       <section class="hsec" data-sec="load">
         <h4>Load <span>${esc(d.cargo.type)}${d.cargo.dangerous_goods ? ' · <span class="tag tag--warn">ADR</span>' : ''}${d.cargo.temperature_controlled ? ' · <span class="tag">reefer</span>' : ''}</span></h4>
-        <div class="capnums"><span><b>${l.loaded_teu}/${cap} TEU</b> utilised (${Math.round(100 * l.utilisation)}%)${l.vehicles && l.vehicles.count > 1 ? ` · <b>${l.vehicles.count} ${esc(l.vehicles.unit)}</b> × ${l.vehicles.teu_each} TEU` : ''}</span>
+        <div class="capnums"><span><b>${Math.round(100 * l.utilisation)}%</b> full · ${l.loaded_teu}/${cap} TEU${l.vehicles && l.vehicles.count > 1 ? ` · ${l.vehicles.count} ${esc(l.vehicles.unit)}` : ''}</span>
           <span>ours <b>${l.ours_teu} TEU</b></span></div>
-        <div class="capbar" title="Loaded ${l.loaded_teu} of ${cap} TEU; ours ${l.ours_teu}">
+        <div class="capbar" title="Loaded ${l.loaded_teu} of ${cap} TEU; ours ${l.ours_teu}${l.usable_teu != null ? `; only ${l.usable_teu} TEU usable at today's water level` : ''}">
           <span style="width:${pct(l.loaded_teu)}"></span>
           <span class="ours" style="width:${pct(l.ours_teu)}"></span>
-          ${l.usable_teu != null ? `<em style="left:${pct(l.usable_teu)}" title="usable at current draught"></em>` : ''}
+          ${l.usable_teu != null ? `<em style="left:${pct(l.usable_teu)}"></em>` : ''}
         </div>
-        ${l.usable_teu != null ? `<p class="chart-note" title="A low-water derate, not a stoppage.">Red mark: only ${l.usable_teu} TEU can be carried at today's water level</p>` : ''}
-        <div class="boxes">${boxes}</div>
-        <p class="chart-note" title="Synthetic manifest, ISO 6346 ids, a deadline per box">${d.containers.length} containers · synthetic</p>
-      </section>`;
-    }
-
-    function logistics(d) {
-      const g = d.logistics;
-      const late = g.delay_hours > 0.5;
-      return `
-      <section class="hsec" data-sec="logistics">
-        <h4>Logistics <span>${esc(g.customer)}</span></h4>
-        <div class="eta">
-          <div><div class="k muted">Planned arrival</div><div class="v">${esc(when(g.eta_original))}</div></div>
-          <div class="arrow">→</div>
-          <div><div class="k muted">Expected now</div>
-            <div class="v${late ? ' late' : ''}">${esc(when(g.eta_revised))}</div></div>
-        </div>
-        <div class="kv" style="margin-top:8px">
-          <div><div class="k">Final destination</div><div class="v">${esc(g.destination)}</div></div>
-          <div><div class="k">Delay</div><div class="v">${late ? `+${hoursText(g.delay_hours)}` : 'none'}</div>
-            <div class="s">${g.misses_commitment ? `misses the ${esc(when(g.committed).slice(0, 10))} commitment` : 'inside the commitment'}</div></div>
-        </div>
+        <div class="bxs" title="Each box: size, on time as planned; red dot: critical">${boxes}</div>
       </section>`;
     }
 
@@ -206,7 +180,7 @@
       const colour = (l) => (l === 'red' || l === 'yellow' || l === 'green' ? statusColour(l) : tokenOf('--accent'));
       return `
       <section class="hsec" data-sec="logs">
-        <h4>Status log</h4>
+        <details class="hfold"><summary><h4>Status log <span>${d.logs.length}</span></h4></summary>
         <div class="logs">${d.logs.map((l) => `
           <div class="log" style="--c:${colour(l.level)}">
             <div class="log-top"><span class="tag">${esc(l.kind)}</span><b>${esc(l.title)}</b></div>
@@ -214,6 +188,7 @@
             ${l.detail ? `<div class="log-detail" title="${esc(l.detail)}">${esc(l.detail)}</div>` : ''}
             <div class="log-src">${esc(l.source)}</div>
           </div>`).join('')}</div>
+        </details>
       </section>`;
     }
 
@@ -255,12 +230,13 @@
       const n = d.matrix.points.length;
       return `
       <section class="hsec" data-sec="risk">
-        <h4>Route hazards <span>${n ? `${n} on the legs ahead` : 'none on the legs ahead'}</span></h4>
+        <details class="hfold"><summary><h4>Hazards ahead <span>${n}</span></h4></summary>
         <div class="risk-two">
           <div>${matrix(d.matrix)}${d.matrix.unsourced ? '<p class="chart-note">Hatched: no sourced probability</p>' : ''}</div>
           <div><div class="radar-wrap"><canvas id="hub-radar" aria-label="Risk radar"></canvas></div>
             <p class="chart-note">Hover a spoke for hours of delay</p></div>
         </div>
+        </details>
       </section>`;
     }
 
@@ -322,57 +298,20 @@
         <label for="w-${k}">${label}</label>
         <input type="range" id="w-${k}" data-w="${k}" min="0" max="100" step="5" value="${Math.round(w[k] * 100)}">
         <output>${Math.round(w[k] * 100)}%</output>`;
-      const o = d.original;
       const alts = d.candidates.map((c) => `
         <button type="button" class="alt${r.hovered === c.id ? ' is-hot' : ''}${r.chosen === c.id ? ' is-chosen' : ''}"
                 data-route="${esc(c.id)}" style="--c:${altColour(c.rank)}">
           <span class="rbadge" style="--c:${altColour(c.rank)}">${esc(c.badge || `#${c.rank}`)}</span>
-          <span class="alt-label">${esc(c.label)}</span>
-          <span class="alt-delta">${esc(c.delta.text)}</span>
-          <span class="alt-notes" title="${esc([c.touches.length ? `Still passes: ${c.touches.map((t) => t.title).join('; ')}` : '', ...c.notes].filter(Boolean).join('\n'))}">ETA ${esc(when(c.eta))} · ${Math.round(c.km).toLocaleString('en-US')} km · setup ${c.setup_hours} h${c.touches.length ? ` · ${c.touches.length} hazard${c.touches.length === 1 ? '' : 's'} left` : ''}${c.beats_original ? '' : ' · worse than staying'}</span>
+          <span class="alt-label" title="${esc([`${c.delta.text} · arrives ${when(c.eta)}${c.meets_commitment ? ' ✓' : ' ✗'} · ${Math.round(c.km).toLocaleString('en-US')} km · setup ${c.setup_hours} h`, c.touches.length ? `Still passes: ${c.touches.map((t) => t.title).join('; ')}` : '', ...c.notes].filter(Boolean).join('\n'))}">${esc(c.label)}</span>
         </button>`).join('');
       return `
       <section class="hsec" data-sec="routes">
-        <h4>Recovery routes <span>${r.status === 'loading' ? 're-ranking…' : `ranked on time · cost · risk`}</span></h4>
+        <h4>Ways on the map <span>${r.status === 'loading' ? 're-ranking…' : 'hover to light one up'}</span></h4>
         ${d.eligible && d.candidates.length ? `<div class="weights">${slider('time', 'Time')}${slider('cost', 'Cost')}${slider('risk', 'Risk')}</div>` : ''}
-        <p class="alt-orig">Original: ETA <b>${esc(when(o.eta))}</b> · ${chf(o.cost_chf)} · risk <b>${esc(o.risk_label)}</b>${d.disruption ? ` · disrupted at ${esc(d.disruption.name || d.disruption.title)}` : ''}</p>
-        ${d.candidates.length ? optionTable(d) : ''}
-        ${d.candidates.length ? shipTreeLink(s, 'ctl ctl--mini ctl--primary hub-tree') : ''}
         ${d.note ? `<p class="hnote hnote--warn">${esc(d.note)}</p>` : ''}
         ${(d.no_route || []).map((t) => `<p class="hnote">${esc(t)}</p>`).join('')}
         <div class="alts">${alts}</div>
       </section>`;
-    }
-
-    /* The option table: one row per way of getting it there, the plan
-     * included. CO2e sits beside cost and date, never inside the score —
-     * the risk score says how bad the disruption is, CO2e what each fix
-     * costs the climate, and folding them together hides the trade-off.
-     * Among the rows that still meet the committed date, the lowest CO2e is
-     * highlighted: cost and date decide, CO2e breaks the tie. */
-    function optionTable(d) {
-      const o = d.original;
-      const rows = [...d.candidates, o];
-      const row = (x) => {
-        const plan = x.id === 'ORIGINAL';
-        const green = x.lowest_co2_on_time;
-        return `<tr class="${green ? 'is-green' : ''}${plan ? ' is-plan' : ''}" data-route="${plan ? '' : esc(x.id)}">
-          <td>${plan ? '<span class="muted">Plan</span>' : `<span class="rbadge" style="--c:${altColour(x.rank)}">${esc(x.badge || `#${x.rank}`)}</span>`}
-            ${esc(plan ? 'Stay on the original route' : x.label)}</td>
-          <td class="num">${esc(when(x.eta).slice(4, 10))} ${x.meets_commitment ? '<span class="ok">✓</span>' : '<span class="late">✗</span>'}</td>
-          <td class="num">${plan ? chf(x.cost_chf) : `${x.delta.cost_chf >= 0 ? '+' : '−'}${chf(Math.abs(x.delta.cost_chf))}`}</td>
-          <td class="num">${tCo2(x.co2e_kg)}${green ? ' <span class="leaf" title="Lowest CO₂e among the options that still meet the committed date">🌿</span>' : ''}</td>
-          <td class="num">${plan ? '—' : pct(x.delta.co2e_pct)}</td>
-        </tr>`;
-      };
-      const greenest = rows.find((x) => x.lowest_co2_on_time);
-      return `
-        <table class="opt-table">
-          <thead><tr><th>Option</th><th>Arrives</th><th>Cost</th><th>CO₂e</th><th>vs plan</th></tr></thead>
-          <tbody>${rows.map(row).join('')}</tbody>
-        </table>
-        <p class="chart-note" title="CO₂e = ${d.tonnes} t × km × factor (${esc(d.carbon.source)}, ${esc(d.carbon.method)}). The leg after the factory gate. Not part of the ranking score.">
-          ✓ on time (by ${esc(when(d.committed).slice(0, 10))})${greenest ? ` · 🌿 lowest CO₂e on time: <b>${esc(greenest.id === 'ORIGINAL' ? 'the plan' : greenest.label)}</b>` : ''} ⓘ</p>`;
     }
 
     /* This shipment's own branch of the Action decision tree, in its window. */
@@ -488,7 +427,7 @@
       <details class="journal"><summary>Actions on this map (${s.journal.length}) · planner or agent</summary>
         <ol>${recent.map((j) => `<li><span class="who">${esc(j.actor)}</span> ${esc(j.summary || j.action)}</li>`).join('')}</ol>
       </details>
-      <p class="chart-note">Advisory. Nothing here books or sends.</p>`;
+      `;
     }
 
     // ---------------------------------------------------------------
@@ -522,8 +461,8 @@
         // What to do comes first (the ways round, the split, who can help);
         // what the vehicle is and carries follows.
         hubBody.innerHTML = `${head(d, s)}
-          <div id="hub-routes"></div><div id="hub-split"></div><div id="hub-partners"></div>
-          ${logistics(d)}${vehicle(d)}${load(d)}${risk(d)}${logs(d)}
+          <div id="hub-routes"></div>${vehicle(d)}${load(d)}<div id="hub-split"></div><div id="hub-partners"></div>
+          ${risk(d)}${logs(d)}
           <div id="hub-foot"></div>`;
         drawRadar(d);
       }

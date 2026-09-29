@@ -329,12 +329,14 @@ def decision_shipment(
 ) -> JSONResponse:
     """One shipment's branch: the order, its customer and contract, its ways
     ranked on time, cost and risk, and the partners who can carry each."""
+    from engine.export import route as route_mod  # noqa: PLC0415
     from engine.export import shipment as shipment_mod  # noqa: PLC0415
 
     board, context, _ship, route, tree, asset, recovery, vendors = _shipment_parts(
         shipment_id, as_of, shipments, _map_weights(w_time, w_cost, w_risk))
     return JSONResponse(shipment_mod.build(context, board, route, tree, asset, recovery,
-                                           vendors, shipment_id))
+                                           vendors, shipment_id,
+                                           route_mod.shipment_journey(context, shipment_id)))
 
 
 @app.post("/api/decision/shipment/{shipment_id}/book")

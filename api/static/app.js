@@ -80,6 +80,8 @@ const state = {
   // The shipment highlighted inside the open route — set when the route was
   // opened by clicking that shipment on the map.
   shipFocus: null,
+  // The shipment whose card is open in the Shipments tab (one at a time).
+  shipOpen: null,
   globe: null,
   spinning: true,
   resumeTimer: null,
@@ -1050,6 +1052,9 @@ function select(routeId, { fly, fit, ship, fromMap } = {}) {
   if (!r) return;
   state.selected = routeId;
   state.shipFocus = ship || null;
+  // Opened by a vehicle on the map: its card is open in the Shipments tab.
+  state.shipOpen = ship || null;
+  if (ship) openRTab('ships');
   // An open route stands alone on the map and the globe; closing it brings
   // every other route back (showRouteList).
   state.isolate = true;
@@ -1370,8 +1375,19 @@ function showCustomer(r, name, anchor) {
   });
   card.querySelectorAll('[data-order]').forEach((b) => b.addEventListener('click', () => {
     card.hidden = true;
-    planRecovery(b.dataset.order);
+    openRTab('ships');
+    toggleShip(b.dataset.order, { open: true });
   }));
+}
+
+/* One of the route panel's three tabs: actions, ships, customers. */
+function openRTab(name) {
+  document.querySelectorAll('.rtab').forEach((t) => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('is-on', on);
+    t.setAttribute('aria-selected', String(on));
+  });
+  document.querySelectorAll('.rpanel').forEach((p) => p.classList.toggle('is-on', p.dataset.panel === name));
 }
 
 function planRecovery(id) {
@@ -1383,13 +1399,48 @@ function planRecovery(id) {
 }
 
 /* The route's shipments, from the map's own asset list, so the list here
- * and the icons there are the same freight. Recovery opens from a row. */
+ * and the icons there are the same freight. A click anywhere on a row opens
+ * its card below it (its legs, when it lands, its ways ranked); a second
+ * click on the same shipment closes it. The vehicle itself (where it is,
+ * what it carries) is the map's Action Hub, opened by "On map", so no fact
+ * is shown twice. */
+const SHIP_CARDS = new Map();   // `${as_of}|${shipments}|${id}` -> { data } | { error } | { loading }
+const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayMon = (iso) => { const d = new Date(iso); return Number.isFinite(+d) ? `${d.getUTCDate()} ${MON3[d.getUTCMonth()]}` : '–'; };
+const shortPlace = (n) => String(n || '').replace(/\s*\(.*\)\s*$/, '');
+const daysTxt = (d) => (d == null ? '–' : `${d < 10 ? (+d).toFixed(1) : Math.round(d)} d`);
+function modeSvg(mode, cls = 'smode') {
+  const g = window.MapView && window.MapView.GLYPH;
+  if (!g) return '';
+  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${(g[mode] || g.road).replace(/COL/g, 'none')}</svg>`;
+}
+
+function shipKey(id) {
+  const p = state.params || {};
+  return `${p.as_of || DEFAULT_AS_OF}|${p.shipments || 150}|${id}`;
+}
+
+function loadShipCard(id) {
+  const key = shipKey(id);
+  if (SHIP_CARDS.has(key)) return;
+  SHIP_CARDS.set(key, { loading: true });
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  fetch(`/api/decision/shipment/${encodeURIComponent(id)}?${q}`)
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`the server answered ${r.status}`))))
+    .then((data) => { SHIP_CARDS.set(key, { data }); })
+    .catch((err) => { SHIP_CARDS.set(key, { error: err.message }); })
+    .finally(() => { if (state.shipOpen === id) fillShipCard(id); });
+}
+
 function renderShips(r) {
   const host = $('d-ships');
   if (!host) return;
+  const count = $('rtab-ships-n');
   const agent = window.MapAgent;
   const st = agent && agent.getState();
   if (!st || st.assets.status !== 'ready') {
+    if (count) count.textContent = '';
     host.innerHTML = '<p class="muted dship-note">Loading this route\'s shipments…</p>';
     return;
   }
@@ -1399,28 +1450,114 @@ function renderShips(r) {
     .sort((a, b) => order[a.status] - order[b.status]
       || rank[a.customer_priority || 'B'] - rank[b.customer_priority || 'B']
       || b.delay_hours - a.delay_hours);
+  if (count) count.textContent = items.length ? String(items.length) : '';
   if (!items.length) {
     host.innerHTML = '<p class="muted dship-note">No shipment on this route is under way or staged.</p>';
     return;
   }
-  host.innerHTML = `<h4>Shipments on this route <span class="muted">· ${items.length}</span></h4>
-    <div class="dship-list">${items.map((a) => `
-      <div class="dship-row${a.id === state.shipFocus ? ' is-focus' : ''}${a.status !== 'green' ? ' is-late' : ''}" data-ship="${esc(a.id)}">
-        <span class="dship-main">
-          <b>${esc(a.id)}</b> · ${esc(a.customer)} ${priBadge(a.customer_priority)}
-          <span class="muted"><span class="dship-status">${esc(a.status_label)}</span> · ${esc(a.leg)}</span>
-        </span>
-        <span class="dship-acts">
-          <button type="button" class="ctl ctl--mini${a.status !== 'green' ? ' ctl--primary' : ''}" data-plan="${esc(a.id)}">
-            ${a.status !== 'green' ? 'Plan recovery' : 'Show'}</button>
-          ${a.status !== 'green' ? `<a class="ctl ctl--mini dship-tree" href="${esc(treeLink(a.id, a.lane_id))}" target="_blank" rel="noopener"
-             title="Decision tree for ${esc(a.id)}: its ways, partners and booking" aria-label="Decision tree for ${esc(a.id)}"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 3v4M10 7l-5 4M10 7l5 4M5 11v3M15 11v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="3.5" r="1.8" fill="currentColor"/><circle cx="5" cy="15.5" r="1.8" fill="currentColor"/><circle cx="15" cy="15.5" r="1.8" fill="currentColor"/></svg></a>` : ''}
-        </span>
-      </div>`).join('')}</div>`;
-  host.querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => {
-    host.querySelectorAll('.dship-row').forEach((row) => row.classList.toggle('is-focus', row.dataset.ship === b.dataset.plan));
-    planRecovery(b.dataset.plan);
-  }));
+  host.innerHTML = `<div class="dship-list">${items.map((a) => {
+    const open = a.id === state.shipOpen;
+    return `
+      <div class="dship-item${open ? ' is-open' : ''}" data-item="${esc(a.id)}">
+        <div class="dship-row${a.id === state.shipFocus ? ' is-focus' : ''}${a.status !== 'green' ? ' is-late' : ''}"
+             data-ship="${esc(a.id)}" role="button" tabindex="0" aria-expanded="${open}"
+             title="${open ? 'Click to close' : 'Click for its legs and its ways'}">
+          <span class="dship-main">
+            <b>${esc(a.id)}</b> · ${esc(a.customer)} ${priBadge(a.customer_priority)}
+            <span class="muted"><span class="dship-status">${esc(a.status_label)}</span> · ${esc(a.leg)}</span>
+          </span>
+          <span class="dship-acts">
+            ${a.status !== 'green' ? `<a class="ctl ctl--mini dship-tree" href="${esc(treeLink(a.id, a.lane_id))}" target="_blank" rel="noopener"
+               title="Decision tree for ${esc(a.id)}: its ways, partners and booking" aria-label="Decision tree for ${esc(a.id)}"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 3v4M10 7l-5 4M10 7l5 4M5 11v3M15 11v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="3.5" r="1.8" fill="currentColor"/><circle cx="5" cy="15.5" r="1.8" fill="currentColor"/><circle cx="15" cy="15.5" r="1.8" fill="currentColor"/></svg></a>` : ''}
+            <span class="dship-caret" aria-hidden="true">▸</span>
+          </span>
+        </div>
+        ${open ? '<div class="scard"></div>' : ''}
+      </div>`;
+  }).join('')}</div>`;
+  host.querySelectorAll('.dship-row').forEach((row) => {
+    const go = (e) => {
+      if (e.target.closest('a')) return;      // the tree icon opens its window
+      toggleShip(row.dataset.ship);
+    };
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); }
+    });
+  });
+  if (state.shipOpen && items.some((a) => a.id === state.shipOpen)) fillShipCard(state.shipOpen);
+}
+
+/* Open a shipment's card, or close it when it is the one open. */
+function toggleShip(id, { open = null } = {}) {
+  const next = open === true ? id : open === false ? null : (state.shipOpen === id ? null : id);
+  state.shipOpen = next;
+  state.shipFocus = next;
+  const r = state.board && state.board.routes.find((x) => x.route_id === state.selected);
+  if (r) renderShips(r);
+  const item = next && document.querySelector(`.dship-item[data-item="${CSS.escape(next)}"]`);
+  if (item) item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function fillShipCard(id) {
+  const el = document.querySelector(`.dship-item[data-item="${CSS.escape(id)}"] .scard`);
+  if (!el) return;
+  const entry = SHIP_CARDS.get(shipKey(id));
+  if (!entry) loadShipCard(id);
+  if (!entry || entry.loading) { el.innerHTML = '<p class="scard-wait">Working out its ways…</p>'; return; }
+  if (entry.error) { el.innerHTML = `<p class="scard-wait">Could not load: ${esc(entry.error)}</p>`; return; }
+  el.innerHTML = shipCardHTML(entry.data);
+  const onMap = el.querySelector('[data-onmap]');
+  if (onMap) onMap.addEventListener('click', () => planRecovery(id));
+}
+
+const LEG_WORD = { ok: 'clear', at_risk: 'at risk', affected: 'hit now' };
+
+function shipCardHTML(d) {
+  const o = d.order;
+  const pool = [...(d.options || []), ...(d.stay ? [d.stay] : [])].sort((a, b) => a.rank - b.rank);
+  const best = pool.find((x) => x.best);
+  const stay = d.stay;
+  const tile = (v, k, tone = '') => `<div class="stile${tone ? ` stile--${tone}` : ''}"><b>${v}</b><span>${esc(k)}</span></div>`;
+  const tiles = [
+    tile(esc(dayMon(o.committed)), 'promised'),
+    stay ? tile(`${esc(dayMon(stay.eta))} ${stay.on_time ? '✓' : '✗'}`, stay.on_time ? 'as planned' : `as planned, +${daysTxt(stay.late_days)}`, stay.on_time ? 'ok' : 'late') : '',
+    best && !best.plan ? tile(`${esc(dayMon(best.eta))} ${best.on_time ? '✓' : '✗'}`, `by #1 way${best.extra_chf > 0.5 ? `, +${chf(best.extra_chf).replace('CHF ', 'CHF ')}` : ''}`, best.on_time ? 'best' : '') : '',
+    tile(esc(chf(o.loss_chf)), 'at risk'),
+  ].join('');
+
+  const j = d.journey;
+  const now = o.leg && o.leg.index;
+  const legs = j ? `
+    <div class="sjour">
+      <span class="sjour-from">${esc(shortPlace(j.legs[0] && j.legs[0].from))}</span>
+      ${j.legs.map((l) => `<span class="sleg sleg--${esc(l.status)}${l.index === now ? ' is-now' : ''}"
+          title="${esc(shortPlace(l.from))} → ${esc(shortPlace(l.to))} · ${Math.round(l.km).toLocaleString('en-US')} km · ${esc(LEG_WORD[l.status] || l.status)}${l.index === now ? ' · here now' : ''}">
+          ${modeSvg(l.mode)}<span>${esc(shortPlace(l.to))}</span></span>`).join('')}
+    </div>
+    ${j.progress && j.progress.total_km ? `<div class="sprog" title="${Math.round(j.progress.travelled_km).toLocaleString('en-US')} km done"><i style="width:${Math.min(100, j.progress.percent)}%"></i></div>
+      <p class="sprog-n"><b>${j.progress.percent}%</b> · ${Math.round(j.progress.remaining_km).toLocaleString('en-US')} km to go
+        <span class="skey"><i class="k-ok"></i>clear <i class="k-risk"></i>at risk <i class="k-hit"></i>hit now</span></p>` : ''}` : '';
+
+  const ways = pool.length ? `
+    <table class="sways">
+      <thead><tr><th></th><th>Way</th><th>Arrives</th><th class="num">+CHF</th><th class="num">CO₂e t</th><th class="num">vs plan</th></tr></thead>
+      <tbody>${pool.map((w) => `
+        <tr class="${w.plan ? 'is-plan' : ''}${w.best ? ' is-best' : ''}">
+          <td>${w.plan ? '<span class="srank srank--plan">·</span>' : `<span class="srank" style="--c:var(--alt-${Math.min(4, w.rank)})">${w.rank}</span>`}</td>
+          <td class="sways-name">${esc(w.plan ? 'Stay on the plan' : w.label)}</td>
+          <td class="${w.on_time ? 'ok' : 'late'}">${esc(dayMon(w.eta))} ${w.on_time ? '✓' : '✗'}</td>
+          <td class="num">${w.plan ? '0' : Math.round(Math.max(0, w.extra_chf)).toLocaleString('en-US')}</td>
+          <td class="num">${w.lowest_co2 ? '🌿 ' : ''}${w.co2e_t}</td>
+          <td class="num">${w.plan ? '–' : w.days_saved > 0 ? `−${daysTxt(w.days_saved)}` : w.days_saved < 0 ? `+${daysTxt(-w.days_saved)}` : '0 d'}</td>
+        </tr>`).join('')}</tbody>
+    </table>` : `<p class="scard-wait">${esc(d.note || 'No way to change this one: tell the customer.')}</p>`;
+
+  return `${tiles ? `<div class="stiles">${tiles}</div>` : ''}${legs}${ways}
+    <div class="scard-acts">
+      <a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(d.shipment_id, d.route_id))}" target="_blank" rel="noopener">Decision tree ↗</a>
+      ${d.located !== false ? '<button type="button" class="ctl ctl--mini" data-onmap>On map</button>' : ''}
+    </div>`;
 }
 
 /* Keep the panel in step with the map.
@@ -1439,8 +1576,9 @@ withAgent((agent) => {
           openPanelTab('routes');
           select(a.lane_id, { fromMap: true, ship: id });
         } else {
-          state.shipFocus = id;
-          renderShips(state.board.routes.find((r) => r.route_id === a.lane_id));
+          // The vehicle on the map, and its card here: one shipment, two views.
+          openRTab('ships');
+          toggleShip(id, { open: true });
         }
       }
     }
@@ -1915,13 +2053,7 @@ function initResponseTabs() {
   }));
 
   document.querySelectorAll('.rtab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.rtab').forEach((t) => t.classList.remove('is-on'));
-      document.querySelectorAll('.rpanel').forEach((p) => p.classList.remove('is-on'));
-      tab.classList.add('is-on');
-      document.querySelector(`.rpanel[data-panel="${tab.dataset.tab}"]`)
-        .classList.add('is-on');
-    });
+    tab.addEventListener('click', () => openRTab(tab.dataset.tab));
   });
 
   $('send-copy').addEventListener('click', async () => {

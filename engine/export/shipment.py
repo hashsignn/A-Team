@@ -174,11 +174,14 @@ def verdict(recovery: dict | None) -> dict:
 
 
 def build(context: RunContext, board: dict, route: dict, tree: dict, asset: dict | None,
-          recovery: dict | None, vendors: dict | None, shipment_id: str) -> dict:
+          recovery: dict | None, vendors: dict | None, shipment_id: str,
+          journey: dict | None = None) -> dict:
     """One shipment's branch of the tree. ``tree`` is the route's decision
     tree (engine/export/decision.py), for the order's branch, the sign-off
     limit, the contract clocks and another site; ``asset``, ``recovery`` and
-    ``vendors`` are the fleet map's detail, recovery routes and partners."""
+    ``vendors`` are the fleet map's detail, recovery routes and partners;
+    ``journey`` its legs in the route page's colours
+    (engine/export/route.shipment_journey)."""
     now = context.clock.as_of
     row = next((o for o in tree.get("orders") or [] if o["shipment_id"] == shipment_id), {})
     logistics = (asset or {}).get("logistics") or {}
@@ -253,6 +256,7 @@ def build(context: RunContext, board: dict, route: dict, tree: dict, asset: dict
             "branch": row.get("branch"),
             "from": logistics.get("origin"), "to": logistics.get("destination"),
         },
+        "journey": journey,
         "event": {"title": driving, "starts_at": started,
                   "at": ((recovery or {}).get("disruption") or {}).get("name")},
         "clocks": clocks or [],

@@ -507,6 +507,35 @@ def _response(page, check) -> None:
               "Escape closes the customer card")
     page.screenshot(path=str(OUT / "response-contacts.png"))
 
+    # The route's shipments are their own tab: a click anywhere on a row
+    # opens its card below it (legs, ways ranked), a second click closes it.
+    page.get_by_role("tab", name="Shipments").click()
+    page.wait_for_timeout(400)
+    rows = page.locator("#d-ships .dship-row")
+    if rows.count():
+        first = rows.first
+        sid = first.get_attribute("data-ship")
+        first.locator(".dship-main").click()
+        try:
+            page.wait_for_function(
+                "(() => { const c = document.querySelector('#d-ships .scard');"
+                " return c && !/Working out/.test(c.textContent); })()", timeout=30_000)
+        except Exception:  # noqa: BLE001
+            pass
+        cardx = page.locator("#d-ships .scard")
+        check(cardx.count() == 1 and (page.locator("#d-ships .scard .sways").count() == 1
+                                      or "tell the customer" in cardx.inner_text().lower()
+                                      or "planned arrival" in cardx.inner_text().lower()),
+              f"[ships] the card for {sid} did not open with its ways",
+              f"shipments tab: {rows.count()} rows; {sid} opens its card with its ways")
+        page.screenshot(path=str(OUT / "response-ships.png"))
+        page.locator(f'#d-ships .dship-row[data-ship="{sid}"]').click()
+        page.wait_for_timeout(300)
+        check(page.locator("#d-ships .scard").count() == 0,
+              "[ships] a second click did not close the card", "a second click closes it")
+    else:
+        print("  note  no shipment on this route")
+
     page.get_by_role("tab", name="Act & escalate").click()
     try:
         page.wait_for_function(
