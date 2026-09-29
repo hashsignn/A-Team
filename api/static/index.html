@@ -29,7 +29,12 @@
          (gitignored, like all of Sika's own material); without it the
          server sends a neutral Horizon mark. See GET /brand/logo. -->
     <div class="brand">
-      <img class="brand-logo" src="/brand/logo?v=__ASSETV__" alt="" height="30">
+      <!-- A click on the logo puts your own there (PNG, JPEG or WebP; kept
+           in config/brand/, never committed). -->
+      <button type="button" class="brand-logo-btn" id="brand-logo-btn" title="Your logo here: click to choose an image">
+        <img class="brand-logo" id="brand-logo" src="/brand/logo?v=__ASSETV__" alt="Logo" height="30">
+      </button>
+      <input type="file" id="brand-logo-file" accept="image/png,image/jpeg,image/webp" hidden>
       <div>
         <h1>Horizon</h1>
         <p class="brand-sub" id="brand-sub" hidden></p>

@@ -296,13 +296,14 @@ ones go in `config/desk.yaml`.
 
 | Asked for | What changed | Where |
 |---|---|---|
-| Call it **Horizon**, with Sika's logo | The header shows the logo, then **Horizon**. Put Sika's logo at `config/brand/logo.svg` (or `.png`/`.jpg`/`.webp`). `config/` is gitignored, so the file stays on your machine. Without it a neutral Horizon mark is shown. The line counting shipments, variables and routes is gone. | `api/static/index.html`, `GET /brand/logo` |
+| Call it **Horizon**, with Sika's logo | The header shows the logo, then **Horizon**. **Click the logo** to upload Sika's (PNG, JPEG or WebP, up to 2 MB), or put the file at `config/brand/logo.png` (or `.jpg`/`.webp`/`.svg`) by hand. `config/` is gitignored, so the logo stays on your machine and is never committed. Without it a neutral Horizon mark is shown. The line counting shipments, variables and routes is gone. | `api/static/index.html`, `GET`/`POST`/`DELETE /brand/logo` |
 | The grey rung is hard to see; orange should be yellow | **Bias** is violet (fuchsia on the blue theme, whose Watch rung is violet). **Alert** is yellow: mustard on light pages, which still reads on white, and bright yellow on dark. | `api/static/styles.css` |
 | The decision tree does it all, so why the checklist and Act fast? | Both are retired. `/ops` and `/fast` redirect to the route's decision tree or to the board. The tree still executes and undoes through `/api/v2`. | `api/main.py` |
 | Close a case when it is resolved, into the risk ledger as history | **✓ Close case** on the route panel and in the decision tree. One click records how it ended (rerouted, split, other port, customer informed, no impact, other), with an optional note. The route then leaves the list and the ladder counts; **✓ Closed (n)** brings closed routes back. **Risk profile → Risk ledger → History** lists every close, newest first, with Reopen. A close holds until the route climbs the ladder. | `engine/act/cases.py`, `/api/cases` |
 | Show which departments confirmed the all-hands | A ring with one dot per department on the **All-hands** tab: green when confirmed, hollow when no reply. A dot opens mail and phone buttons to chase that department, and a **Confirmed** tick. The header chip carries the same dots. Replies belong to one sitting, so each new sitting starts empty. | `engine/rsvp.py`, `POST /api/allhands/rsvp` |
 | Ports, inventory, road/rail and vendors around the freight, only when something is selected, one tick each, plus "nearby and available" | Select a shipment, open a route, or open a customer's card, and the map draws what is around the freight. Nothing is drawn while nothing is selected. The five layers are listed below the table. | `engine/fleet/context.py`, `GET /api/map/context` |
 | Less text | Contacts are mail, phone and web icons; the address is in the tooltip. The unusual-volume panel is a small translucent card: route, how many times the usual volume, two bars. The empty band below the map, the funnel footer and the footnotes are gone. | `api/static/*` |
+| A decision tree per shipment, like **Plan recovery**, less text, more colour | Each shipment has its own branch: its ways ranked, with arrival, extra cost, CO₂e and risk, the partners who can carry each, then sign-off and book. Ranks wear the map's route colours. See [the Action decision tree](#the-action-decision-tree-in-its-own-window). | `engine/export/shipment.py`, `api/static/tree.js` |
 
 The five map layers, one tick each (bottom left of the map):
 
@@ -349,6 +350,11 @@ and start with `.venv\Scripts\python run.py serve`.
 To check it worked, click **Ask** on the board: answers written by the
 model say `written by qwen2.5:7b-instruct`. If Ollama runs but the model
 is missing, the board says so and names the `ollama pull` to run.
+
+In a Codespace, use the smaller model (`bash scripts/setup_ai.sh` alone
+downloads `qwen2.5:3b-instruct`) and export `RADAR_LOCAL_MODEL=qwen2.5:3b-instruct`
+before `run.py serve --host 0.0.0.0`. After the Codespace restarts, run the
+script again: it starts Ollama and skips the download.
 
 ## What Sika's answers changed
 
@@ -1191,30 +1197,49 @@ cost, when it starts.
 
 ### The Action decision tree, in its own window
 
-**Action decision tree ↗** on the route panel opens `/tree?route=…`: the same
-decisions as a real tree, top down, that grows as you choose. Each box is
-numbers first; the panel on the right fills with the numbers behind the box
-you clicked, and the long text is behind **More detail**.
+**Action decision tree ↗** on the route panel opens `/tree?route=…`. The tree
+icon on a shipment (the board's shipment list, the Action Hub's recovery
+routes) opens `/tree?route=…&ship=…` on that shipment. The tree opens on the
+route, and each order grows its own branch, because each has its own way out:
+a truck still at the plant can switch to rail, a barge already on the Rhine
+cannot. Each box is numbers first; the panel on the right shows the numbers
+behind the box you clicked, and the long text is behind **More detail**.
 
 ```
 1 What is happening       the events, when they started, the contract clocks they start
-2 Who is hit              not hit  |  absorbed by buffers  |  need action
-3 Keep the dates?         keep the date  |  cut the damage  |  tell the customer
-4 Which way, best first   the ways, ranked; another Sika site; stay as planned
-5 Who carries it          per mode, the carriers along the way (real operators marked)
+2 Who is hit              the customers, key accounts first; not hit and absorbed in one box
+3 Which shipment          that customer's orders, most at stake first: days late on the
+                          plan, CHF at risk, and what its ways can do ("✓ 2 ways on time")
+4 Which way, best first   this order's ways ranked on time, cost and risk: arrival ✓/✗,
+                          extra CHF, CO₂e (🌿 lowest on time), risk, closes in; the plan
+                          in the same ranking; another Sika site when one can serve it
+5 Who carries it          the partners near the freight who can take that way
 6 Sign off and book       within your limit or not; book it, with a 15-minute undo
 ```
 
-- **Ranked in one hue**: darker is better (1st, 2nd, 3rd), grey is staying as
-  planned. The ramp is not a ladder colour, and it was checked for
-  colour-blind separation.
-- **Stay as planned ranks first** when every order is more likely than not on
-  time anyway and its expected loss is below what the cheapest way costs for
-  certain: paying CHF 5,000 to protect CHF 800 of expected loss is not a
-  recommendation (`tests/test_decision.py`).
+- **One engine per shipment.** The ways are the fleet map's recovery routes
+  (`engine/fleet/reroute.py`): the numbers the Action Hub shows under **Plan
+  recovery**, so the two never disagree. A shipment's box says what its branch
+  holds (`GET /api/decision/{route}?ways=1`), and days late count from the
+  **promised** date, not the planned arrival: a plan with slack can be delayed
+  and still be on time (`engine/export/shipment.py`,
+  `tests/test_shipment_tree.py`).
+- **Balanced, Fastest, Cheapest, Safest** re-rank the ways with the Action
+  Hub's time, cost and risk weights. They reorder the ways, never add or
+  remove one.
+- **Colour follows rank**, in the map's route colours: 1st cyan, 2nd violet,
+  3rd magenta, the plan grey; ✓ on time, ✗ late; each level has its own
+  colour.
+- **No live position.** Past its planned arrival the map counts a shipment as
+  delivered, so no route from "here" can be drawn. Its box says so and its
+  branch goes straight to telling the customer.
+- **Booking** re-derives the way on the server from the shipment and the
+  way's id; nothing else in the request is trusted. It uses the same ledger
+  and 15-minute undo as every action
+  (`POST /api/decision/shipment/{id}/book`, `POST /api/v2/undo`).
 - **Sign-off** compares the way's cost with the delegated limit (CHF 10,000,
   raised to the crisis limit while the all-hands is convened), and names
-  Controlling with a ready email when it is above.
+  Controlling, with mail and phone, when it is above.
 - **What it costs** splits the expected loss of doing nothing into customer
   impact, expediting and surcharges, and shows the contract delay penalties
   as a dashed bar when they are not counted, with a switch to count them.

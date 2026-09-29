@@ -657,3 +657,6 @@
 .surge-card header { align-items: flex-start; }
 .surge-card .surge-show { padding: 2px 10px; font-size: 14px; }
 .volume-panel { background: color-mix(in srgb, var(--surface-1) 78%, transparent); }
+
+/* Under the ways: this shipment's own decision tree. */
+.hub-tree { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }

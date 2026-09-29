@@ -326,6 +326,11 @@ p { margin: 0; }
   height: 32px; width: auto; max-width: 150px; object-fit: contain;
 }
 .brand-logo + div { padding-left: 13px; border-left: 1px solid var(--border); }
+.brand-logo-btn {
+  display: block; flex: none; padding: 2px; border: 0; border-radius: 8px; background: none; cursor: pointer;
+}
+.brand-logo-btn:hover, .brand-logo-btn:focus-visible { outline: 2px dashed var(--border-strong); outline-offset: 2px; }
+.brand-logo-btn + input + div { padding-left: 13px; border-left: 1px solid var(--border); }
 .brand h1 { letter-spacing: .01em; }
 .brand-sub { font-size: 13px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
 
@@ -3382,3 +3387,7 @@ button.dt-order:hover { color: var(--text-primary); }
 .contact { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
 .contact .contact-top, .contact .contact-role { grid-column: 1; }
 .contact .contact-links { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+
+/* Each shipment row opens its own branch of the decision tree. */
+.dship-acts { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.dship-tree { display: inline-grid; place-items: center; padding: 0 9px; }

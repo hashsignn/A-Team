@@ -223,6 +223,7 @@ def _sources(board: dict | None, orders: set[str], now: datetime) -> list[dict]:
         out.append({"id": f"src:{item['text']}", "label": item["text"].split(" · ")[0],
                     "orders": len(mine), "shipment_ids": mine, "detail": item.get("detail", ""),
                     "on_time": len(set(item.get("in_time_orders") or []) & set(mine)),
+                    "on_time_ids": sorted(set(item.get("in_time_orders") or []) & set(mine)),
                     "via": item.get("via"), "via_route": item.get("route_id"),
                     "hours": item.get("hours"), "value_chf": item.get("value_chf"),
                     "closes_at": (now + timedelta(hours=float(window))).isoformat()

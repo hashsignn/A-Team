@@ -15,6 +15,7 @@ and they close that gap.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -186,11 +187,12 @@ def test_the_profile_page_carries_its_controls():
 # =====================================================================
 
 
-def _request(path: str, query: str = ""):
+def _request(path: str, query: str = "", method: str = "GET", site: str | None = None):
     from starlette.requests import Request  # noqa: PLC0415
 
-    return Request({"type": "http", "method": "GET", "path": path,
-                    "query_string": query.encode(), "headers": []})
+    headers = [(b"sec-fetch-site", site.encode())] if site else []
+    return Request({"type": "http", "method": method, "path": path,
+                    "query_string": query.encode(), "headers": headers})
 
 
 def test_the_retired_checklist_and_act_fast_pages_redirect():
@@ -221,3 +223,40 @@ def test_the_logo_falls_back_to_the_horizon_mark(tmp_path, monkeypatch):
     served = main.brand_logo()
     assert str(served.path) == str(tmp_path / "brand" / "logo.png")
     assert served.media_type == "image/png"
+
+
+def test_a_logo_can_be_uploaded_and_only_as_a_picture(tmp_path, monkeypatch):
+    """The header's logo is set with one click: the image is kept in
+    config/brand/ (gitignored). Only PNG, JPEG or WebP, told apart by their
+    first bytes; an SVG or a script with an image name is refused."""
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    import api.main as main  # noqa: PLC0415
+
+    monkeypatch.setattr(main, "CUSTOMER_DIR", tmp_path)
+    webp = b"RIFF\x24\x00\x00\x00WEBPVP8 " + b"\x00" * 24
+    assert main.save_logo(webp)["file"] == "config/brand/logo.webp"
+    assert main.brand_logo().media_type == "image/webp"
+
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+    with pytest.raises(HTTPException) as refused:
+        main.save_logo(svg)
+    assert refused.value.status_code == 415
+    assert (tmp_path / "brand" / "logo.webp").is_file(), "a refused upload leaves the logo alone"
+    with pytest.raises(HTTPException) as big:
+        main.save_logo(b"\x89PNG\r\n\x1a\n" + b"\x00" * main.LOGO_MAX_BYTES)
+    assert big.value.status_code == 413
+
+    main.save_logo(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+    assert (tmp_path / "brand" / "logo.png").is_file() and not (tmp_path / "brand" / "logo.webp").exists()
+    assert "default-src 'none'" in main.brand_logo().headers["content-security-policy"]
+
+    # Another site's page cannot reset it from the planner's browser.
+    with pytest.raises(HTTPException) as foreign:
+        main.brand_logo_reset(_request("/brand/logo", method="DELETE", site="cross-site"))
+    assert foreign.value.status_code == 403
+    assert (tmp_path / "brand" / "logo.png").is_file()
+
+    own = _request("/brand/logo", method="DELETE", site="same-origin")
+    assert json.loads(main.brand_logo_reset(own).body)["removed"] == 1
+    assert main.brand_logo().media_type == "image/svg+xml"

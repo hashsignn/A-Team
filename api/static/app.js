@@ -328,6 +328,7 @@ async function boot() {
   initResponseTabs();
   initAsk();
   initAlerts();
+  initLogo();
   applyBoard(board);
 
   $('asof-form').addEventListener('submit', (e) => {
@@ -1409,8 +1410,12 @@ function renderShips(r) {
           <b>${esc(a.id)}</b> · ${esc(a.customer)} ${priBadge(a.customer_priority)}
           <span class="muted"><span class="dship-status">${esc(a.status_label)}</span> · ${esc(a.leg)}</span>
         </span>
-        <button type="button" class="ctl ctl--mini${a.status !== 'green' ? ' ctl--primary' : ''}" data-plan="${esc(a.id)}">
-          ${a.status !== 'green' ? 'Plan recovery' : 'Show'}</button>
+        <span class="dship-acts">
+          <button type="button" class="ctl ctl--mini${a.status !== 'green' ? ' ctl--primary' : ''}" data-plan="${esc(a.id)}">
+            ${a.status !== 'green' ? 'Plan recovery' : 'Show'}</button>
+          ${a.status !== 'green' ? `<a class="ctl ctl--mini dship-tree" href="${esc(treeLink(a.id, a.lane_id))}" target="_blank" rel="noopener"
+             title="Decision tree for ${esc(a.id)}: its ways, partners and booking" aria-label="Decision tree for ${esc(a.id)}"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 3v4M10 7l-5 4M10 7l5 4M5 11v3M15 11v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="3.5" r="1.8" fill="currentColor"/><circle cx="5" cy="15.5" r="1.8" fill="currentColor"/><circle cx="15" cy="15.5" r="1.8" fill="currentColor"/></svg></a>` : ''}
+        </span>
       </div>`).join('')}</div>`;
   host.querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => {
     host.querySelectorAll('.dship-row').forEach((row) => row.classList.toggle('is-focus', row.dataset.ship === b.dataset.plan));
@@ -1535,9 +1540,17 @@ function optionsTile(d) {
 
 const cleanLabel = (l) => String(l || '').replace(/\s*\+\d+ more$/, '');
 // The decision tree page, opened on one option.
-function treeLink(optionId) {
-  const base = ($('link-tree') && $('link-tree').getAttribute('href')) || '/tree';
-  return `${base}${base.includes('?') ? '&' : '?'}opt=${encodeURIComponent(optionId)}`;
+// The decision tree page, opened on one shipment (the first an option covers).
+/* One shipment's branch of the decision tree, at the board's as-of: built
+ * here rather than from the route link, which is only set once a route is
+ * opened (a shipment row can be drawn before that). */
+function treeLink(shipmentId, routeId) {
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  const route = routeId || state.selected;
+  if (route) q.set('route', route);
+  if (shipmentId) q.set('ship', shipmentId);
+  return `/tree?${q}`;
 }
 const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || `${one}s`)}`;
 function pathWords(path) {
@@ -1651,7 +1664,7 @@ function routeBody(r, o) {
     <div class="dt-orders">${orders}</div>
     <div class="dt-acts">
       ${drawable ? `<button type="button" class="ctl ctl--mini" data-map="${esc(o.id)}">Show on map</button>` : ''}
-      <a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(o.id))}" target="_blank" rel="noopener">Open in the decision tree ↗</a>
+      <a class="ctl ctl--mini ctl--primary" href="${esc(treeLink((o.shipment_ids || [])[0]))}" target="_blank" rel="noopener">Open in the decision tree ↗</a>
     </div>`;
 }
 
@@ -1684,7 +1697,7 @@ function noHTML(r, d) {
       sum: `${plural(g.orders.length, 'order')} · ${g.cost_chf > 0 ? `costs ${chf(g.cost_chf)}` : 'free'} · saves ${chf(g.saves_chf)} · decide ${inHours(g.decide_in_h)}` }, `
       <div class="dt-orders">${orders}</div>
       <p class="dt-sub">Takes ${Math.round(g.takes_h || 0)} h · ${g.owner === 'us' ? 'we can do this' : `${esc(g.owner || 'the carrier')} does this`}. "Saves" is the expected cost of lateness it avoids.</p>
-      <div class="dt-acts"><a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(`act:${g.label}`))}" target="_blank" rel="noopener">Open in the decision tree ↗</a></div>`);
+      <div class="dt-acts"><a class="ctl ctl--mini ctl--primary" href="${esc(treeLink((g.orders[0] || {}).shipment_id))}" target="_blank" rel="noopener">Open in the decision tree ↗</a></div>`);
   }).join('');
   const tell = d.tell.orders;
   const leaf = tell.length ? `
@@ -2763,6 +2776,26 @@ async function alertsTest() {
       : r.status === 'recorded' ? 'Recorded here, not sent: no mail server is set on this server.'
         : r.detail || 'Not sent.';
   } catch { $('al-status').textContent = 'Could not reach the server.'; }
+}
+
+/* The logo in the header: a click picks an image, which the server keeps
+ * in config/brand/ (gitignored). */
+function initLogo() {
+  const btn = $('brand-logo-btn');
+  const file = $('brand-logo-file');
+  if (!btn || !file) return;
+  btn.addEventListener('click', () => file.click());
+  file.addEventListener('change', async () => {
+    const f = file.files && file.files[0];
+    if (!f) return;
+    try {
+      const res = await fetch('/brand/logo', { method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(out.detail || 'That image could not be used.'); return; }
+      $('brand-logo').src = `/brand/logo?t=${Date.now()}`;
+    } catch { alert('Could not reach the server.'); }
+    file.value = '';
+  });
 }
 
 function initAlerts() {

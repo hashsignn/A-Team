@@ -79,6 +79,12 @@ _BOARDS: dict[tuple[str, int], dict] = {}
 # The delivery-first optimiser's lane summaries, for the decision tree: one
 # computation per board, not one per route clicked.
 _LANES: dict[tuple[str, int], list[dict]] = {}
+# The route decision trees, one per route per board: every shipment of a
+# route reads its branch, sign-off limit and clocks from the same tree.
+_TREES: dict[tuple[str, int, str], dict] = {}
+# Each order's own ways in one line (engine/export/shipment.verdict), per
+# route per board: what the tree page puts on a shipment's box.
+_WAYS: dict[tuple[str, int, str], dict] = {}
 
 
 # The delay-penalty switch, for this server process. None means "as the
@@ -141,6 +147,8 @@ def _invalidate() -> None:
     _RUNS.clear()
     _BOARDS.clear()
     _LANES.clear()
+    _TREES.clear()
+    _WAYS.clear()
 
 
 # The v2 surface shares this cache rather than keeping its own: two caches of
@@ -240,17 +248,21 @@ def decision(
     route_id: str,
     as_of: str = Query(DEFAULT_AS_OF),
     shipments: int = Query(150, ge=20, le=400),
+    ways: bool = Query(False),
 ) -> JSONResponse:
     """The route's Action tab as a decision tree (engine/export/decision.py):
     what is happening, who is hit, can the dates be kept and how, what
-    reduces the damage otherwise, who to tell."""
+    reduces the damage otherwise, who to tell. ``ways=1`` adds each order's
+    own ways in one line, for the tree page's shipment boxes."""
     board = _board(as_of, shipments)
     route = _route(board, route_id)
     tree = _tree(board, route, as_of, shipments)
     # Whether the case is closed, so the tree can offer Close or Reopen.
     case = cases_mod.annotate({"routes": [route]}, _context(as_of, shipments).clock.as_of)
-    return JSONResponse(tree | {"case": case["routes"][0]["case"],
-                                "case_outcomes": cases_mod.OUTCOMES})
+    extra = {"case": case["routes"][0]["case"], "case_outcomes": cases_mod.OUTCOMES}
+    if ways:
+        extra["ways"] = _ways(board, tree, as_of, shipments)
+    return JSONResponse(tree | extra)
 
 
 def _tree(board: dict, route: dict, as_of: str, shipments: int) -> dict:
@@ -260,10 +272,130 @@ def _tree(board: dict, route: dict, as_of: str, shipments: int) -> dict:
 
     context = _context(as_of, shipments)
     key = (as_of, shipments)
+    tree_key = (as_of, shipments, route["route_id"])
+    if tree_key in _TREES:
+        return _TREES[tree_key]
     if key not in _LANES:
         _LANES[key] = fast_view.route_summaries(context)
     detail = next((row for row in _LANES[key] if row["route_id"] == route["route_id"]), None)
-    return decision_mod.build(context, route, detail, board)
+    _TREES[tree_key] = decision_mod.build(context, route, detail, board)
+    return _TREES[tree_key]
+
+
+def _ways(board: dict, tree: dict, as_of: str, shipments: int) -> dict[str, dict]:
+    """Each order that needs a decision, by its own recovery routes: the
+    same engine its branch opens with, so its box and its branch agree."""
+    from engine.export import shipment as shipment_mod  # noqa: PLC0415
+    from engine.fleet import reroute as reroute_mod  # noqa: PLC0415
+
+    key = (as_of, shipments, tree["route_id"])
+    if key not in _WAYS:
+        context = _context(as_of, shipments)
+        _WAYS[key] = {
+            row["shipment_id"]: shipment_mod.verdict(
+                reroute_mod.recovery(board, context, row["shipment_id"]))
+            for row in tree.get("orders") or [] if row.get("branch") != "absorbed"
+        }
+    return _WAYS[key]
+
+
+def refuse_cross_site(request: Request) -> None:
+    """A write sent by another site's page, from the planner's own browser,
+    is refused: the browser says where a request comes from (Sec-Fetch-Site).
+    The board's pages are same-origin; a script or a TMS hook sends no such
+    header and is unaffected."""
+    if request.headers.get("sec-fetch-site", "") in ("cross-site", "same-site"):
+        raise HTTPException(403, "refused: this request came from another site's page")
+
+
+# ---------------------------------------------------------------------
+# The decision tree for ONE shipment (engine/export/shipment.py): its own
+# recovery routes, ranked like the Action Hub's, and who can carry them.
+def _shipment_parts(shipment_id: str, as_of: str, shipments: int, weights: dict | None):
+    from engine.fleet import assets as assets_mod  # noqa: PLC0415
+    from engine.fleet import reroute as reroute_mod  # noqa: PLC0415
+    from engine.fleet import vendors as vendors_mod  # noqa: PLC0415
+
+    board = _board(as_of, shipments)
+    context = _context(as_of, shipments)
+    ship = next((s for s in context.shipments if s.shipment_id == shipment_id), None)
+    if ship is None:
+        raise HTTPException(404, f"unknown shipment {shipment_id!r}")
+    route = _route(board, ship.lane_id)
+    tree = _tree(board, route, as_of, shipments)
+    asset = assets_mod.asset_detail(board, context, shipment_id)
+    recovery = reroute_mod.recovery(board, context, shipment_id, weights=weights)
+    vendors = vendors_mod.nearby(board, context, shipment_id, weights=weights)
+    return board, context, ship, route, tree, asset, recovery, vendors
+
+
+@app.get("/api/decision/shipment/{shipment_id}")
+def decision_shipment(
+    shipment_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+    w_time: float | None = Query(None, ge=0, le=100),
+    w_cost: float | None = Query(None, ge=0, le=100),
+    w_risk: float | None = Query(None, ge=0, le=100),
+) -> JSONResponse:
+    """One shipment's branch: the order, its customer and contract, its ways
+    ranked on time, cost and risk, and the partners who can carry each."""
+    from engine.export import shipment as shipment_mod  # noqa: PLC0415
+
+    board, context, _ship, route, tree, asset, recovery, vendors = _shipment_parts(
+        shipment_id, as_of, shipments, _map_weights(w_time, w_cost, w_risk))
+    return JSONResponse(shipment_mod.build(context, board, route, tree, asset, recovery,
+                                           vendors, shipment_id))
+
+
+@app.post("/api/decision/shipment/{shipment_id}/book")
+def decision_shipment_book(
+    shipment_id: str,
+    payload: Annotated[dict, Body()],
+    request: Request,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """Book one of this shipment's recovery routes, with the same ledger and
+    undo window as every other action (POST /api/v2/undo pulls it back).
+
+    The way is re-derived here from the engine, never taken from the body:
+    a client that sent an edited route would be booking freight the engine
+    never offered."""
+    from engine.export import shipment as shipment_mod  # noqa: PLC0415
+    from engine.fast import execute as execute_mod  # noqa: PLC0415
+    from engine.fast import margin as margin_mod  # noqa: PLC0415
+    from engine.fast import options as fast_options  # noqa: PLC0415
+
+    refuse_cross_site(request)
+    option_id = str(payload.get("option_id") or "").strip()
+    weights = payload.get("weights") if isinstance(payload.get("weights"), dict) else None
+    _board_, context, ship, _route_, _tree_, _asset, recovery, _vendors = _shipment_parts(
+        shipment_id, as_of, shipments, weights)
+    cand = next((c for c in (recovery or {}).get("candidates") or [] if c["id"] == option_id), None)
+    if cand is None:
+        raise HTTPException(404, f"way {option_id!r} is not open for {shipment_id!r} any more")
+    extra = max(0.0, float((cand.get("delta") or {}).get("cost_chf") or 0.0))
+    late = shipment_mod.late_days(cand.get("eta"), recovery.get("committed"))
+    option = fast_options.FastOption(
+        option_id=f"{shipment_id}:recovery:{cand['id']}",
+        shipment_id=shipment_id, kind="reroute", label=cand.get("label") or cand["id"],
+        detail=f"{cand.get('km', 0):,.0f} km, setup {cand.get('setup_hours', 0):.0f} h",
+        owner=cand.get("owner") or "us",
+        hours_to_start=float(cand.get("setup_hours") or 0.0),
+        hours_to_resolve=float(cand.get("setup_hours") or 0.0),
+        days_late_after=late, on_time=bool(cand.get("meets_commitment")), cost_chf=extra,
+        margin=margin_mod.evaluate(ship, context.config, extra, late),
+        modes=tuple(dict.fromkeys(leg["mode"] for leg in cand.get("legs") or [])),
+    )
+    result = execute_mod.execute(option, context.config, fast_routes._now(),
+                                 by="planner", trigger="decision tree", ledger=fast_routes.LEDGER)
+    if isinstance(result, execute_mod.Refusal):
+        return JSONResponse({"ok": False, "executed": [], "refused": [result.as_dict()],
+                             "sentence": f"Not booked: {result.detail}"}, status_code=409)
+    done = result.as_dict(fast_routes._now())
+    return JSONResponse({"ok": True, "executed": [done], "refused": [],
+                         "sentence": f"{done['label']}: booked for {shipment_id}."})
 
 
 def _route(board: dict, route_id: str) -> dict:
@@ -1182,15 +1314,75 @@ BRAND_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
                ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 
+# Served with a policy that lets an image be an image and nothing else: an
+# SVG put in config/brand/ by hand cannot run a script from this origin.
+_LOGO_HEADERS = {"Cache-Control": "no-cache",
+                 "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+                 "X-Content-Type-Options": "nosniff"}
+
+
 @app.get("/brand/logo")
 @app.head("/brand/logo")
 def brand_logo() -> Response:
     for suffix, media in BRAND_TYPES.items():
         path = CUSTOMER_DIR / "brand" / f"logo{suffix}"
         if path.is_file():
-            return FileResponse(path, media_type=media, headers={"Cache-Control": "no-cache"})
+            return FileResponse(path, media_type=media, headers=_LOGO_HEADERS)
     return FileResponse(STATIC / "horizon-mark.svg", media_type="image/svg+xml",
-                        headers={"Cache-Control": "no-cache"})
+                        headers=_LOGO_HEADERS)
+
+
+# Uploads are pictures only, told apart by their first bytes rather than by
+# what the browser says they are. SVG is not taken here (it can carry
+# script); drop an SVG into config/brand/ by hand if that is the file you have.
+_LOGO_MAGIC = ((b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"))
+LOGO_MAX_BYTES = 2_000_000
+
+
+def _logo_suffix(data: bytes) -> str | None:
+    for magic, suffix in _LOGO_MAGIC:
+        if data.startswith(magic):
+            return suffix
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+@app.post("/brand/logo")
+async def brand_logo_upload(request: Request) -> JSONResponse:
+    """Put your own logo in the header: the image is the request body. Kept
+    in config/brand/ (gitignored), so it never reaches the public repo."""
+    refuse_cross_site(request)
+    return JSONResponse(save_logo(await request.body()))
+
+
+def save_logo(data: bytes) -> dict:
+    if not data:
+        raise HTTPException(400, "send the image as the request body")
+    if len(data) > LOGO_MAX_BYTES:
+        raise HTTPException(413, "the logo is over 2 MB; a header logo needs far less")
+    suffix = _logo_suffix(data)
+    if suffix is None:
+        raise HTTPException(415, "a PNG, JPEG or WebP image, please")
+    folder = CUSTOMER_DIR / "brand"
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in BRAND_TYPES:
+        (folder / f"logo{old}").unlink(missing_ok=True)
+    (folder / f"logo{suffix}").write_bytes(data)
+    return {"ok": True, "file": f"config/brand/logo{suffix}", "bytes": len(data)}
+
+
+@app.delete("/brand/logo")
+def brand_logo_reset(request: Request) -> JSONResponse:
+    """Back to the neutral Horizon mark."""
+    refuse_cross_site(request)
+    removed = 0
+    for suffix in BRAND_TYPES:
+        path = CUSTOMER_DIR / "brand" / f"logo{suffix}"
+        if path.is_file():
+            path.unlink()
+            removed += 1
+    return JSONResponse({"ok": True, "removed": removed})
 
 
 app.mount("/", StaticFiles(directory=STATIC), name="static")

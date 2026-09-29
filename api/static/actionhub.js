@@ -337,6 +337,7 @@
         ${d.eligible && d.candidates.length ? `<div class="weights">${slider('time', 'Time')}${slider('cost', 'Cost')}${slider('risk', 'Risk')}</div>` : ''}
         <p class="alt-orig">Original: ETA <b>${esc(when(o.eta))}</b> · ${chf(o.cost_chf)} · risk <b>${esc(o.risk_label)}</b>${d.disruption ? ` · disrupted at ${esc(d.disruption.name || d.disruption.title)}` : ''}</p>
         ${d.candidates.length ? optionTable(d) : ''}
+        ${d.candidates.length ? shipTreeLink(s, 'ctl ctl--mini ctl--primary hub-tree') : ''}
         ${d.note ? `<p class="hnote hnote--warn">${esc(d.note)}</p>` : ''}
         ${(d.no_route || []).map((t) => `<p class="hnote">${esc(t)}</p>`).join('')}
         <div class="alts">${alts}</div>
@@ -372,6 +373,18 @@
         </table>
         <p class="chart-note" title="CO₂e = ${d.tonnes} t × km × factor (${esc(d.carbon.source)}, ${esc(d.carbon.method)}). The leg after the factory gate. Not part of the ranking score.">
           ✓ on time (by ${esc(when(d.committed).slice(0, 10))})${greenest ? ` · 🌿 lowest CO₂e on time: <b>${esc(greenest.id === 'ORIGINAL' ? 'the plan' : greenest.label)}</b>` : ''} ⓘ</p>`;
+    }
+
+    /* This shipment's own branch of the Action decision tree, in its window. */
+    function shipTreeLink(s, cls) {
+      const det = s.selection.detail;
+      if (!det) return '';
+      const q = new URLSearchParams();
+      if (s.params.as_of) q.set('as_of', s.params.as_of);
+      if (s.params.shipments) q.set('shipments', s.params.shipments);
+      q.set('route', det.logistics.lane_id);
+      q.set('ship', s.selection.id);
+      return `<a class="${cls}" href="/tree?${q}" target="_blank" rel="noopener" title="Decide this shipment step by step: its ways, partners and booking"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 3v4M10 7l-5 4M10 7l5 4M5 11v3M15 11v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="3.5" r="1.8" fill="currentColor"/><circle cx="5" cy="15.5" r="1.8" fill="currentColor"/><circle cx="15" cy="15.5" r="1.8" fill="currentColor"/></svg> Decision tree for ${esc(s.selection.id)} ↗</a>`;
     }
 
     function split(s) {
@@ -466,11 +479,10 @@
       if (p.as_of) q.set('as_of', p.as_of);
       if (p.shipments) q.set('shipments', p.shipments);
       const lane = d.logistics.lane_id;
-      const ops = new URLSearchParams(q); ops.set('route', lane);
       const recent = s.journal.slice(-8).reverse();
       return `
       <div class="hub-foot">
-        <a class="ctl ctl--primary" href="/tree?${ops}" target="_blank" rel="noopener" title="Every option for this route as a decision tree, in its own window">Action decision tree ↗</a>
+        ${shipTreeLink(s, 'ctl ctl--primary')}
         <a class="ctl" href="/route/${encodeURIComponent(lane)}?${q}" title="Route page: matrix and charts">Route page</a>
       </div>
       <details class="journal"><summary>Actions on this map (${s.journal.length}) · planner or agent</summary>

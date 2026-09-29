@@ -12,13 +12,14 @@
 </head>
 <body class="tr-body">
 
-<!-- The Action decision tree for one route, in its own window.
+<!-- The Action decision tree, per shipment, in its own window.
 
      A real tree: the disruption at the top, every way out below it, and
      each choice growing the next level. Numbers first; the words are one
      click away, behind "More detail". Built on /api/decision/{route}. -->
 <header class="topbar topbar--sub tr-top">
   <a class="ctl ctl--ghost" id="tr-back" href="/">&larr; Board</a>
+  <img class="brand-logo tr-logo" src="/brand/logo?v=__ASSETV__" alt="" height="30">
   <div class="tr-head">
     <span class="level-chip" id="tr-chip"></span>
     <div class="tr-head-text">
@@ -43,10 +44,12 @@
   <section class="tr-stage" id="tr-stage" aria-label="Decision tree">
     <p class="tr-key" id="tr-key">
       <span class="tr-key-note">Click a box to grow the next level</span>
-      <span><i class="tr-key-sw" style="background:var(--rank-1)"></i>1st</span>
-      <span><i class="tr-key-sw" style="background:var(--rank-2)"></i>2nd</span>
-      <span><i class="tr-key-sw" style="background:var(--rank-3)"></i>3rd</span>
-      <span><i class="tr-key-sw tr-key-sw--base"></i>as planned</span>
+      <span><i class="tr-key-sw" style="background:var(--alt-1)"></i>1st</span>
+      <span><i class="tr-key-sw" style="background:var(--alt-2)"></i>2nd</span>
+      <span><i class="tr-key-sw" style="background:var(--alt-3)"></i>3rd</span>
+      <span><i class="tr-key-sw tr-key-sw--base"></i>the plan</span>
+      <span><b class="tr-key-ok">✓</b> on time</span>
+      <span>🌿 lowest CO₂e</span>
     </p>
     <div class="tr-levels" id="tr-levels">
       <svg class="tr-wires" id="tr-wires" aria-hidden="true"></svg>
