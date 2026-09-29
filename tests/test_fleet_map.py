@@ -742,3 +742,21 @@ def test_the_map_draws_its_own_borders_unless_tiles_are_asked_for():
     assert settings(load_config())["basemap"]["draw_tiles"] is False
     assert basemap({"tiles": ["https://tiles.example.internal/{z}/{x}/{y}.png"]})["draw_tiles"] is True
     assert basemap({"draw_tiles": True, "providers": []})["draw_tiles"] is True
+
+
+def test_one_vehicle_per_run_of_same_mode_legs():
+    """The barge past Kaub is the same barge; the ship through Suez is the
+    same ship. The vehicle changes where the mode does."""
+    from engine.clock import Clock  # noqa: PLC0415
+    from engine.pipeline import RunOptions, run  # noqa: PLC0415
+
+    context = run(clock=Clock.at("2026-09-26T23:00:00+00:00"), options=RunOptions(shipment_count=60, seed=7))
+    checked = 0
+    for shipment in context.shipments:
+        for i in range(1, len(shipment.legs)):
+            if shipment.legs[i].mode != shipment.legs[i - 1].mode:
+                continue
+            a, b = manifest.vehicle(shipment, i - 1), manifest.vehicle(shipment, i)
+            assert (a["asset_id"], a["name"], a["crew"]) == (b["asset_id"], b["name"], b["crew"]), shipment.shipment_id
+            checked += 1
+    assert checked, "the book has shipments with consecutive legs in one mode"

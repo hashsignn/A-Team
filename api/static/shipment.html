@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="radar-default-as-of" content="__DEFAULT_AS_OF__">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shipment · Horizon</title>
+<link rel="stylesheet" href="/styles.css?v=__ASSETV__">
+<link rel="icon" href="data:,">
+<script src="/theme.js?v=__ASSETV__"></script>
+</head>
+<body class="rt-body sp-body">
+
+<header class="topbar topbar--sub">
+  <a class="ctl ctl--ghost" id="sp-back" href="/">&larr; Board</a>
+  <div class="rt-head">
+    <span class="level-chip" id="sp-chip"></span>
+    <h1 id="sp-name">…</h1>
+    <span class="sp-route" id="sp-route"></span>
+  </div>
+  <nav class="themes" id="themes" aria-label="Colour theme"></nav>
+</header>
+
+<!-- ONE shipment: the vehicle on each stretch, what was reported from it,
+     and its own risk. The route page is every shipment on a route; this is
+     one of them. Numbers first; the words are in the tooltips. -->
+<main class="rt-main">
+  <section class="rt-stats" id="sp-stats"></section>
+
+  <section class="rt-block">
+    <div class="rt-block-head">
+      <h2>Vehicles</h2>
+      <div class="rt-key">
+        <span><i class="veh-key veh-key--ok"></i> clear</span>
+        <span><i class="veh-key veh-key--risk"></i> at risk</span>
+        <span><i class="veh-key veh-key--hit"></i> hit now</span>
+      </div>
+    </div>
+    <div class="sp-prog" id="sp-prog"></div>
+    <div class="sp-vehs" id="sp-vehs"></div>
+  </section>
+
+  <section class="rt-block">
+    <div class="rt-block-head">
+      <h2>Field reports <span class="rtab-n" id="sp-rep-n"></span></h2>
+      <span class="block-note" id="sp-where"></span>
+    </div>
+    <div id="sp-reports"></div>
+  </section>
+
+  <section class="rt-block" id="sp-events-block" hidden>
+    <div class="rt-block-head"><h2>Events on it</h2></div>
+    <div class="sp-events" id="sp-events"></div>
+  </section>
+
+  <div class="rt-two">
+    <section class="rt-block">
+      <div class="rt-block-head">
+        <h2>Risk matrix</h2>
+        <span class="block-note">one dot per event</span>
+      </div>
+      <div id="sp-matrix"></div>
+      <div class="mx-legend">
+        <span><i class="mx-dot mx-dot--solid"></i> options still open</span>
+        <span><i class="mx-dot mx-dot--hollow"></i> too late to act</span>
+        <span class="mx-explain" title="Impact we can size for events nobody publishes odds on. A strike ballot has no percentage, a gauge reading does.">last column: no published odds ⓘ</span>
+      </div>
+    </section>
+
+    <section class="rt-block">
+      <div class="rt-block-head">
+        <h2>Risk in effect</h2>
+        <span class="block-note">days of delay</span>
+      </div>
+      <div class="rt-radars">
+        <div class="rt-radar-pane">
+          <h3 class="rt-radar-h">Measured <em>gauges &amp; forecasts</em></h3>
+          <div class="evm-radar evm-radar--pane">
+            <svg id="sp-radar-measured" role="img" aria-label="Measured risk families"></svg>
+          </div>
+          <div class="gauges" id="sp-gauges-measured"></div>
+        </div>
+        <div class="rt-radar-pane">
+          <h3 class="rt-radar-h">Reported <em>strikes, closures, rules</em></h3>
+          <div class="evm-radar evm-radar--pane">
+            <svg id="sp-radar-reported" role="img" aria-label="Reported risk families"></svg>
+          </div>
+          <div class="gauges" id="sp-gauges-reported"></div>
+        </div>
+      </div>
+      <div class="radar-legend" id="sp-radar-legend"></div>
+    </section>
+  </div>
+
+  <a class="rt-next" id="sp-next" href="#">
+    <span>
+      <b>Decision tree for this shipment</b>
+      <em>its ways, ranked, then book</em>
+    </span>
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </a>
+</main>
+
+<script src="/charts.js?v=__ASSETV__"></script>
+<script src="/shipment.js?v=__ASSETV__"></script>
+</body>
+</html>

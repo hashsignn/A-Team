@@ -321,3 +321,37 @@ def test_a_shipments_legs_are_its_row_of_the_route_page(ships):
             assert row["status"] == leg["status"], (sid, leg["index"])
         p = journey["progress"]
         assert 0 <= p["percent"] <= 100 and p["total_km"] >= p["remaining_km"] >= 0, sid
+
+
+# =====================================================================
+# The shipment's own page
+# =====================================================================
+
+
+def test_the_shipment_page_is_that_shipment_only(ships):
+    """Its vehicles cover its legs in order, one per run of a mode; its
+    matrix dots are its own points in the route's events; its radars are
+    cut to the events that touch it; and its figures are the board's."""
+    board = main._board(AS_OF, SHIPMENTS)
+    for sid, d in list(ships.items())[:12]:
+        v = body(main.shipment_detail(sid, as_of=AS_OF, shipments=SHIPMENTS))
+        assert v["shipment_id"] == sid and v["route_id"] == d["route_id"]
+        legs = [leg for veh in v["vehicles"] for leg in veh["legs"]]
+        assert [leg["index"] for leg in legs] == list(range(len(legs))), sid
+        for a, b in zip(v["vehicles"], v["vehicles"][1:], strict=False):
+            assert a["mode"] != b["mode"], (sid, "two cards for one vehicle")
+        route = next(r for r in board["routes"] if r["route_id"] == v["route_id"])
+        mine = {e["event_id"]: p for e in route["events"]
+                for p in (e.get("matrix") or {}).get("points") or [] if p["shipment_id"] == sid}
+        assert {e["event_id"] for e in v["events"]} == set(mine), sid
+        for e in v["events"]:
+            assert e["point"] == mine[e["event_id"]], sid
+        if v["events"]:
+            assert v["stats"]["loss_chf"] == max(p["expected_loss_chf"] for p in mine.values())
+        assert v["radar_measured"]["axes"] and "series" in v["radar_reported"], sid
+
+
+def test_an_unknown_shipment_page_is_a_404():
+    with pytest.raises(HTTPException) as exc:
+        main.shipment_detail("SYN-NOPE", as_of=AS_OF, shipments=SHIPMENTS)
+    assert exc.value.status_code == 404

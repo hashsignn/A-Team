@@ -751,6 +751,22 @@ def route_detail(
     return JSONResponse(view)
 
 
+@app.get("/api/shipment/{shipment_id}")
+def shipment_detail(
+    shipment_id: str,
+    as_of: str = Query(DEFAULT_AS_OF),
+    shipments: int = Query(150, ge=20, le=400),
+) -> JSONResponse:
+    """One shipment on its own page: the vehicle on each stretch, its field
+    reports, where it is, and its own risk (engine/export/route.shipment_view)."""
+    from engine.export import route as route_mod  # noqa: PLC0415
+
+    view = route_mod.shipment_view(_board(as_of, shipments), _context(as_of, shipments), shipment_id)
+    if view is None:
+        raise HTTPException(404, f"unknown shipment {shipment_id!r}")
+    return JSONResponse(view)
+
+
 @app.get("/api/execute/{shipment_id}")
 def execute(
     shipment_id: str,
@@ -1280,6 +1296,12 @@ def tree_page() -> Response:
 @app.head("/route/{route_id}")
 def route_page(route_id: str) -> Response:
     return _page("route.html")
+
+
+@app.get("/shipment/{shipment_id}")
+@app.head("/shipment/{shipment_id}")
+def shipment_page(shipment_id: str) -> Response:
+    return _page("shipment.html")
 
 
 @app.get("/driver")

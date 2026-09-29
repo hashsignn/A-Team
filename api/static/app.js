@@ -1415,6 +1415,14 @@ function modeSvg(mode, cls = 'smode') {
   return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${(g[mode] || g.road).replace(/COL/g, 'none')}</svg>`;
 }
 
+/* One shipment's own page: its vehicles, reports and risk. */
+function shipPageLink(id) {
+  const p = state.params || {};
+  const q = new URLSearchParams({ as_of: p.as_of || DEFAULT_AS_OF, shipments: String(p.shipments || 150) });
+  return `/shipment/${encodeURIComponent(id)}?${q}`;
+}
+const PAGE_ICON = '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 2.5h7l3 3v12H5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7.5 13.5v-2.5M10 13.5V9M12.5 13.5v-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+
 function shipKey(id) {
   const p = state.params || {};
   return `${p.as_of || DEFAULT_AS_OF}|${p.shipments || 150}|${id}`;
@@ -1467,6 +1475,8 @@ function renderShips(r) {
             <span class="muted"><span class="dship-status">${esc(a.status_label)}</span> · ${esc(a.leg)}</span>
           </span>
           <span class="dship-acts">
+            <a class="ctl ctl--mini dship-tree" href="${esc(shipPageLink(a.id))}" target="_blank" rel="noopener"
+               title="${esc(a.id)}'s page: every vehicle, its reports and its risk" aria-label="Page for ${esc(a.id)}">${PAGE_ICON}</a>
             ${a.status !== 'green' ? `<a class="ctl ctl--mini dship-tree" href="${esc(treeLink(a.id, a.lane_id))}" target="_blank" rel="noopener"
                title="Decision tree for ${esc(a.id)}: its ways, partners and booking" aria-label="Decision tree for ${esc(a.id)}"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 3v4M10 7l-5 4M10 7l5 4M5 11v3M15 11v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="3.5" r="1.8" fill="currentColor"/><circle cx="5" cy="15.5" r="1.8" fill="currentColor"/><circle cx="15" cy="15.5" r="1.8" fill="currentColor"/></svg></a>` : ''}
             <span class="dship-caret" aria-hidden="true">▸</span>
@@ -1556,6 +1566,7 @@ function shipCardHTML(d) {
   return `${tiles ? `<div class="stiles">${tiles}</div>` : ''}${legs}${ways}
     <div class="scard-acts">
       <a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(d.shipment_id, d.route_id))}" target="_blank" rel="noopener">Decision tree ↗</a>
+      <a class="ctl ctl--mini" href="${esc(shipPageLink(d.shipment_id))}" target="_blank" rel="noopener" title="Every vehicle, its reports and its risk">Shipment page ↗</a>
       ${d.located !== false ? '<button type="button" class="ctl ctl--mini" data-onmap>On map</button>' : ''}
     </div>`;
 }

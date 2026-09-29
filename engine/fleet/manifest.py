@@ -97,15 +97,25 @@ def main_mode(shipment: Shipment) -> str:
     return longest.mode.value
 
 
+def _run_start(shipment: Shipment, leg_index: int) -> int:
+    """The first leg of the same-mode run this leg is part of."""
+    i = leg_index
+    while i > 0 and shipment.legs[i - 1].mode == shipment.legs[i].mode:
+        i -= 1
+    return i
+
+
 def vehicle(shipment: Shipment, leg_index: int) -> dict:
     """The vehicle carrying this consignment on one leg, and who is driving it.
 
-    A consignment changes vehicle at every mode change — the truck to Basel is
-    not the barge to Rotterdam — so identity is per leg.
+    A consignment changes vehicle where it changes mode, and only there: the
+    truck to Basel is not the barge to Rotterdam, but the barge past Kaub is
+    the same barge, and one ship sails Rotterdam through Suez to Shanghai.
+    So identity is per run of same-mode legs.
     """
     leg = shipment.legs[leg_index]
     mode = leg.mode.value
-    rng = _rng(shipment.shipment_id, "vehicle", leg_index)
+    rng = _rng(shipment.shipment_id, "vehicle", _run_start(shipment, leg_index))
     names = VEHICLE_NAMES.get(mode, ["Vehicle"])
     base = rng.choice(names)
     number = rng.randint(1000, 9999)

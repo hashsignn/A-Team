@@ -274,12 +274,26 @@ def main() -> int:
         backdrop = page.evaluate("getComputedStyle(document.getElementById('hub')).backdropFilter")
         check("blur(10px)" in backdrop, f"[hub] no glass: backdrop-filter is {backdrop!r}",
               "glass card: backdrop-filter blur(10px)")
-        cells = page.locator("#hub .rm .cell:not(.gutter)").count()
-        check(cells == 25, f"[matrix] {cells} cells, expected 5 x 5", "risk matrix: 5 x 5")
-        radar = page.evaluate("""(() => { const c = Chart.getChart('hub-radar');
-            return c ? { type: c.config.type, n: c.data.labels.length } : null; })()""")
-        check(bool(radar) and radar["type"] == "radar" and radar["n"] == 5,
-              f"[radar] chart wrong or missing: {radar}", "radar chart: 5 axes (Chart.js)")
+        # The hazards matrix and radar are the shipment's own page, not the
+        # Hub: one place for each.
+        check(page.locator("#hub .rm, #hub canvas").count() == 0,
+              "[hub] still carries a risk matrix or radar", "hub: no matrix or radar (the shipment page has them)")
+        sp = browser.new_page(viewport={"width": 1400, "height": 900})
+        sp_errors: list[str] = []
+        sp.on("pageerror", lambda e: sp_errors.append(str(e)))
+        sp.goto(f"{BASE}/shipment/{target['id']}", wait_until="networkidle")
+        sp.wait_for_selector("#sp-vehs .sp-veh", timeout=30_000)
+        sp.wait_for_timeout(600)
+        vehs = sp.locator("#sp-vehs .sp-veh").count()
+        cells = sp.locator("#sp-matrix .mx-cell").count()
+        spokes = sp.evaluate("document.querySelectorAll('#sp-radar-measured *, #sp-radar-reported *').length")
+        check(vehs >= 1 and sp.locator("#sp-stats .rt-stat").count() == 5 and not sp_errors,
+              f"[shipment page] {vehs} vehicles, errors {sp_errors}",
+              f"shipment page: {vehs} vehicle(s), 5 numbers")
+        check(cells >= 16 and spokes > 0, f"[shipment page] matrix {cells} cells, radar {spokes} marks",
+              f"shipment page: its risk matrix ({cells} cells) and radars")
+        sp.screenshot(path=str(OUT / "shipment-page.png"), full_page=True)
+        sp.close()
 
         # ---- recovery routes on the map --------------------------------------
         routes = page.evaluate("""(() => { const s = MapAgent.getState(), m = window.__fleetmap;

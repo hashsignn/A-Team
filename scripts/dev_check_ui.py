@@ -528,6 +528,9 @@ def _response(page, check) -> None:
                                       or "planned arrival" in cardx.inner_text().lower()),
               f"[ships] the card for {sid} did not open with its ways",
               f"shipments tab: {rows.count()} rows; {sid} opens its card with its ways")
+        page_link = page.locator(f'#d-ships .dship-row[data-ship="{sid}"] a[href^="/shipment/"]')
+        check(page_link.count() == 1 and page.locator('#d-ships .scard a[href^="/shipment/"]').count() == 1,
+              f"[ships] no link to {sid}'s own page", "each shipment links to its own page")
         page.screenshot(path=str(OUT / "response-ships.png"))
         page.locator(f'#d-ships .dship-row[data-ship="{sid}"]').click()
         page.wait_for_timeout(300)

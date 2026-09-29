@@ -365,7 +365,7 @@ const Charts = (() => {
       // problems, and the ramp alone cannot say which this is.
       const lost = n > s;
       const why = n
-        ? `${n} shipment(s) · CHF ${Math.round(chf).toLocaleString('en-US')} expected loss`
+        ? `${n} ${board.noun || 'shipment'}(s) · CHF ${Math.round(chf).toLocaleString('en-US')} expected loss`
           + (lost ? ' · some options already closed' : '')
           + (isUnsourced ? ' · probability not sourceable' : '')
         : 'empty';

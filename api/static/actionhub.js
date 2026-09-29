@@ -9,8 +9,8 @@
  * ------------------
  * Closing is `MapAgent.clearSelection()`. The store drops the routes, the split
  * and the partners with the selection; the map erases them because the state
- * no longer has them; this file destroys the radar chart because the detail
- * is gone. No renderer has to remember to clean up.
+ * no longer has them. The hazards matrix and radar are the shipment's own
+ * page (/shipment/{id}), not this card. No renderer has to remember to clean up.
  *
  * GLASS
  * -----
@@ -56,7 +56,6 @@
     const hub = $('hub');
     const card = $('vendor-card');
     const hubBody = $('hub-body');
-    let chart = null;
     let placed = false;
 
     // ---------------------------------------------------------------
@@ -190,99 +189,6 @@
           </div>`).join('')}</div>
         </details>
       </section>`;
-    }
-
-    /* 5 x 5: probability across, impact up. The cell shade is the product of
-     * the two band positions — the conventional heat of a risk matrix — and
-     * each hazard is a dot. An unsourced probability sits in the hatched
-     * gutter, never at a guessed column. */
-    function matrix(m) {
-      const P = m.probability_bands;
-      const I = m.impact_bands;
-      const gutter = m.points.some((p) => p.probability_band == null);
-      const at = (i, p) => m.points.filter((x) => x.impact_band === i && x.probability_band === p);
-      const heat = (ri, ci) => {
-        const score = ((I.length - ri) * (ci + 1)) / (I.length * P.length);
-        const hue = score > 0.55 ? statusColour('red') : score > 0.25 ? statusColour('yellow') : statusColour('green');
-        return `background: color-mix(in srgb, ${hue} ${Math.round(14 + score * 38)}%, transparent)`;
-      };
-      let html = `<div class="rm${gutter ? ' has-gutter' : ''}">`;
-      I.forEach((ib, ri) => {
-        html += `<div class="rl">${esc(ib.label)}</div>`;
-        P.forEach((pb, ci) => {
-          const pts = at(ib.id, pb.id);
-          html += `<div class="cell" style="${heat(ri, ci)}" title="${esc(ib.label)} impact · ${esc(pb.label)}${pts.length ? `\n${pts.map((p) => `• ${p.label}`).join('\n')}` : ''}">
-            ${pts.map(() => '<i></i>').join('')}</div>`;
-        });
-        if (gutter) {
-          const pts = m.points.filter((x) => x.impact_band === ib.id && x.probability_band == null);
-          html += `<div class="cell gutter" title="probability unsourced${pts.length ? `\n${pts.map((p) => `• ${p.label}`).join('\n')}` : ''}">${pts.map(() => '<i></i>').join('')}</div>`;
-        }
-      });
-      html += '<div></div>';
-      P.forEach((pb) => { html += `<div class="cl">${esc(pb.label.split(' ')[0])}</div>`; });
-      if (gutter) html += '<div class="cl">P?</div>';
-      html += '</div><div class="rm-axis">P(late) → · impact if late ↑</div>';
-      return html;
-    }
-
-    function risk(d) {
-      const n = d.matrix.points.length;
-      return `
-      <section class="hsec" data-sec="risk">
-        <details class="hfold"><summary><h4>Hazards ahead <span>${n}</span></h4></summary>
-        <div class="risk-two">
-          <div>${matrix(d.matrix)}${d.matrix.unsourced ? '<p class="chart-note">Hatched: no sourced probability</p>' : ''}</div>
-          <div><div class="radar-wrap"><canvas id="hub-radar" aria-label="Risk radar"></canvas></div>
-            <p class="chart-note">Hover a spoke for hours of delay</p></div>
-        </div>
-        </details>
-      </section>`;
-    }
-
-    function drawRadar(d) {
-      if (chart) { chart.destroy(); chart = null; }
-      const canvas = $('hub-radar');
-      if (!canvas || !root.Chart) return;
-      const r = d.radar;
-      const colour = statusColour(d.status.level);
-      chart = new root.Chart(canvas, {
-        type: 'radar',
-        data: {
-          labels: r.axes,
-          datasets: [{
-            data: r.values,
-            backgroundColor: `color-mix(in srgb, ${colour} 24%, transparent)`,
-            borderColor: colour, borderWidth: 2,
-            pointBackgroundColor: colour, pointRadius: 2.5,
-          }],
-        },
-        options: {
-          maintainAspectRatio: false,
-          animation: { duration: 260 },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => {
-                  const i = ctx.dataIndex;
-                  const drivers = r.drivers[i].length ? ` · ${r.drivers[i][0]}` : '';
-                  return ` ${r.values[i]} / 100 · ${hoursText(r.hours[i])} expected delay${drivers}`;
-                },
-              },
-            },
-          },
-          scales: {
-            r: {
-              min: 0, max: 100,
-              ticks: { display: false, stepSize: 25 },
-              grid: { color: tokenOf('--grid') },
-              angleLines: { color: tokenOf('--axis') },
-              pointLabels: { color: tokenOf('--text-secondary'), font: { size: 12 } },
-            },
-          },
-        },
-      });
     }
 
     function routes(s) {
@@ -438,7 +344,6 @@
       if (!sel.id) {
         if (!hub.hidden) {
           hub.hidden = true;
-          if (chart) { chart.destroy(); chart = null; }
           hubBody.innerHTML = '';
         }
         card.hidden = true;
@@ -449,7 +354,6 @@
       if (sel.status !== 'ready') {
         $('hub-title').innerHTML = `<h3><span class="mono">${esc(sel.id)}</span></h3>
           <p class="hub-sub">${sel.status === 'error' ? `Could not load: ${esc(sel.error)}` : 'Loading…'}</p>`;
-        if (chart) { chart.destroy(); chart = null; }
         hubBody.innerHTML = '';
         card.hidden = true;
         return;
@@ -462,9 +366,8 @@
         // what the vehicle is and carries follows.
         hubBody.innerHTML = `${head(d, s)}
           <div id="hub-routes"></div>${vehicle(d)}${load(d)}<div id="hub-split"></div><div id="hub-partners"></div>
-          ${risk(d)}${logs(d)}
+          ${logs(d)}
           <div id="hub-foot"></div>`;
-        drawRadar(d);
       }
       if (detailChanged || prev.routing !== s.routing) $('hub-routes').innerHTML = routes(s);
       if (detailChanged || prev.split !== s.split || prev.routing.data !== s.routing.data

@@ -260,3 +260,117 @@ def route_view(board: dict, context: RunContext, route_id: str) -> dict | None:
             "ok": sum(leg["counts"]["ok"] for leg in legs),
         },
     }
+
+
+# =====================================================================
+# One shipment, on its own page
+# =====================================================================
+def shipment_view(board: dict, context: RunContext, shipment_id: str) -> dict | None:
+    """The route page for ONE shipment: the vehicle on each of its legs, its
+    field reports, where it is, and its risk: one matrix point per event
+    that touches it, and the radars cut to those events. Every figure is the
+    board's; nothing is recomputed."""
+    from engine.export import board as board_mod  # noqa: PLC0415
+    from engine.fleet import assets as assets_mod  # noqa: PLC0415
+    from engine.fleet import manifest  # noqa: PLC0415
+
+    shipment = next((s for s in context.shipments if s.shipment_id == shipment_id), None)
+    if shipment is None:
+        return None
+    route = next((r for r in board["routes"] if r["route_id"] == shipment.lane_id), None)
+    lane = next((ln for ln in context.config.lanes if ln["id"] == shipment.lane_id), None)
+    if route is None or lane is None:
+        return None
+    as_of = context.clock.as_of
+    journey = shipment_journey(context, shipment_id) or {"legs": []}
+    reports = _reports_for(shipment_id, context)
+    moved = progress_mod.progress(shipment, context.config.nodes, as_of)
+    seen = progress_mod.observed(reports)
+    where = assets_mod.locate(context, shipment)
+    now = where["leg_index"] if where else None
+
+    # One card per vehicle: a run of same-mode legs is one barge, one ship.
+    worse = {"ok": 0, "at_risk": 1, "affected": 2}
+    vehicles: list[dict] = []
+    for leg in journey["legs"]:
+        own = shipment.legs[leg["index"]]
+        veh = manifest.vehicle(shipment, leg["index"])
+        phase = ("now" if leg["index"] == now
+                 else "done" if own.planned_arrive <= as_of else "ahead")
+        stretch = {**leg, "departs": own.planned_depart.isoformat(), "phase": phase}
+        if vehicles and vehicles[-1]["asset_id"] == veh["asset_id"]:
+            v = vehicles[-1]
+            v["legs"].append(stretch)
+            v["to"], v["arrives"] = leg["to"], leg["arrives"]
+            v["km"] = round(v["km"] + leg["km"], 1)
+            if worse[leg["status"]] > worse[v["status"]]:
+                v["status"] = leg["status"]
+            if phase == "now" or (phase == "ahead" and v["phase"] == "done"):
+                v["phase"] = phase
+            continue
+        vehicles.append({
+            "vehicle": veh["name"], "asset_id": veh["asset_id"], "mode": veh["mode"],
+            "crew": veh["crew"], "capacity_teu": veh["capacity_teu"], "carrier": veh["carrier"],
+            "from": leg["from"], "to": leg["to"], "km": leg["km"],
+            "departs": own.planned_depart.isoformat(), "arrives": leg["arrives"],
+            "status": leg["status"], "phase": phase, "legs": [stretch],
+        })
+
+    # This shipment in each event touching it: the event's matrix point for
+    # it, as the route page draws them, one dot per event here.
+    events = []
+    for e in route.get("events") or []:
+        point = next((p for p in (e.get("matrix") or {}).get("points") or []
+                      if p["shipment_id"] == shipment_id), None)
+        if point is None:
+            continue
+        events.append({k: e.get(k) for k in (
+            "event_id", "title", "kind", "kind_label", "delay_days", "capped_at",
+            "break_even_probability", "break_even_words", "severity", "starts_at")}
+            | {"point": point})
+    worst = max(events, key=lambda e: e["point"]["expected_loss_chf"], default=None)
+    touching = [a for a in context.result.assessments
+                if any(r.shipment_id == shipment_id for r in a.shipment_risks)]
+    risk = _soonest_risks(context).get(shipment_id) or {}
+
+    return {
+        "shipment_id": shipment_id,
+        "route_id": route["route_id"],
+        "route_name": route["name"],
+        "level": route["level"],
+        "level_label": route.get("level_label", route["level"]),
+        "customer": shipment.customer,
+        "tier": _tier(shipment.customer, context),
+        "value_chf": shipment.value_chf,
+        "cargo": {"type": shipment.product_family, "dangerous_goods": shipment.dangerous_goods,
+                  "temperature_controlled": shipment.temperature_controlled},
+        "committed": shipment.otif_committed_date.isoformat(),
+        "eta": shipment.eta.isoformat() if shipment.eta else None,
+        "stats": {
+            "lead_time_hours": risk.get("lead_time_hours"),
+            "loss_chf": worst["point"]["expected_loss_chf"] if worst else 0.0,
+            "p_late": worst["point"]["p_late"] if worst else None,
+            "survive_days": worst["point"]["time_to_survive_days"] if worst else None,
+            "events": len(events),
+            "reports": len(reports),
+        },
+        "vehicles": vehicles,
+        "progress": {k: moved.get(k) for k in ("percent", "travelled_km", "remaining_km", "total_km")},
+        "position": {
+            "planned": moved.get("planned_position"),
+            "seen": seen,
+            "drift_km": progress_mod.drift_km(moved.get("planned_position"), seen),
+        },
+        "reports": reports,
+        "events": events,
+        "radar_measured": board_mod._radar(touching, lane, context,
+                                           keep=lambda v: v.probability_sourceable),
+        "radar_reported": board_mod._radar(touching, lane, context,
+                                           keep=lambda v: not v.probability_sourceable),
+        "matrix_grid": board.get("matrix_grid"),
+    }
+
+
+def _tier(customer: str, context: RunContext) -> str:
+    from engine.desk import priority_of  # noqa: PLC0415
+    return priority_of(customer, context.config)

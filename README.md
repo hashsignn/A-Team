@@ -1415,6 +1415,19 @@ glass card below it, and a second click closes it:
 the vehicle, not the shipment. Its dates and ranked ways are the card's, so
 the Hub does not repeat them.
 
+**Shipment page ↗** (the page icon on each row, or the card) opens
+`/shipment/{id}`: the route page for that one shipment
+(`engine/export/route.shipment_view`, `GET /api/shipment/{id}`). Five
+numbers (at risk, chance late, the delay it absorbs, promised, field
+reports); a card per **vehicle** it uses, one per run of a mode (the truck
+to Basel, the barge past Kaub to Rotterdam, the ship through Suez to
+Shanghai), with its stretches in the three colours, its dates and crew; its
+field reports and where it is against the plan; the events on it with the
+delay if each hits, the CHF and the chance; its **risk matrix**, one dot per
+event; and **risk in effect**, the two radars cut to the events that touch
+it. The explanations are in the tooltips. The route page stays the whole
+route, every shipment on it.
+
 Click an asset: a draggable glass card (`backdrop-filter: blur(10px)` over
 `rgba(255,255,255,0.8)`, the dark equivalent on Dark). The ways as coloured
 badges that light up on the map, with the time, cost and risk sliders; four
@@ -1422,15 +1435,11 @@ tiles for the position and where it came from, the leg, the last sync and the
 crew; the load in TEU with the low-water derate marked, and a chip per
 container (size, on time as planned, a red dot when critical); the split and
 the partners nearby. Folded away: the status log (feed, field report and
-schedule entries kept apart, never blended) and a **5×5 matrix** of the hazards on the legs still ahead
-(P(late) × the bill if late — the board's two axes, banded finer, unsourced
-probability in a hatched gutter, never at a guessed column); and a **radar**
-(Chart.js) of Weather, Geopolitics, Port Congestion, Route Infrastructure and
-Mechanical Status, each spoke 0–100 from hours of expected delay, with the
-hours in the tooltip.
+schedule entries kept apart, never blended). The shipment's risk matrix and
+radars are on its own page, so the Hub no longer draws them.
 
-Close it and everything it drew goes with it — routes, split, partners, the
-chart. That is a property of the state, not something each renderer has to
+Close it and everything it drew goes with it — routes, split, partners.
+That is a property of the state, not something each renderer has to
 remember.
 
 ### Recovery routes
