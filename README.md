@@ -360,6 +360,38 @@ downloads `qwen2.5:3b-instruct`) and export `RADAR_LOCAL_MODEL=qwen2.5:3b-instru
 before `run.py serve --host 0.0.0.0`. After the Codespace restarts, run the
 script again: it starts Ollama and skips the download.
 
+## The interactive demo (2:30)
+
+An Arcade-style walk through the board, recorded from a running server: it
+pans and zooms across real screenshots, moves a cursor, rings what is being
+said, and stops at ten breakpoints until someone clicks. 2:30 without the
+pauses (Shanshan 1:00 on the map, Harjot 1:30 on the rest), about 3:00 with
+them. One self-contained `demo.html` plays offline; `--video` adds a
+continuous `demo.mp4`.
+
+```bash
+.venv/bin/pip install playwright pillow            # free
+.venv/bin/python -m playwright install chromium    # --with-deps on a fresh Codespace
+.venv/bin/python run.py serve                      # in another terminal
+.venv/bin/python scripts/demo/record.py            # -> data/exports/demo/demo.html
+.venv/bin/pip install imageio-ffmpeg && .venv/bin/python scripts/demo/record.py --build-only --video
+```
+
+- It records whatever the server shows: with `config/` in place, your own
+  data and logo. The output goes to `data/exports/demo/`, which is
+  gitignored, so a recording of real data is never committed. Share it the
+  way you would share the data it shows.
+- The story picks its own targets: the first critical route with a barge
+  or a ship that has two ways round and a split that moves only some boxes.
+- It files one field report from that vehicle (reports are append-only).
+  Everything else it changes (the penalty switch, an all-hands reply, a
+  closed case, a booking) it puts back.
+- The words, every camera move and each breakpoint live in
+  `scripts/demo/storyboard.json`. `scripts/demo/SCRIPT.md` is the same plan
+  to read, generated from it (`--script`); a test keeps the two in step.
+- In the player: Space or a click continues, ← → move by segment, C
+  captions, P pauses on or off, F full screen.
+
 ## What Sika's answers changed
 
 Six questions went to Sika. Four of the answers changed the build.

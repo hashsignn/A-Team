@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horizon demo</title>
+<style>
+  :root {
+    --bg: #0b1020; --stage: #0f172a; --ink: #e5e7eb; --muted: #94a3b8;
+    --accent: #22d3ee; --ring: #38bdf8; --red: #f43f5e; --green: #22c55e;
+    --shan: #c4b5fd; --harj: #6ee7b7;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  #app { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+  #stage { position: relative; overflow: hidden; background: var(--stage); border-radius: 12px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06); cursor: default; }
+  .layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; }
+  .layer img { display: block; user-select: none; -webkit-user-drag: none; }
+  .phone { position: absolute; overflow: hidden; background: #fff; will-change: transform; }
+  .phone img { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  .bezel { position: absolute; pointer-events: none; border-radius: 40px;
+    box-shadow: 0 0 0 11px #0a0a0a, 0 0 0 13px #3b4252, 0 40px 90px rgba(0, 0, 0, .6); }
+  #ov { position: absolute; inset: 0; pointer-events: none; }
+  .ring { position: absolute; border: 3px solid var(--ring); border-radius: 10px;
+    box-shadow: 0 0 0 5px rgba(56, 189, 248, .22), 0 0 28px rgba(56, 189, 248, .5); }
+  .ring.red { border-color: var(--red); box-shadow: 0 0 0 5px rgba(244, 63, 94, .2), 0 0 28px rgba(244, 63, 94, .45); }
+  .ring.green { border-color: var(--green); box-shadow: 0 0 0 5px rgba(34, 197, 94, .2), 0 0 28px rgba(34, 197, 94, .45); }
+  .note { position: absolute; transform: translate(-50%, -100%); background: rgba(8, 13, 28, .94); color: #fff;
+    padding: 7px 12px; border-radius: 9px; font-weight: 650; font-size: 15px; white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
+  .note.below { transform: translate(-50%, 0); }
+  .note::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent;
+    border-bottom: 0; border-top-color: rgba(8, 13, 28, .94); }
+  .note.below::after { bottom: auto; top: -6px; border: 6px solid transparent; border-top: 0; border-bottom-color: rgba(8, 13, 28, .94); }
+  #cursor { position: absolute; left: 0; top: 0; width: 30px; height: 30px; margin: -4px 0 0 -5px;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .45)); will-change: transform, opacity; }
+  .ripple { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+    border: 3px solid var(--accent); background: rgba(34, 211, 238, .18); }
+  #hot { position: absolute; width: 0; height: 0; pointer-events: none; }
+  #hot .spot { position: absolute; border-radius: 12px; pointer-events: auto; cursor: pointer;
+    box-shadow: 0 0 0 9999px rgba(2, 6, 23, .38); animation: glow 1.4s ease-in-out infinite; border: 3px solid var(--accent); }
+  #hot .dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+    background: var(--accent); pointer-events: none; animation: pulse 1.4s ease-out infinite; }
+  #hot .tip { position: absolute; transform: translate(-50%, 0); background: #0b1224; color: #fff; padding: 9px 14px;
+    border-radius: 10px; font-weight: 650; font-size: 15px; white-space: nowrap; pointer-events: auto; cursor: pointer;
+    border: 1px solid rgba(34, 211, 238, .55); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+  #hot .tip small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, .65); } 100% { box-shadow: 0 0 0 26px rgba(34, 211, 238, 0); } }
+  @keyframes glow { 0%, 100% { border-color: rgba(34, 211, 238, 1); } 50% { border-color: rgba(34, 211, 238, .35); } }
+  .card { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+    background: radial-gradient(1200px 600px at 50% 40%, rgba(34, 211, 238, .16), transparent 60%), rgba(2, 6, 23, .9);
+    text-align: center; gap: 12px; }
+  .card h1 { margin: 0; font-size: 56px; letter-spacing: -.02em; }
+  .card p { margin: 0; color: var(--muted); font-size: 19px; }
+  .card .who { display: flex; gap: 18px; margin-top: 6px; color: var(--muted); font-size: 15px; }
+  .card .who b { color: #fff; }
+  .card button { margin-top: 18px; font: inherit; font-size: 17px; font-weight: 700; color: #04111d; background: var(--accent);
+    border: 0; border-radius: 12px; padding: 12px 28px; cursor: pointer; box-shadow: 0 10px 30px rgba(34, 211, 238, .35); }
+  .card button:disabled { opacity: .5; cursor: wait; }
+  .card .keys { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .third { position: absolute; left: 22px; bottom: 22px; background: rgba(8, 13, 28, .92); border-radius: 12px; padding: 10px 16px;
+    border-left: 4px solid var(--c, var(--accent)); box-shadow: 0 10px 30px rgba(0, 0, 0, .4); }
+  .third b { display: block; font-size: 18px; } .third span { color: var(--muted); font-size: 14px; }
+  #cap { margin-top: 12px; min-height: 58px; display: flex; gap: 14px; align-items: baseline; }
+  #cap[hidden] { display: none; }
+  .spk { flex: none; font-weight: 800; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px;
+    border-radius: 6px; background: rgba(255, 255, 255, .06); }
+  .line { font-size: 19px; line-height: 1.45; }
+  .line .w { color: rgba(229, 231, 235, .38); transition: color .12s; }
+  .line .w.on { color: #fff; }
+  .line .w.now { color: var(--accent); }
+  .gatehint { color: var(--accent); font-weight: 600; }
+  #bar { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+  .b { font: inherit; font-size: 13px; color: var(--ink); background: rgba(255, 255, 255, .07);
+    border: 1px solid rgba(255, 255, 255, .13); border-radius: 8px; padding: 6px 10px; cursor: pointer; min-width: 36px; }
+  .b:hover { background: rgba(255, 255, 255, .12); }
+  .b.is-on { border-color: rgba(34, 211, 238, .6); color: #fff; }
+  #prog { position: relative; flex: 1; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .09); cursor: pointer; }
+  #prog .part { position: absolute; top: 0; bottom: 0; opacity: .35; }
+  #prog .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 5px; }
+  #prog .tick { position: absolute; top: -3px; width: 2px; height: 16px; background: rgba(255, 255, 255, .28); }
+  #prog .gate { position: absolute; top: 1px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg);
+    background: #fff; opacity: .7; }
+  #time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 92px; text-align: right; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <div class="layer" id="L0"></div>
+    <div class="layer" id="L1"></div>
+    <div id="ov"></div>
+    <div id="hot" hidden><div class="spot"></div><div class="dot"></div><div class="tip"></div></div>
+    <div class="card" id="title">
+      <h1 id="t-title">Horizon</h1>
+      <p id="t-sub"></p>
+      <div class="who" id="t-who"></div>
+      <button type="button" id="start" disabled>Loading…</button>
+      <div class="keys">Click or Space to continue at each pause · ← → segments · C captions · P pauses · F full screen</div>
+    </div>
+    <div class="card" id="end" hidden>
+      <h1 id="e-title">Horizon</h1>
+      <p id="e-sub"></p>
+      <button type="button" id="replay">Replay</button>
+    </div>
+  </div>
+  <div id="cap"><span class="spk" id="spk"></span><div class="line" id="line"></div></div>
+  <div id="bar">
+    <button class="b" id="bPlay" title="Play or pause (Space)">▶</button>
+    <button class="b" id="bPrev" title="Previous segment (←)">⏮</button>
+    <button class="b" id="bNext" title="Next segment (→)">⏭</button>
+    <div id="prog"><div class="fill" id="fill"></div></div>
+    <span id="time">0:00 / 0:00</span>
+    <button class="b is-on" id="bCap" title="Captions (C)">CC</button>
+    <button class="b is-on" id="bGates" title="Stop at each pause (P)">Pauses</button>
+    <button class="b" id="bFull" title="Full screen (F)">⛶</button>
+  </div>
+</div>
+<script>
+'use strict';
+const DEMO = /*__DEMO__*/null;
+const AR = 16 / 9;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ease = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+const FR = DEMO.frames;
+const SB = DEMO.story;
+const VARS = { ...(DEMO.vars || {}) };
+VARS.event_short = String(VARS.event || '').split(':')[0];
+const fill = (s) => String(s || '').replace(/\{(\w+)\}/g, (_, k) => (VARS[k] ?? ''));
+const COLOR = { Shanshan: 'var(--shan)', Harjot: 'var(--harj)' };
+// ?video=1: the stage alone, full window, for rendering a video frame by frame.
+const VIDEO = new URLSearchParams(location.search).has('video');
+const norm = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}\-]/gu, '');
+const pageOf = (f) => f.page || `${f.kind}:${f.w}`;
+
+// ------------------------------------------------------------ the timeline
+let T0 = 0;
+const segs = SB.segments.map((s) => { const o = { ...s, cues: s.cues.map((c) => ({ ...c })), start: T0 }; T0 += s.dur; return o; });
+const TOTAL = T0;
+
+for (const s of segs) {
+  const words = s.text.split(/\s+/).filter(Boolean);
+  const [a, b] = s.speak || [0.2, s.dur - 0.25];
+  const wt = words.map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').length + 1.6
+    + (/[,:;]$/.test(w) ? 2.4 : 0) + (/[.!?]$/.test(w) ? 3.4 : 0));
+  const tot = wt.reduce((x, y) => x + y, 0);
+  let acc = 0;
+  s.words = words.map((w, i) => { const t = s.start + a + (b - a) * acc / tot; acc += wt[i]; return { w, t, key: norm(w) }; });
+  let from = 0;
+  for (const c of s.cues) {
+    if (c.at != null) { c.time = s.start + c.at; continue; }
+    const ph = c.word.split(/\s+/).map(norm);
+    const find = (start) => { for (let i = start; i <= s.words.length - ph.length; i++) {
+      if (ph.every((p, k) => s.words[i + k].key === p)) return i; } return -1; };
+    let hit = find(from);
+    if (hit < 0) hit = find(0);
+    if (hit < 0) { console.warn('cue word not found:', s.id, c.word); c.time = s.start; continue; }
+    from = hit;
+    c.time = clamp(s.words[hit].t - (c.lead ?? 0.25), s.start, s.start + s.dur - 0.05);
+  }
+}
+const cues = segs.flatMap((s) => s.cues.map((c) => ({ ...c, seg: s }))).sort((x, y) => x.time - y.time);
+
+// Frames: which one is on screen, from when, fading how long.
+const frameKeys = [];
+for (const c of cues) if (c.frame && FR[c.frame]) frameKeys.push({ time: c.time, frame: c.frame, fade: c.fade ?? 0.35 });
+if (!frameKeys.length || frameKeys[0].time > 0) frameKeys.unshift({ time: 0, frame: Object.keys(FR)[0], fade: 0 });
+const frameIdx = (t) => { let i = 0; for (let k = 0; k < frameKeys.length; k++) if (frameKeys[k].time <= t) i = k; return i; };
+const frameAt = (t) => FR[frameKeys[frameIdx(t)].frame];
+
+// The camera: a rectangle on the frame, in its CSS pixels.
+function phoneH(f) { return (f.targets.phone && f.targets.phone[3]) || 844; }
+function camRect(spec, f, prev) {
+  if (f.kind === 'phone') {
+    const ph = phoneH(f);
+    let y = 0;
+    if (spec && spec !== 'full') { const b = f.targets[spec.t]; if (!b) return prev || { x: 0, y: 0, w: f.w, h: ph, phone: true };
+      y = b[1] + b[3] / 2 - ph * 0.45; }
+    return { x: 0, y: clamp(y, 0, Math.max(0, f.h - ph)), w: f.w, h: ph, phone: true };
+  }
+  const full = { x: 0, y: 0, w: f.w, h: f.w / AR };
+  if (!spec || spec === 'full') return full;
+  if (spec.rect) { const [x, y, w] = spec.rect; return { x, y, w, h: w / AR }; }
+  const b = f.targets[spec.t];
+  if (!b) return prev || full;
+  let w;
+  if (spec.z) w = f.w / spec.z;
+  else { const p = spec.pad ?? 0.08; w = Math.max(b[2] * (1 + 2 * p), b[3] * (1 + 2 * p) * AR); }
+  w = clamp(w, f.w / 3.4, f.w);
+  const h = w / AR;
+  return { x: clamp(b[0] + b[2] / 2 - w / 2, 0, f.w - w), y: clamp(b[1] + b[3] / 2 - h / 2, 0, Math.max(0, f.h - h)), w, h };
+}
+function lerpRect(a, b, u) {
+  if (b.phone || a.phone) return { ...b, y: a.y + (b.y - a.y) * u };
+  const w = Math.exp(Math.log(a.w) + (Math.log(b.w) - Math.log(a.w)) * u);
+  const cx = a.x + a.w / 2 + ((b.x + b.w / 2) - (a.x + a.w / 2)) * u;
+  const cy = a.y + a.h / 2 + ((b.y + b.h / 2) - (a.y + a.h / 2)) * u;
+  return { x: cx - w / 2, y: cy - w / AR / 2, w, h: w / AR };
+}
+const camKeys = [];
+function camAt(t) {
+  let k = null;
+  for (const x of camKeys) { if (x.t0 <= t) k = x; else break; }
+  if (!k) return null;
+  const u = k.dur > 0 ? clamp((t - k.t0) / k.dur, 0, 1) : 1;
+  return lerpRect(k.from, k.to, ease(u));
+}
+{
+  // Every change of page gets a camera of its own, even if the story gave none.
+  const camCues = cues.filter((c) => c.cam).map((c) => ({ time: c.time, cam: c.cam, dur: c.dur ?? 0.9 }));
+  let lastPage = null;
+  for (const fk of frameKeys) {
+    const page = pageOf(FR[fk.frame]);
+    if (page !== lastPage && !camCues.some((c) => Math.abs(c.time - fk.time) < 1e-6)) camCues.push({ time: fk.time, cam: 'full', dur: 0 });
+    lastPage = page;
+  }
+  camCues.sort((x, y) => x.time - y.time);
+  let prevPage = null;
+  for (const c of camCues) {
+    const f = frameAt(c.time);
+    const page = pageOf(f);
+    const before = camAt(c.time);
+    const to = camRect(c.cam, f, before);
+    const from = before && prevPage === page ? before : to;
+    camKeys.push({ t0: c.time, dur: from === to ? 0 : c.dur, from, to, page });
+    prevPage = page;
+  }
+}
+
+// The cursor, clicks, rings and notes.
+const curKeys = [];
+{
+  let pos = null;
+  for (const c of cues) {
+    const target = c.click || c.cursor;
+    if (!target) continue;
+    const f = frameAt(c.time);
+    const b = f.targets[target];
+    if (!b) { console.warn('no target for cursor:', c.seg.id, target); continue; }
+    const to = { page: pageOf(f), x: b[0] + b[2] * 0.5, y: b[1] + b[3] * 0.55 };
+    const from = pos && pos.page === to.page ? pos : to;
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const dur = dist < 2 ? 0 : (c.click ? 0.35 : 0.55);
+    curKeys.push({ t0: c.time, dur, from, to, click: !!c.click, fresh: from === to && (!pos || pos.page !== to.page) });
+    pos = to;
+  }
+}
+const rings = [];
+const notes = [];
+for (const c of cues) {
+  if (c.ring) for (const t of [].concat(c.ring)) rings.push({ t0: c.time, t1: c.time + (c.hold ?? 1.9), t, tone: c.tone || '' });
+  if (c.note && c.note.text) notes.push({ t0: c.time + 0.1, t1: c.time + (c.hold ?? 2.3), t: c.note.t, text: fill(c.note.text) });
+}
+const gates = segs.filter((s) => s.pause).map((s) => ({ time: s.start + s.dur, seg: s, done: false }));
+
+// ------------------------------------------------------------ the stage
+const stage = $('stage');
+const ov = $('ov');
+const L = [$('L0'), $('L1')];
+let W = 1280;
+let H = 720;
+function layout() {
+  if (VIDEO) {
+    $('cap').hidden = true;
+    $('bar').hidden = true;
+    W = innerWidth;
+    H = Math.round(W / AR);
+    stage.style.width = `${W}px`;
+    stage.style.height = `${H}px`;
+    stage.style.borderRadius = '0';
+    mounted = [null, null];
+    return;
+  }
+  const capH = $('cap').hidden ? 0 : 70;
+  const availW = innerWidth - 32;
+  const availH = innerHeight - capH - 64 - 24;
+  W = Math.floor(Math.min(availW, availH * AR));
+  H = Math.floor(W / AR);
+  stage.style.width = `${W}px`;
+  stage.style.height = `${H}px`;
+  $('cap').style.width = `${W}px`;
+  $('bar').style.width = `${W}px`;
+  mounted = [null, null];
+}
+const imgs = {};
+let mounted = [null, null];
+function mount(layer, name) {
+  const el = L[layer];
+  if (mounted[layer] === name) return;
+  mounted[layer] = name;
+  el.innerHTML = '';
+  if (!name) return;
+  const f = FR[name];
+  const img = imgs[name];
+  if (f.kind === 'phone') {
+    const ph = phoneH(f);
+    const hs = H * 0.94;
+    const s = hs / ph;
+    const ws = f.w * s;
+    const box = document.createElement('div');
+    box.className = 'phone';
+    Object.assign(box.style, { left: `${(W - ws) / 2}px`, top: `${(H - hs) / 2}px`, width: `${ws}px`, height: `${hs}px`, borderRadius: `${30 * s}px` });
+    img.style.width = `${f.w}px`;
+    img.style.height = `${f.h}px`;
+    box.appendChild(img);
+    const bezel = document.createElement('div');
+    bezel.className = 'bezel';
+    Object.assign(bezel.style, { left: `${(W - ws) / 2}px`, top: `${(H - hs) / 2}px`, width: `${ws}px`, height: `${hs}px`, borderRadius: `${30 * s}px` });
+    el.append(box, bezel);
+    el.style.transform = 'none';
+    el._phone = { s, left: (W - ws) / 2, top: (H - hs) / 2 };
+  } else {
+    img.style.width = `${f.w}px`;
+    img.style.height = `${f.h}px`;
+    img.style.transform = 'none';
+    el.appendChild(img);
+    el._phone = null;
+  }
+}
+function place(layer, f, cam) {
+  const el = L[layer];
+  if (f.kind === 'phone') {
+    const p = el._phone;
+    const img = el.querySelector('img');
+    img.style.transform = `translateY(${-cam.y * p.s}px) scale(${p.s})`;
+    return;
+  }
+  const s = W / cam.w;
+  el.style.transform = `translate(${-cam.x * s}px, ${-cam.y * s}px) scale(${s})`;
+}
+function toScreen(f, cam, x, y) {
+  if (f.kind === 'phone') {
+    const s = H * 0.94 / phoneH(f);
+    return { x: (W - f.w * s) / 2 + x * s, y: (H - H * 0.94) / 2 + (y - cam.y) * s, s };
+  }
+  const s = W / cam.w;
+  return { x: (x - cam.x) * s, y: (y - cam.y) * s, s };
+}
+function boxOnScreen(f, cam, b, pad = 6) {
+  const p = toScreen(f, cam, b[0], b[1]);
+  return { x: p.x - pad, y: p.y - pad, w: b[2] * p.s + 2 * pad, h: b[3] * p.s + 2 * pad };
+}
+
+const cursor = document.createElement('div');
+cursor.id = 'cursor';
+cursor.innerHTML = '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M4 2.5l15 9.2-6.6 1.4 3.8 7.4-2.9 1.4-3.7-7.5L4.9 19z" fill="#fff" stroke="#0b1020" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+
+// ------------------------------------------------------------ one frame of video
+let t = 0;
+let playing = false;
+let gated = null;
+let started = false;
+let gatesOn = true;
+function render(now) {
+  const i = frameIdx(now);
+  const cur = frameKeys[i];
+  const f = FR[cur.frame];
+  const cam = camAt(now) || camRect('full', f);
+  const u = cur.fade > 0 ? clamp((now - cur.time) / cur.fade, 0, 1) : 1;
+  const prev = i > 0 && u < 1 ? frameKeys[i - 1] : null;
+  // Layer 1 is the frame on screen, layer 0 the one it is fading in over.
+  mount(1, cur.frame);
+  mount(0, prev ? prev.frame : null);
+  place(1, f, cam);
+  L[1].style.opacity = String(ease(u));
+  if (prev) {
+    const pf = FR[prev.frame];
+    const pcam = pageOf(pf) === pageOf(f) ? cam : (camAt(cur.time - 1e-3) || camRect('full', pf));
+    place(0, pf, pcam);
+    L[0].style.opacity = '1';
+  }
+
+  let html = '';
+  for (const r of rings) {
+    if (now < r.t0 || now > r.t1) continue;
+    const b = f.targets[r.t];
+    if (!b) continue;
+    const s = boxOnScreen(f, cam, b, 7);
+    const a = Math.min(1, (now - r.t0) / 0.2, (r.t1 - now) / 0.35);
+    html += `<div class="ring ${r.tone}" style="left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;opacity:${a}"></div>`;
+  }
+  for (const n of notes) {
+    if (now < n.t0 || now > n.t1) continue;
+    const b = f.targets[n.t];
+    if (!b) continue;
+    const s = boxOnScreen(f, cam, b, 10);
+    const below = s.y < 60;
+    const x = clamp(s.x + s.w / 2, 120, W - 120);
+    const y = below ? s.y + s.h + 12 : s.y - 12;
+    const a = Math.min(1, (now - n.t0) / 0.25, (n.t1 - now) / 0.35);
+    html += `<div class="note${below ? ' below' : ''}" style="left:${x}px;top:${y}px;opacity:${a}">${escHTML(n.text)}</div>`;
+  }
+  // The cursor, and a ripple where it clicks.
+  let k = null;
+  for (const x of curKeys) { if (x.t0 <= now) k = x; else break; }
+  if (k && k.to.page === pageOf(f)) {
+    const v = k.dur > 0 ? ease(clamp((now - k.t0) / k.dur, 0, 1)) : 1;
+    const x = k.from.x + (k.to.x - k.from.x) * v;
+    const y = k.from.y + (k.to.y - k.from.y) * v;
+    const p = toScreen(f, cam, x, y);
+    const fadeIn = k.fresh ? clamp((now - k.t0) / 0.25, 0, 1) : 1;
+    // An idle cursor steps out of the way of what the camera shows.
+    const idle = now - (k.t0 + k.dur + (k.click ? 0.6 : 0));
+    const fadeOut = idle > 1.5 ? clamp(1 - (idle - 1.5) / 0.5, 0, 1) : 1;
+    cursor.style.transform = `translate(${p.x}px, ${p.y}px)`;
+    cursor.style.opacity = String(fadeIn * fadeOut);
+    if (!cursor.isConnected) ov.appendChild(cursor);
+    for (const c of curKeys) {
+      if (!c.click) continue;
+      const at = c.t0 + c.dur;
+      if (now < at || now > at + 0.6 || c.to.page !== pageOf(f)) continue;
+      const q = toScreen(f, cam, c.to.x, c.to.y);
+      const g = (now - at) / 0.6;
+      html += `<div class="ripple" style="left:${q.x}px;top:${q.y}px;transform:scale(${1 + g * 2.6});opacity:${1 - g}"></div>`;
+    }
+  } else {
+    cursor.style.opacity = '0';
+  }
+  const keep = cursor.isConnected ? cursor : null;
+  ov.innerHTML = html;
+  if (keep) ov.appendChild(keep);
+
+  // The pause: a lit hotspot on what gets clicked next.
+  const hot = $('hot');
+  if (gated) {
+    const b = f.targets[gated.seg.pause.t];
+    const s = b ? boxOnScreen(f, cam, b, 8) : { x: W / 2 - 60, y: H - 120, w: 120, h: 40 };
+    const spot = hot.querySelector('.spot');
+    Object.assign(spot.style, { left: `${s.x}px`, top: `${s.y}px`, width: `${s.w}px`, height: `${s.h}px` });
+    const dot = hot.querySelector('.dot');
+    Object.assign(dot.style, { left: `${s.x + s.w / 2}px`, top: `${s.y + s.h / 2}px` });
+    const tip = hot.querySelector('.tip');
+    const below = s.y + s.h + 70 < H;
+    tip.innerHTML = `${escHTML(fill(gated.seg.pause.label))}<small>Click to continue</small>`;
+    Object.assign(tip.style, { left: `${clamp(s.x + s.w / 2, 150, W - 150)}px`, top: `${below ? s.y + s.h + 14 : Math.max(8, s.y - 64)}px` });
+    hot.hidden = false;
+  } else {
+    hot.hidden = true;
+  }
+
+  // Captions: the line being spoken, word by word.
+  const seg = segs.find((s) => now >= s.start && now < s.start + s.dur) || segs[segs.length - 1];
+  if (seg !== render.seg) {
+    render.seg = seg;
+    $('spk').textContent = `${seg.speaker} · ${SB.parts[seg.speaker] || ''}`;
+    $('spk').style.color = COLOR[seg.speaker] || '#fff';
+    $('line').innerHTML = seg.words.map((w, j) => `<span class="w" data-j="${j}">${escHTML(w.w)}</span>`).join(' ');
+  }
+  const spans = $('line').children;
+  seg.words.forEach((w, j) => {
+    const on = now >= w.t;
+    const nowWord = on && (j === seg.words.length - 1 || now < seg.words[j + 1].t);
+    spans[j].className = `w${on ? ' on' : ''}${nowWord && playing && !gated ? ' now' : ''}`;
+  });
+
+  // Lower third when a speaker starts.
+  const first = segs.find((s) => s.speaker === seg.speaker);
+  const third = stage.querySelector('.third');
+  if (now - first.start < 3.2 && started) {
+    if (!third || third.dataset.who !== seg.speaker) {
+      if (third) third.remove();
+      const el = document.createElement('div');
+      el.className = 'third';
+      el.dataset.who = seg.speaker;
+      el.style.setProperty('--c', COLOR[seg.speaker]);
+      el.innerHTML = `<b>${escHTML(seg.speaker)}</b><span>${escHTML(SB.parts[seg.speaker] || '')}</span>`;
+      stage.appendChild(el);
+    }
+    stage.querySelector('.third').style.opacity = String(Math.min(1, (now - first.start) / 0.3, (3.2 - (now - first.start)) / 0.4));
+  } else if (third) {
+    third.remove();
+  }
+
+  $('fill').style.width = `${(now / TOTAL) * 100}%`;
+  $('time').textContent = `${mmss(now)} / ${mmss(TOTAL)}`;
+  $('bPlay').textContent = playing && !gated ? '❚❚' : '▶';
+}
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const escHTML = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let lastTs = null;
+function tick(ts) {
+  if (playing && !gated) {
+    const dt = lastTs == null ? 0 : Math.min(0.1, (ts - lastTs) / 1000);
+    let nt = t + dt;
+    if (gatesOn) {
+      const g = gates.find((x) => !x.done && x.time > t - 1e-6 && x.time <= nt);
+      if (g) { nt = g.time; gated = g; }
+    }
+    t = Math.min(nt, TOTAL);
+    if (t >= TOTAL) { playing = false; $('end').hidden = false; }
+  }
+  lastTs = ts;
+  render(t);
+  requestAnimationFrame(tick);
+}
+
+// ------------------------------------------------------------ controls
+function go() {
+  if (!started) return;
+  if (gated) { gated.done = true; gated = null; playing = true; return; }
+  if (t >= TOTAL) { seek(0); playing = true; return; }
+  playing = !playing;
+}
+function seek(to) {
+  t = clamp(to, 0, TOTAL);
+  gated = null;
+  for (const g of gates) g.done = g.time < t - 1e-6;
+  $('end').hidden = t < TOTAL;
+}
+function segStart(dir) {
+  const i = segs.findIndex((s) => t >= s.start && t < s.start + s.dur);
+  const cur = i < 0 ? segs.length - 1 : i;
+  if (dir < 0) seek(t - segs[cur].start > 1 ? segs[cur].start : segs[Math.max(0, cur - 1)].start);
+  else seek(cur + 1 < segs.length ? segs[cur + 1].start : TOTAL);
+  // Arriving at a segment is arriving past its gate: the click already happened.
+  for (const g of gates) if (Math.abs(g.time - t) < 1e-6) g.done = true;
+}
+function start() {
+  if (!$('start').disabled) { $('title').hidden = true; started = true; seek(0); playing = true; }
+}
+$('start').addEventListener('click', start);
+$('replay').addEventListener('click', () => { seek(0); playing = true; });
+$('bPlay').addEventListener('click', () => (started ? go() : start()));
+$('bPrev').addEventListener('click', () => segStart(-1));
+$('bNext').addEventListener('click', () => segStart(1));
+$('bCap').addEventListener('click', () => { $('cap').hidden = !$('cap').hidden; $('bCap').classList.toggle('is-on', !$('cap').hidden); layout(); });
+$('bGates').addEventListener('click', () => { gatesOn = !gatesOn; $('bGates').classList.toggle('is-on', gatesOn); if (!gatesOn && gated) go(); });
+$('bFull').addEventListener('click', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()));
+stage.addEventListener('click', (e) => { if (e.target.closest('.card')) return; if (started) go(); });
+$('prog').addEventListener('click', (e) => {
+  const r = $('prog').getBoundingClientRect();
+  seek(((e.clientX - r.left) / r.width) * TOTAL);
+});
+addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); started ? go() : start(); }
+  else if (e.key === 'ArrowRight') { if (gated) go(); else segStart(1); }
+  else if (e.key === 'ArrowLeft') segStart(-1);
+  else if (e.key === 'c' || e.key === 'C') $('bCap').click();
+  else if (e.key === 'p' || e.key === 'P') $('bGates').click();
+  else if (e.key === 'f' || e.key === 'F') $('bFull').click();
+  else if (e.key === 'r' || e.key === 'R' || e.key === 'Home') { seek(0); playing = started; }
+});
+addEventListener('resize', layout);
+
+// Progress bar: the two parts, a tick per segment, a diamond per pause.
+{
+  const prog = $('prog');
+  for (const s of segs) {
+    const tick = document.createElement('div');
+    tick.className = 'tick';
+    tick.style.left = `${(s.start / TOTAL) * 100}%`;
+    prog.appendChild(tick);
+  }
+  for (const who of Object.keys(SB.parts)) {
+    const mine = segs.filter((s) => s.speaker === who);
+    if (!mine.length) continue;
+    const a = mine[0].start;
+    const b = mine[mine.length - 1].start + mine[mine.length - 1].dur;
+    const band = document.createElement('div');
+    band.className = 'part';
+    Object.assign(band.style, { left: `${(a / TOTAL) * 100}%`, width: `${((b - a) / TOTAL) * 100}%`, background: COLOR[who] });
+    band.title = `${who}: ${mmss(b - a)}`;
+    prog.prepend(band);
+  }
+  for (const g of gates) {
+    const d = document.createElement('div');
+    d.className = 'gate';
+    d.style.left = `${(g.time / TOTAL) * 100}%`;
+    d.title = g.seg.pause.label;
+    prog.appendChild(d);
+  }
+}
+
+$('t-title').textContent = SB.title;
+$('e-title').textContent = SB.title;
+$('t-sub').textContent = SB.subtitle || '';
+$('e-sub').textContent = SB.subtitle || '';
+$('t-who').innerHTML = Object.entries(SB.parts).map(([who, part]) => {
+  const d = segs.filter((s) => s.speaker === who).reduce((x, s) => x + s.dur, 0);
+  return `<span><b style="color:${COLOR[who]}">${escHTML(who)}</b> · ${escHTML(part)} · ${mmss(d)}</span>`;
+}).join('');
+
+// For a headless check: seek, look, and list the cues that found nothing.
+window.__demo = {
+  total: TOTAL,
+  segments: segs.map((s) => ({ id: s.id, start: s.start, dur: s.dur, pause: !!s.pause })),
+  seek(to) { if (!started) { $('title').hidden = true; started = true; } seek(to); playing = false; if (VIDEO) $('end').hidden = true; render(t); },
+  gate(id) { const g = gates.find((x) => x.seg.id === id); if (g) { seek(g.time); gated = g; render(t); } },
+  missing() {
+    const out = [];
+    for (const c of cues) {
+      const f = frameAt(c.time);
+      const want = [c.cam && c.cam.t, c.click, c.cursor, ...[].concat(c.ring || []), c.note && c.note.t].filter(Boolean);
+      for (const w of want) if (!f.targets[w]) out.push(`${c.seg.id} ${c.word || `@${c.at}`}: ${w} not in ${frameKeys[frameIdx(c.time)].frame}`);
+    }
+    for (const g of gates) { const f = frameAt(g.time - 1e-3); if (!f.targets[g.seg.pause.t]) out.push(`${g.seg.id} pause: ${g.seg.pause.t}`); }
+    return out;
+  },
+};
+
+layout();
+Promise.all(Object.entries(FR).map(([name, f]) => {
+  const img = new Image();
+  img.decoding = 'async';
+  img.draggable = false;
+  img.alt = name;
+  img.src = f.src;
+  imgs[name] = img;
+  return img.decode().catch(() => null);
+})).then(() => {
+  $('start').disabled = false;
+  $('start').textContent = `Start · ${mmss(TOTAL)} plus pauses`;
+});
+render(0);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

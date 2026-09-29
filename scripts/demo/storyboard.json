@@ -1,0 +1,1371 @@
+{
+  "title": "Horizon",
+  "subtitle": "Supply chain risk radar · Sika Innovathon 2026",
+  "parts": {
+    "Shanshan": "The dynamic map",
+    "Harjot": "Solutions, architecture and AI"
+  },
+  "segments": [
+    {
+      "id": "S1a",
+      "speaker": "Shanshan",
+      "dur": 5.0,
+      "text": "The dynamic map is the main interface for situation awareness.",
+      "cues": [
+        {
+          "at": 0,
+          "frame": "board",
+          "cam": "full",
+          "dur": 0
+        },
+        {
+          "word": "dynamic map",
+          "cam": {
+            "t": "map",
+            "pad": 0.01
+          },
+          "dur": 1.5
+        },
+        {
+          "word": "situation awareness",
+          "cam": {
+            "t": "ladder",
+            "z": 2.3
+          },
+          "dur": 1.0,
+          "ring": "ladder",
+          "note": {
+            "t": "ladder",
+            "text": "Every route, ranked by how soon someone must decide"
+          }
+        },
+        {
+          "at": 4.2,
+          "cam": {
+            "t": "card",
+            "z": 1.9
+          },
+          "dur": 0.8,
+          "cursor": "card_open"
+        }
+      ],
+      "pause": {
+        "t": "card_open",
+        "label": "Open the critical route"
+      }
+    },
+    {
+      "id": "S1b",
+      "speaker": "Shanshan",
+      "dur": 7.0,
+      "speak": [
+        0.45,
+        6.8
+      ],
+      "text": "It brings together vessels, shipping routes, ports, warehouses, and real-time or predicted disruptions in one view.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "card_open"
+        },
+        {
+          "at": 0.4,
+          "frame": "route",
+          "cam": {
+            "t": "map",
+            "pad": 0.01
+          },
+          "dur": 0.8
+        },
+        {
+          "word": "vessels",
+          "cam": {
+            "t": "vessels",
+            "z": 2.3
+          },
+          "dur": 0.7,
+          "ring": "vessels",
+          "hold": 1.4
+        },
+        {
+          "word": "shipping routes",
+          "cam": {
+            "t": "map",
+            "pad": 0.01
+          },
+          "dur": 1.1,
+          "note": {
+            "t": "lane",
+            "text": "The route, stop by stop"
+          },
+          "hold": 1.6
+        },
+        {
+          "word": "ports",
+          "ring": [
+            "ports",
+            "ctx_ports"
+          ],
+          "hold": 1.4
+        },
+        {
+          "word": "warehouses",
+          "ring": [
+            "stock",
+            "ctx_inv"
+          ],
+          "hold": 1.4,
+          "note": {
+            "t": "ctx_inv",
+            "text": "Plants, depots, partner warehouses"
+          }
+        },
+        {
+          "word": "real-time or predicted",
+          "cam": {
+            "t": "happening",
+            "z": 2.2
+          },
+          "dur": 0.9,
+          "ring": "happening",
+          "note": {
+            "t": "happening",
+            "text": "Detected live, with its trend"
+          }
+        },
+        {
+          "word": "in one view",
+          "cam": "full",
+          "dur": 1.0
+        }
+      ]
+    },
+    {
+      "id": "S2a",
+      "speaker": "Shanshan",
+      "dur": 5.8,
+      "text": "When a disruption is detected, Horizon identifies which routes and vessels may be affected.",
+      "cues": [
+        {
+          "word": "disruption is detected",
+          "cam": {
+            "t": "chip",
+            "z": 2.6
+          },
+          "dur": 0.8,
+          "ring": "chip"
+        },
+        {
+          "word": "which routes",
+          "cam": {
+            "t": "title",
+            "z": 2.1
+          },
+          "dur": 0.7,
+          "ring": "title"
+        },
+        {
+          "word": "vessels may be affected",
+          "cam": {
+            "t": "who_hit",
+            "z": 2.3
+          },
+          "dur": 0.7,
+          "ring": "who_hit"
+        },
+        {
+          "at": 5.1,
+          "cam": {
+            "t": "tab_ships",
+            "z": 2.0
+          },
+          "dur": 0.6,
+          "cursor": "tab_ships"
+        }
+      ],
+      "pause": {
+        "t": "tab_ships",
+        "label": "Open Shipments"
+      }
+    },
+    {
+      "id": "S2b",
+      "speaker": "Shanshan",
+      "dur": 6.0,
+      "speak": [
+        0.45,
+        5.8
+      ],
+      "text": "But the impact is not the same for every vessel, even on the same route.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "tab_ships"
+        },
+        {
+          "at": 0.35,
+          "frame": "ships_mid",
+          "cam": {
+            "t": "rows_mid",
+            "pad": 0.04
+          },
+          "dur": 0.8
+        },
+        {
+          "word": "not the same",
+          "ring": "rows_major",
+          "tone": "red",
+          "note": {
+            "t": "status_major",
+            "text": "Misses the promised date"
+          }
+        },
+        {
+          "word": "every vessel",
+          "ring": "rows_nominal",
+          "tone": "green",
+          "note": {
+            "t": "status_nominal",
+            "text": "Same stretch, still on time"
+          }
+        },
+        {
+          "word": "same route",
+          "cam": {
+            "t": "leg_shared",
+            "z": 2.7
+          },
+          "dur": 0.7,
+          "ring": "leg_shared"
+        }
+      ]
+    },
+    {
+      "id": "S2c",
+      "speaker": "Shanshan",
+      "dur": 7.6,
+      "speak": [
+        0.9,
+        7.2
+      ],
+      "text": "Based on each vessel's current position, route, ETA, disruption timing, and downstream inventory, Horizon evaluates the impact individually.",
+      "cues": [
+        {
+          "at": 0,
+          "frame": "ships_top",
+          "fade": 0.3,
+          "cam": {
+            "t": "row",
+            "z": 1.9
+          },
+          "dur": 0.5
+        },
+        {
+          "at": 0.3,
+          "click": "row_main"
+        },
+        {
+          "at": 0.8,
+          "frame": "card",
+          "cam": {
+            "t": "scard",
+            "pad": 0.03
+          },
+          "dur": 0.7
+        },
+        {
+          "word": "current position",
+          "ring": [
+            "leg_now",
+            "prog"
+          ],
+          "hold": 1.3
+        },
+        {
+          "word": "route",
+          "ring": "jour",
+          "hold": 1.2
+        },
+        {
+          "word": "ETA",
+          "ring": "tile_plan",
+          "hold": 1.2
+        },
+        {
+          "word": "disruption timing",
+          "ring": "leg_risk",
+          "hold": 1.4,
+          "note": {
+            "t": "leg_risk",
+            "text": "Where and when it hits"
+          }
+        },
+        {
+          "word": "downstream inventory",
+          "ring": "tile_risk",
+          "hold": 1.6,
+          "note": {
+            "t": "tile_risk",
+            "text": "Cost at the customer if stock runs out"
+          }
+        },
+        {
+          "word": "evaluates the impact individually",
+          "ring": "sways",
+          "hold": 1.6
+        },
+        {
+          "at": 7.1,
+          "cam": {
+            "t": "map",
+            "pad": 0.01
+          },
+          "dur": 0.5,
+          "cursor": "hazard"
+        }
+      ],
+      "pause": {
+        "t": "hazard",
+        "label": "Zoom into the affected area"
+      }
+    },
+    {
+      "id": "S3",
+      "speaker": "Shanshan",
+      "dur": 8.0,
+      "text": "The map then zooms into the affected area, highlights the vessels at risk, and shows their routes and disruption information.",
+      "cues": [
+        {
+          "word": "zooms into the affected area",
+          "cam": {
+            "t": "hazard",
+            "z": 2.5
+          },
+          "dur": 1.3,
+          "ring": "hazard",
+          "note": {
+            "t": "hazard",
+            "text": "{event_short}"
+          }
+        },
+        {
+          "word": "highlights the vessels at risk",
+          "cam": {
+            "t": "sel",
+            "z": 2.5
+          },
+          "dur": 0.9,
+          "ring": "sel",
+          "note": {
+            "t": "sel",
+            "text": "{vessel}"
+          }
+        },
+        {
+          "word": "shows their routes",
+          "cam": {
+            "t": "routes_all",
+            "pad": 0.08
+          },
+          "dur": 0.9,
+          "ring": [
+            "badge1",
+            "badge2"
+          ]
+        },
+        {
+          "word": "disruption information",
+          "cam": {
+            "t": "hub_head",
+            "z": 2.3
+          },
+          "dur": 0.8,
+          "ring": "hub_head"
+        }
+      ]
+    },
+    {
+      "id": "S4a",
+      "speaker": "Shanshan",
+      "dur": 7.4,
+      "text": "For each affected vessel, Horizon can also evaluate alternative ports and routes, including sea, rail, and road connections.",
+      "cues": [
+        {
+          "word": "alternative ports and routes",
+          "cam": {
+            "t": "hub_alts",
+            "z": 2.5
+          },
+          "dur": 0.8,
+          "ring": "hub_alts"
+        },
+        {
+          "word": "including sea",
+          "lead": 0.5,
+          "cam": {
+            "t": "routes_all",
+            "pad": 0.06
+          },
+          "dur": 0.8
+        },
+        {
+          "word": "sea",
+          "ring": "jm_dest",
+          "hold": 1.4,
+          "note": {
+            "t": "jm_dest",
+            "text": "Seaport"
+          }
+        },
+        {
+          "word": "rail",
+          "ring": "badge1",
+          "hold": 1.6,
+          "note": {
+            "t": "badge1",
+            "text": "#1 {alt1}"
+          }
+        },
+        {
+          "word": "road connections",
+          "ring": [
+            "badge2",
+            "ctx_links"
+          ],
+          "hold": 1.8,
+          "note": {
+            "t": "badge2",
+            "text": "#2 {alt2}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "S4b",
+      "speaker": "Shanshan",
+      "dur": 13.2,
+      "text": "This turns the map from a monitoring tool into an intuitive interface that helps planners clearly see where and when disruptions occur, which shipments are at risk, and what alternative options are available.",
+      "cues": [
+        {
+          "word": "This turns the map",
+          "cam": "full",
+          "dur": 1.6
+        },
+        {
+          "word": "where",
+          "ring": "hazard",
+          "note": {
+            "t": "hazard",
+            "text": "Where"
+          }
+        },
+        {
+          "word": "when disruptions occur",
+          "ring": "leg_risk",
+          "note": {
+            "t": "leg_risk",
+            "text": "When: the stretch it hits"
+          }
+        },
+        {
+          "word": "which shipments are at risk",
+          "ring": [
+            "row",
+            "tab_ships"
+          ],
+          "note": {
+            "t": "tab_ships",
+            "text": "Which shipments"
+          }
+        },
+        {
+          "word": "alternative options",
+          "ring": [
+            "hub_alts",
+            "sways"
+          ],
+          "note": {
+            "t": "hub_alts",
+            "text": "What the options are"
+          }
+        },
+        {
+          "at": 12.4,
+          "cam": {
+            "t": "hub",
+            "pad": 0.05
+          },
+          "dur": 0.8,
+          "cursor": "hub_sliders"
+        }
+      ],
+      "pause": {
+        "t": "hub_sliders",
+        "label": "Over to Harjot: solutions, architecture and AI"
+      }
+    },
+    {
+      "id": "H1",
+      "speaker": "Harjot",
+      "dur": 12.0,
+      "text": "From here, planners act. The Hub ranks every way by time, cost and risk, a smart split rushes the urgent boxes while the rest stay put, and it lists partner carriers nearby.",
+      "cues": [
+        {
+          "word": "ranks every way",
+          "cam": {
+            "t": "hub_sliders",
+            "z": 2.7
+          },
+          "dur": 0.8,
+          "ring": "hub_sliders",
+          "note": {
+            "t": "hub_sliders",
+            "text": "Your weights: time, cost, risk"
+          }
+        },
+        {
+          "word": "smart split",
+          "lead": 1.0,
+          "frame": "hub_split0",
+          "fade": 0.3,
+          "cam": {
+            "t": "split_sec",
+            "z": 2.3
+          },
+          "dur": 0.6
+        },
+        {
+          "word": "smart split",
+          "lead": 0.2,
+          "click": "split_toggle"
+        },
+        {
+          "word": "rushes",
+          "frame": "hub_split",
+          "cam": {
+            "t": "split_sec",
+            "z": 2.1
+          },
+          "dur": 0.4
+        },
+        {
+          "word": "urgent boxes",
+          "cam": {
+            "t": "split_boxes",
+            "z": 2.8
+          },
+          "dur": 0.5,
+          "ring": "split_urgent",
+          "note": {
+            "t": "split_boxes",
+            "text": "{moved} of {boxes} boxes move, most urgent first"
+          }
+        },
+        {
+          "word": "the rest stay put",
+          "cam": {
+            "t": "branches",
+            "pad": 0.6
+          },
+          "dur": 0.8,
+          "ring": [
+            "branch_a",
+            "branch_b"
+          ]
+        },
+        {
+          "word": "partner carriers nearby",
+          "frame": "hub_partners",
+          "fade": 0.3,
+          "cam": {
+            "t": "partners",
+            "z": 2.2
+          },
+          "dur": 0.6,
+          "ring": "partner_1"
+        },
+        {
+          "at": 11.3,
+          "cam": {
+            "t": "btn_tree",
+            "z": 1.9
+          },
+          "dur": 0.6,
+          "cursor": "btn_tree"
+        }
+      ],
+      "pause": {
+        "t": "btn_tree",
+        "label": "Open the decision tree"
+      }
+    },
+    {
+      "id": "H2a",
+      "speaker": "Harjot",
+      "dur": 12.2,
+      "speak": [
+        0.5,
+        12.0
+      ],
+      "text": "The decision tree turns this into a decision: key accounts first, each way with arrival, extra cost and CO₂e, the cost of doing nothing, with penalties, then sign-off and one-click booking,",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "btn_tree"
+        },
+        {
+          "at": 0.35,
+          "frame": "tree",
+          "fade": 0.45,
+          "cam": "full",
+          "dur": 0
+        },
+        {
+          "word": "key accounts first",
+          "cam": {
+            "t": "keys",
+            "pad": 0.1
+          },
+          "dur": 0.8,
+          "ring": [
+            "key_1",
+            "key_2"
+          ],
+          "note": {
+            "t": "key_1",
+            "text": "Key accounts first"
+          }
+        },
+        {
+          "word": "each way",
+          "cam": {
+            "t": "opt_best",
+            "z": 2.6
+          },
+          "dur": 0.7,
+          "ring": "opt_best"
+        },
+        {
+          "word": "arrival",
+          "ring": "opt_best_date"
+        },
+        {
+          "word": "extra cost",
+          "ring": "opt_best_cost"
+        },
+        {
+          "word": "CO₂e",
+          "cam": {
+            "t": "opt_best_co2",
+            "z": 2.8
+          },
+          "dur": 0.5,
+          "ring": "opt_best_co2",
+          "note": {
+            "t": "opt_best_co2",
+            "text": "Lowest CO₂e of the ways"
+          }
+        },
+        {
+          "word": "cost of doing nothing",
+          "frame": "tree_cost",
+          "fade": 0.3,
+          "cam": {
+            "t": "cost_block",
+            "z": 2.4
+          },
+          "dur": 0.6,
+          "ring": "cost_block"
+        },
+        {
+          "word": "with penalties",
+          "lead": 0.5,
+          "click": "pen_toggle"
+        },
+        {
+          "word": "penalties",
+          "frame": "tree_cost_pen",
+          "ring": "pen_row"
+        },
+        {
+          "word": "then sign-off",
+          "lead": 0.5,
+          "frame": "tree_book",
+          "fade": 0.4,
+          "cam": {
+            "t": "sign_box",
+            "z": 2.4
+          },
+          "dur": 0.6,
+          "ring": "sign_box",
+          "note": {
+            "t": "sign_box",
+            "text": "Within your sign-off limit"
+          }
+        },
+        {
+          "word": "one-click booking",
+          "cam": {
+            "t": "book_btn",
+            "z": 2.6
+          },
+          "dur": 0.6,
+          "cursor": "book_btn"
+        }
+      ],
+      "pause": {
+        "t": "book_btn",
+        "label": "Book it"
+      }
+    },
+    {
+      "id": "H2b",
+      "speaker": "Harjot",
+      "dur": 2.0,
+      "speak": [
+        0.3,
+        1.9
+      ],
+      "text": "with fifteen minutes to undo.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "book_btn"
+        },
+        {
+          "at": 0.3,
+          "frame": "tree_booked",
+          "cam": {
+            "t": "undo_btn",
+            "z": 2.6
+          },
+          "dur": 0.5,
+          "ring": "undo_btn",
+          "note": {
+            "t": "undo_btn",
+            "text": "Undo within 15 minutes"
+          }
+        }
+      ]
+    },
+    {
+      "id": "H3",
+      "speaker": "Harjot",
+      "dur": 8.6,
+      "text": "Every shipment has its own page: each vehicle, each box by deadline, its risk matrix and its risk-in-effect radar: severity, category, impact.",
+      "cues": [
+        {
+          "at": 0,
+          "frame": "ship_page",
+          "fade": 0.45,
+          "cam": "full",
+          "dur": 0
+        },
+        {
+          "word": "each vehicle",
+          "cam": {
+            "t": "strs",
+            "pad": 0.04
+          },
+          "dur": 0.7,
+          "ring": [
+            "unit_cur",
+            "unit_wait"
+          ],
+          "note": {
+            "t": "unit_wait",
+            "text": "Grey: not reached yet"
+          }
+        },
+        {
+          "word": "each box by deadline",
+          "cam": {
+            "t": "boxes",
+            "pad": 0.04
+          },
+          "dur": 0.6,
+          "ring": "box_crit",
+          "note": {
+            "t": "box_crit",
+            "text": "Critical boxes marked"
+          }
+        },
+        {
+          "word": "risk matrix",
+          "cam": {
+            "t": "matrix",
+            "pad": 0.05
+          },
+          "dur": 0.8,
+          "ring": "matrix_dot"
+        },
+        {
+          "word": "risk-in-effect radar",
+          "cam": {
+            "t": "radars",
+            "pad": 0.05
+          },
+          "dur": 0.7,
+          "ring": "radar_m"
+        },
+        {
+          "word": "severity",
+          "ring": "radar_legend"
+        },
+        {
+          "word": "category, impact",
+          "ring": "gauge_1",
+          "note": {
+            "t": "gauge_1",
+            "text": "Category and days of delay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "H4",
+      "speaker": "Harjot",
+      "dur": 6.4,
+      "text": "Drivers and skippers report from the road in a simple app, straight onto their vehicle.",
+      "cues": [
+        {
+          "at": 0,
+          "frame": "drv_form",
+          "fade": 0.45,
+          "cam": "full",
+          "dur": 0
+        },
+        {
+          "word": "report from the road",
+          "ring": [
+            "st_queued",
+            "f_position"
+          ],
+          "hold": 1.4
+        },
+        {
+          "at": 1.8,
+          "cam": {
+            "t": "dv_send"
+          },
+          "dur": 0.5
+        },
+        {
+          "at": 2.35,
+          "click": "dv_send"
+        },
+        {
+          "at": 2.7,
+          "frame": "drv_sent",
+          "cam": {
+            "t": "dv_log"
+          },
+          "dur": 0.4,
+          "ring": "dv_log",
+          "hold": 1.0
+        },
+        {
+          "word": "straight onto their vehicle",
+          "frame": "ship_report",
+          "fade": 0.4,
+          "cam": {
+            "t": "rep_1",
+            "pad": 0.05
+          },
+          "dur": 0.6,
+          "ring": "rep_1",
+          "note": {
+            "t": "rep_1",
+            "text": "Filed from {vessel}"
+          }
+        },
+        {
+          "at": 5.8,
+          "frame": "board",
+          "fade": 0.35,
+          "cam": {
+            "t": "link_profile",
+            "z": 2.0
+          },
+          "dur": 0.4,
+          "cursor": "link_profile"
+        }
+      ],
+      "pause": {
+        "t": "link_profile",
+        "label": "Under the hood: the sources"
+      }
+    },
+    {
+      "id": "H5",
+      "speaker": "Harjot",
+      "dur": 8.0,
+      "speak": [
+        0.45,
+        7.4
+      ],
+      "text": "Under the hood, Horizon reads sixteen sources: free public APIs, custom connectors for our own data, and commercial feeds once licensed.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "link_profile"
+        },
+        {
+          "at": 0.35,
+          "frame": "prof_top",
+          "fade": 0.4,
+          "cam": "full",
+          "dur": 0
+        },
+        {
+          "word": "sixteen sources",
+          "cam": {
+            "t": "src_count",
+            "z": 2.4
+          },
+          "dur": 0.7,
+          "ring": "src_count"
+        },
+        {
+          "word": "free public APIs",
+          "cam": {
+            "t": "src_free_row",
+            "pad": 0.03
+          },
+          "dur": 0.6,
+          "ring": "src_free"
+        },
+        {
+          "word": "custom connectors",
+          "cam": {
+            "t": "src_custom",
+            "pad": 0.03
+          },
+          "dur": 0.6,
+          "ring": "src_custom",
+          "note": {
+            "t": "src_custom",
+            "text": "Our own exports, read as files"
+          }
+        },
+        {
+          "word": "commercial feeds",
+          "frame": "prof_absent",
+          "fade": 0.35,
+          "cam": {
+            "t": "src_paid",
+            "pad": 0.06
+          },
+          "dur": 0.6,
+          "ring": "src_ais",
+          "note": {
+            "t": "src_ais",
+            "text": "Commercial: plugs in once licensed"
+          }
+        },
+        {
+          "at": 7.5,
+          "frame": "prof_top",
+          "fade": 0.3,
+          "cam": {
+            "t": "prof_back",
+            "z": 2.2
+          },
+          "dur": 0.4,
+          "cursor": "prof_back"
+        }
+      ],
+      "pause": {
+        "t": "prof_back",
+        "label": "Back to the board: the signals"
+      }
+    },
+    {
+      "id": "H6",
+      "speaker": "Harjot",
+      "dur": 19.0,
+      "speak": [
+        1.5,
+        18.4
+      ],
+      "text": "Two AI layers read them: one triages out the noise, one extracts the event, predictable, like a gauge or a forecast, or sudden, like a closure or a blockade. Unusual activity counts too: bursts of small orders or carrier push-outs flag a crisis days early, tied to the route they hit.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "prof_back"
+        },
+        {
+          "at": 0.35,
+          "frame": "board",
+          "fade": 0.4,
+          "cam": {
+            "t": "tab_signals",
+            "z": 1.8
+          },
+          "dur": 0.4,
+          "cursor": "tab_signals"
+        },
+        {
+          "at": 0.7,
+          "click": "tab_signals"
+        },
+        {
+          "at": 0.95,
+          "frame": "sig_funnel",
+          "cam": {
+            "t": "funnel",
+            "pad": 0.05
+          },
+          "dur": 0.6
+        },
+        {
+          "word": "Two AI layers",
+          "cam": {
+            "t": "st_ai",
+            "z": 2.5
+          },
+          "dur": 0.7,
+          "ring": "st_ai",
+          "note": {
+            "t": "st_ai",
+            "text": "Layer 1 triage, layer 2 extraction"
+          }
+        },
+        {
+          "word": "triages out the noise",
+          "cam": {
+            "t": "funnel",
+            "pad": 0.06
+          },
+          "dur": 0.7,
+          "ring": "kept"
+        },
+        {
+          "word": "extracts the event",
+          "cam": {
+            "t": "ev_first",
+            "z": 2.4
+          },
+          "dur": 0.6,
+          "ring": "ev_first"
+        },
+        {
+          "word": "predictable",
+          "cam": {
+            "t": "ev_predict",
+            "pad": 0.12
+          },
+          "dur": 0.6,
+          "ring": [
+            "ev_gauge",
+            "ev_forecast"
+          ],
+          "note": {
+            "t": "ev_gauge",
+            "text": "Measured: gauges and forecasts"
+          }
+        },
+        {
+          "word": "sudden",
+          "cam": {
+            "t": "ev_sudden_rows",
+            "pad": 0.08
+          },
+          "dur": 0.6,
+          "ring": [
+            "ev_sudden",
+            "ev_closure"
+          ],
+          "note": {
+            "t": "ev_sudden",
+            "text": "Reported: news and closures"
+          },
+          "frame": "sig_rows",
+          "fade": 0.3
+        },
+        {
+          "word": "Unusual activity",
+          "frame": "sig_top",
+          "fade": 0.35,
+          "cam": {
+            "t": "ews",
+            "pad": 0.06
+          },
+          "dur": 0.7
+        },
+        {
+          "word": "bursts of small orders",
+          "cam": {
+            "t": "burst",
+            "z": 2.5
+          },
+          "dur": 0.6,
+          "ring": "burst"
+        },
+        {
+          "word": "carrier push-outs",
+          "cam": {
+            "t": "pushout",
+            "z": 2.5
+          },
+          "dur": 0.6,
+          "ring": "pushout"
+        },
+        {
+          "word": "crisis days early",
+          "note": {
+            "t": "pushout",
+            "text": "No official notice yet"
+          }
+        },
+        {
+          "word": "tied to the route",
+          "lead": 0.6,
+          "click": "vol_btn"
+        },
+        {
+          "word": "route they hit",
+          "frame": "volume",
+          "cam": {
+            "t": "vol_area",
+            "pad": 0.12
+          },
+          "dur": 0.7,
+          "ring": [
+            "vol_row",
+            "surge_chip"
+          ]
+        },
+        {
+          "at": 18.3,
+          "cam": {
+            "t": "ask_btn",
+            "z": 2.2
+          },
+          "dur": 0.5,
+          "cursor": "ask_btn"
+        }
+      ],
+      "pause": {
+        "t": "ask_btn",
+        "label": "Ask the AI"
+      }
+    },
+    {
+      "id": "H7",
+      "speaker": "Harjot",
+      "dur": 6.4,
+      "speak": [
+        1.0,
+        6.0
+      ],
+      "text": "Ask anything: answers come from the board's own numbers, with a free local AI for open questions.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "ask_btn"
+        },
+        {
+          "at": 0.35,
+          "frame": "ask0",
+          "cam": {
+            "t": "ask_panel",
+            "pad": 0.06
+          },
+          "dur": 0.5,
+          "cursor": "chip_2"
+        },
+        {
+          "at": 0.9,
+          "click": "chip_2"
+        },
+        {
+          "at": 1.2,
+          "frame": "ask1",
+          "cam": {
+            "t": "ask_a_head",
+            "pad": 0.12
+          },
+          "dur": 0.6
+        },
+        {
+          "word": "board's own numbers",
+          "ring": "ask_tag"
+        },
+        {
+          "word": "free local AI",
+          "note": {
+            "t": "ask_tag",
+            "text": "A local model: nothing leaves the machine"
+          }
+        },
+        {
+          "at": 5.8,
+          "cam": {
+            "t": "tab_allhands",
+            "z": 2.0
+          },
+          "dur": 0.5,
+          "cursor": "tab_allhands"
+        }
+      ]
+    },
+    {
+      "id": "H8",
+      "speaker": "Harjot",
+      "dur": 5.8,
+      "speak": [
+        0.4,
+        5.3
+      ],
+      "text": "When limits are crossed, the all-hands goes daily and every department confirms with one click.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "tab_allhands"
+        },
+        {
+          "at": 0.3,
+          "frame": "ah",
+          "cam": {
+            "t": "ah_tiles",
+            "pad": 0.05
+          },
+          "dur": 0.5
+        },
+        {
+          "word": "limits are crossed",
+          "ring": "ah_tile1"
+        },
+        {
+          "word": "goes daily",
+          "cam": {
+            "t": "ah_meets",
+            "z": 2.5
+          },
+          "dur": 0.5,
+          "ring": "ah_meets"
+        },
+        {
+          "word": "every department",
+          "cam": {
+            "t": "rsvp",
+            "z": 2.6
+          },
+          "dur": 0.5,
+          "click": "rsvp_dot1"
+        },
+        {
+          "word": "confirms",
+          "frame": "ah_card",
+          "cursor": "rsvp_yes"
+        },
+        {
+          "word": "one click",
+          "click": "rsvp_yes"
+        },
+        {
+          "word": "click",
+          "lead": -0.25,
+          "frame": "ah_conf",
+          "ring": "rsvp",
+          "note": {
+            "t": "rsvp",
+            "text": "Confirmed"
+          }
+        },
+        {
+          "at": 5.35,
+          "cam": {
+            "t": "alerts_btn",
+            "z": 2.0
+          },
+          "dur": 0.4,
+          "cursor": "alerts_btn"
+        }
+      ],
+      "pause": {
+        "t": "alerts_btn",
+        "label": "Alerts, the summary, the case"
+      }
+    },
+    {
+      "id": "H9",
+      "speaker": "Harjot",
+      "dur": 9.6,
+      "speak": [
+        0.4,
+        9.2
+      ],
+      "text": "Critical alerts reach your phone, the summary goes out as a PDF, and every closed case feeds the risk ledger. From signal to decision, in minutes.",
+      "cues": [
+        {
+          "at": 0.05,
+          "click": "alerts_btn"
+        },
+        {
+          "at": 0.3,
+          "frame": "alerts",
+          "cam": {
+            "t": "al_pop",
+            "pad": 0.08
+          },
+          "dur": 0.5
+        },
+        {
+          "word": "reach your phone",
+          "ring": "al_red"
+        },
+        {
+          "word": "summary goes out",
+          "frame": "esc",
+          "fade": 0.4,
+          "cam": {
+            "t": "pdf_btn",
+            "z": 2.4
+          },
+          "dur": 0.6,
+          "ring": "pdf_btn"
+        },
+        {
+          "word": "every closed case",
+          "frame": "case0",
+          "fade": 0.35,
+          "cam": {
+            "t": "case_pick",
+            "z": 2.2
+          },
+          "dur": 0.6,
+          "cursor": "case_opt1"
+        },
+        {
+          "word": "feeds",
+          "click": "case_opt1"
+        },
+        {
+          "word": "risk ledger",
+          "lead": 0.35,
+          "frame": "ledger",
+          "fade": 0.4,
+          "cam": {
+            "t": "ledger_row",
+            "pad": 0.05
+          },
+          "dur": 0.5,
+          "ring": "ledger_row",
+          "note": {
+            "t": "ledger_row",
+            "text": "Closed: into the risk ledger"
+          }
+        },
+        {
+          "word": "From signal to decision",
+          "frame": "final",
+          "fade": 0.6,
+          "cam": "full",
+          "dur": 1.4
+        }
+      ]
+    }
+  ]
+}
