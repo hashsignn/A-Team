@@ -282,6 +282,7 @@ def test_stage_one_then_stage_two_produces_a_challenged_event(config, monkeypatc
     monkeypatch.setattr(llm, "parse", fake_parse)
     monkeypatch.setattr(llm, "detect", lambda *a, **k: llm.BackendStatus(
         backend=llm.Backend.LOCAL, model="stub", detail="stub", unlocks_if_connected=""))
+    monkeypatch.setenv(llm.BOARD_ENV, "1")
 
     kept, cost = F.triage([dict(RESCUE_ITEM)])
     assert cost.passed_triage == 1
@@ -309,6 +310,7 @@ def test_a_fabricated_quote_is_refused_by_the_challenger(config, monkeypatch):
                         if model is F.Triage else bad)
     monkeypatch.setattr(llm, "detect", lambda *a, **k: llm.BackendStatus(
         backend=llm.Backend.LOCAL, model="stub", detail="stub", unlocks_if_connected=""))
+    monkeypatch.setenv(llm.BOARD_ENV, "1")
 
     assert _rescue_event(dict(RESCUE_ITEM), config, None, AS_OF) is None
 
@@ -323,6 +325,7 @@ def test_an_invented_variable_id_is_refused(config, monkeypatch):
                         if model is F.Triage else bad)
     monkeypatch.setattr(llm, "detect", lambda *a, **k: llm.BackendStatus(
         backend=llm.Backend.LOCAL, model="stub", detail="stub", unlocks_if_connected=""))
+    monkeypatch.setenv(llm.BOARD_ENV, "1")
 
     assert _rescue_event(dict(RESCUE_ITEM), config, None, AS_OF) is None
 
@@ -340,6 +343,7 @@ def test_a_triage_no_means_stage_two_never_runs(config, monkeypatch):
     monkeypatch.setattr(llm, "parse", fake_parse)
     monkeypatch.setattr(llm, "detect", lambda *a, **k: llm.BackendStatus(
         backend=llm.Backend.LOCAL, model="stub", detail="stub", unlocks_if_connected=""))
+    monkeypatch.setenv(llm.BOARD_ENV, "1")
 
     kept, cost = F.triage([dict(RESCUE_ITEM)])
     assert kept == []

@@ -150,6 +150,34 @@ def test_the_free_local_model_is_still_used_when_it_is_running(
     assert llm.detect().backend is llm.Backend.LOCAL
 
 
+def test_a_running_local_model_answers_ask_but_never_reads_the_board(monkeypatch):
+    """Qwen is there to chat about the board. The board reads the news with
+    the router and the answers recorded earlier: a live model on every
+    headline of every board build kept a Codespace on "Loading" for minutes.
+    RADAR_LLM_BOARD=1 (the recorder sets it) is the only way to let it read."""
+    from engine.reason import extract as E  # noqa: PLC0415
+    from engine.reason import funnel as F  # noqa: PLC0415
+
+    monkeypatch.delenv(llm.BOARD_ENV, raising=False)
+    monkeypatch.delenv("RADAR_LLM_BACKEND", raising=False)
+    monkeypatch.setattr(llm, "_ollama_reachable", lambda: True)
+    live: list[str] = []
+    monkeypatch.setattr(llm, "_call_local", lambda *a, **k: live.append("call") or "{}")
+
+    assert llm.detect().backend is llm.Backend.LOCAL, "Ask still uses it"
+    assert not llm.board_status().available
+
+    item = {"item_id": "x", "headline": "Strait closed to all shipping", "source": "wire",
+            "source_nature": "news", "text": "Strait closed to all shipping"}
+    kept, _cost = F.triage([dict(item)])
+    assert kept, "without a model the funnel fails open, it drops nothing"
+    assert E.extract(dict(item), load_config(), Clock.at("2026-09-26T23:00:00+00:00")) is None
+    assert live == [], "the board called the live model"
+
+    monkeypatch.setenv(llm.BOARD_ENV, "1")
+    assert llm.board_status().backend is llm.Backend.LOCAL
+
+
 def test_the_paid_socket_is_still_shown_as_something_to_attach(
     monkeypatch, key_in_environment,
 ):

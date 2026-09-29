@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import sys
 from pathlib import Path
@@ -198,6 +199,8 @@ def main() -> int:
             print(line)
         return 2
 
+    # Recording is the one run where the board's reading uses the live model.
+    os.environ[llm.BOARD_ENV] = "1"
     status = llm.detect()
     print(f"backend : {status.backend.value}")
     print(f"model   : {status.model or '—'}")

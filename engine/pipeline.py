@@ -1287,7 +1287,11 @@ def _add_absent_sockets(bundle: IngestBundle, clock: Clock) -> None:
             status=(
                 FeedStatus.CONNECTED if model.available else FeedStatus.ABSENT
             ),
-            detail=model.detail,
+            # Running is not the same as reading the board: by default a
+            # local model answers Ask only (engine/reason/llm.board_status).
+            detail=(model.detail if not model.available or llm_mod.board_uses_model()
+                    else f"{model.detail}: answers Ask. The board reads with the "
+                         f"router and recorded answers ({llm_mod.BOARD_ENV}=1 to read live)"),
             unlocks_if_connected=model.unlocks_if_connected,
             retrieved_at=clock.as_of,
         )

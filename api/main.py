@@ -956,20 +956,24 @@ def model_status() -> JSONResponse:
     from engine.reason import funnel as funnel_mod  # noqa: PLC0415
 
     status = llm_mod.detect()
+    # The model that runs (for Ask) and the one the board reads with are
+    # two answers: by default the board uses recorded answers only.
+    board = llm_mod.board_status()
     payload = dict(llm_mod.report(status))
+    payload["board_reads_live"] = board.available
     payload["stages"] = {
         "triage": {
-            "model": llm_mod.TRIAGE_MODEL if status.available else None,
+            "model": llm_mod.TRIAGE_MODEL if board.available else None,
             "job": "one yes/no per headline: could this affect freight?",
             "may": "remove an item from the queue, and nothing else",
         },
         "extract": {
-            "model": llm_mod.EXTRACT_MODEL if status.available else None,
+            "model": llm_mod.EXTRACT_MODEL if board.available else None,
             "job": "read one survivor and return structured JSON",
             "may": "claim what happened, where and for how long, never score it",
         },
     }
-    payload["funnel"] = funnel_mod.report(funnel_mod.FunnelCost(), status)["note"]
+    payload["funnel"] = funnel_mod.report(funnel_mod.FunnelCost(), board)["note"]
 
     # Recorded answers replay without a model. Reported here because a board
     # running off a recording and one running off a live model are different

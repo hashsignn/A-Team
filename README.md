@@ -327,7 +327,11 @@ like the field reports.
 ### Run it on your laptop with Qwen 2.5 (free, local)
 
 Ask answers from the board without any model. For free-form questions, run
-Qwen 2.5 locally through Ollama. Nothing leaves the machine.
+Qwen 2.5 locally through Ollama. Nothing leaves the machine, and nothing is
+billed. Qwen only chats about the board: the board itself is read by the
+router and the answers recorded earlier, so it loads as fast with Qwen
+running as without (`RADAR_LLM_BOARD=1` lets a live model read the news too,
+which takes minutes per board on a laptop).
 
 ```bash
 # 1. Horizon itself (once)

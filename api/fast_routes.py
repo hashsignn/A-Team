@@ -409,10 +409,12 @@ def signals(
         "sources": sources,
         "model": {
             **llm_mod.report(status),
-            "triage": llm_mod.TRIAGE_MODEL if status.available else None,
-            "extract": llm_mod.EXTRACT_MODEL if status.available else None,
+            # What the board read with: by default recorded answers, not the
+            # model that answers Ask (engine/reason/llm.board_status).
+            "triage": llm_mod.TRIAGE_MODEL if llm_mod.board_status().available else None,
+            "extract": llm_mod.EXTRACT_MODEL if llm_mod.board_status().available else None,
             "funnel_note": funnel_mod.report(
-                funnel_mod.FunnelCost(), status)["note"],
+                funnel_mod.FunnelCost(), llm_mod.board_status())["note"],
             # A recording is a third state between "a model is reading this"
             # and "nothing is". It has to be visible as its own thing, or a
             # replayed board looks like a live one.

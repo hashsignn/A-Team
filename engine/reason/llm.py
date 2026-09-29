@@ -222,6 +222,33 @@ def detect(override: str | None = None) -> BackendStatus:
     )
 
 
+# The board reads the news with the deterministic router and the answers
+# recorded earlier (data/reasoning). A live model reading every headline on
+# each board build takes minutes on a laptop or a Codespace, and the board
+# waits for it: a local model is for Ask. RADAR_LLM_BOARD=1 lets the board
+# read with it too; scripts/record_reasoning.py sets it to record answers.
+BOARD_ENV = "RADAR_LLM_BOARD"
+
+
+def board_uses_model() -> bool:
+    return os.environ.get(BOARD_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def board_status() -> BackendStatus:
+    """The model the board's own reading (triage, extraction) may call live.
+
+    None unless RADAR_LLM_BOARD=1. Recorded answers still replay without it:
+    they were read once, and cost nothing to read again."""
+    if board_uses_model():
+        return detect()
+    return BackendStatus(
+        Backend.NONE, None,
+        f"the board reads with the router and recorded answers; set {BOARD_ENV}=1 "
+        "to let a live model read the news too",
+        "",
+    )
+
+
 # ---------------------------------------------------------------------
 # Calling
 # ---------------------------------------------------------------------
@@ -399,10 +426,11 @@ def ask_text(
             body = json.dumps({
                 "model": model or LOCAL_MODEL,
                 "stream": False,
-                # A context window big enough for the board brief (Ollama's
-                # default can cut the prompt without a word), and a short
-                # answer, which is also a quick one on a laptop.
-                "options": {"temperature": 0.1, "num_ctx": 8192, "num_predict": 400},
+                # A context window big enough for the board brief (about
+                # 1,200 tokens; Ollama's default can cut a prompt without a
+                # word), and a short answer, which is also a quick one on a
+                # 2-core Codespace.
+                "options": {"temperature": 0.1, "num_ctx": 4096, "num_predict": 300},
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt},

@@ -148,7 +148,7 @@ def extract(
     item is nothing, so the item is dropped and counted. A dropped item that is
     counted is recoverable. A dropped item that is silent is not.
     """
-    status = status or llm.detect()
+    status = status or llm.board_status()
     prompt = build_prompt(item, config, clock)
 
     # A recording answers this exact question, so the stage runs on a machine

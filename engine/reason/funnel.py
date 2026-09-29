@@ -227,7 +227,7 @@ def triage(
     cost.seen = len(items)
     cost.instruments = len(measured)
 
-    status = status or llm.detect()
+    status = status or llm.board_status()
     # A recording answers the same questions a live model would, so the stage
     # runs when either is available. Without both, it fails open.
     replay = cache.report()["available"]
@@ -292,7 +292,7 @@ def _triage_prompt(item: dict) -> str:
 
 def report(cost: FunnelCost, status: llm.BackendStatus | None = None) -> dict:
     """What /inputs and /api/model render."""
-    status = status or llm.detect()
+    status = status or llm.board_status()
     return {
         "counts": cost.as_dict(),
         "sentence": cost.sentence(),
