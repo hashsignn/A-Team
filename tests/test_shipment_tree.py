@@ -329,17 +329,35 @@ def test_a_shipments_legs_are_its_row_of_the_route_page(ships):
 
 
 def test_the_shipment_page_is_that_shipment_only(ships):
-    """Its vehicles cover its legs in order, one per run of a mode; its
-    matrix dots are its own points in the route's events; its radars are
-    cut to the events that touch it; and its figures are the board's."""
+    """Its stretches cover its legs in order, one per run of a mode, with
+    every vehicle on each (a truck per 40 ft box or pair of 20s, one barge,
+    one ship) and every box on each stretch; before the current stretch is
+    done, after it is waiting; its matrix dots are its own points in the
+    route's events; its radars are cut to the events that touch it."""
+    from engine.fleet import manifest  # noqa: PLC0415
+
     board = main._board(AS_OF, SHIPMENTS)
+    context = main._context(AS_OF, SHIPMENTS)
     for sid, d in list(ships.items())[:12]:
         v = body(main.shipment_detail(sid, as_of=AS_OF, shipments=SHIPMENTS))
         assert v["shipment_id"] == sid and v["route_id"] == d["route_id"]
-        legs = [leg for veh in v["vehicles"] for leg in veh["legs"]]
+        legs = [leg for s in v["stretches"] for leg in s["legs"]]
         assert [leg["index"] for leg in legs] == list(range(len(legs))), sid
-        for a, b in zip(v["vehicles"], v["vehicles"][1:], strict=False):
-            assert a["mode"] != b["mode"], (sid, "two cards for one vehicle")
+        for a, b in zip(v["stretches"], v["stretches"][1:], strict=False):
+            assert a["mode"] != b["mode"], (sid, "one mode split in two")
+        shipment = next(s for s in context.shipments if s.shipment_id == sid)
+        boxes = manifest.containers(shipment)
+        states = [s["state"] for s in v["stretches"]]
+        live = [i for i, st in enumerate(states) if st not in ("done", "waiting")]
+        if live:
+            assert all(st == "done" for st in states[:live[0]]) and all(st == "waiting" for st in states[live[0] + 1:]), (sid, states)
+        for s in v["stretches"]:
+            expected = manifest.load(shipment, s["first"], boxes)["vehicles"]["count"]
+            assert len(s["units"]) == expected, (sid, s["mode"])
+            carried = sorted(b["container_id"] for u in s["units"] for b in u["boxes"])
+            assert carried == sorted(b["container_id"] for b in boxes), (sid, s["mode"])
+            assert len({u["asset_id"] for u in s["units"]}) == len(s["units"]), sid
+        assert v["vehicles"] == sum(len(s["units"]) for s in v["stretches"])
         route = next(r for r in board["routes"] if r["route_id"] == v["route_id"])
         mine = {e["event_id"]: p for e in route["events"]
                 for p in (e.get("matrix") or {}).get("points") or [] if p["shipment_id"] == sid}
@@ -349,6 +367,33 @@ def test_the_shipment_page_is_that_shipment_only(ships):
         if v["events"]:
             assert v["stats"]["loss_chf"] == max(p["expected_loss_chf"] for p in mine.values())
         assert v["radar_measured"]["axes"] and "series" in v["radar_reported"], sid
+
+
+def test_a_report_lands_on_the_vehicle_it_came_from(monkeypatch):
+    """Named: on that vehicle, the second truck of four if it says so. Not
+    named: on the vehicle carrying the freight when it was seen."""
+    from engine.export import route as route_mod  # noqa: PLC0415
+
+    board = main._board(AS_OF, SHIPMENTS)
+    context = main._context(AS_OF, SHIPMENTS)
+    base = route_mod.shipment_view(board, context, "SYN-0041") or {}
+    if not base or len(base["stretches"]) < 2 or len(base["stretches"][0]["units"]) < 2:
+        pytest.skip("the demo shipment is not a convoy then a second stretch here")
+    second_truck = base["stretches"][0]["units"][1]["asset_id"]
+    later = base["stretches"][1]
+    reports = [
+        {"report_id": "a", "shipment_id": "SYN-0041", "status": "held", "load_state": "intact",
+         "observed_at": base["stretches"][0]["departs"], "vehicle_id": second_truck},
+        {"report_id": "b", "shipment_id": "SYN-0041", "status": "moving", "load_state": "intact",
+         "observed_at": later["departs"], "vehicle_id": None},
+    ]
+    monkeypatch.setattr(route_mod, "_reports_for", lambda sid, ctx: [dict(r) for r in reports])
+    v = route_mod.shipment_view(board, context, "SYN-0041")
+    on = {u["asset_id"]: [r["report_id"] for r in u["reports"]] for s in v["stretches"] for u in s["units"]}
+    assert on[second_truck] == ["a"]
+    assert on[v["stretches"][1]["units"][0]["asset_id"]] == ["b"]
+    placed = v["stretches"][1]["units"][0]["reports"][0]
+    assert placed["placed_by_time"] is True
 
 
 def test_an_unknown_shipment_page_is_a_404():

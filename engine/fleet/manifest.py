@@ -113,9 +113,13 @@ def vehicle(shipment: Shipment, leg_index: int) -> dict:
     the same barge, and one ship sails Rotterdam through Suez to Shanghai.
     So identity is per run of same-mode legs.
     """
+    rng = _rng(shipment.shipment_id, "vehicle", _run_start(shipment, leg_index))
+    return _identity(shipment, leg_index, rng)
+
+
+def _identity(shipment: Shipment, leg_index: int, rng: random.Random) -> dict:
     leg = shipment.legs[leg_index]
     mode = leg.mode.value
-    rng = _rng(shipment.shipment_id, "vehicle", _run_start(shipment, leg_index))
     names = VEHICLE_NAMES.get(mode, ["Vehicle"])
     base = rng.choice(names)
     number = rng.randint(1000, 9999)
@@ -138,6 +142,38 @@ def vehicle(shipment: Shipment, leg_index: int) -> dict:
         "crew": {"name": rng.choice(CREW), "role": CREW_ROLE.get(mode, "Operator")},
         "synthetic": True,
     }
+
+
+def convoy(shipment: Shipment, leg_index: int, boxes: list[dict]) -> list[dict]:
+    """Every vehicle on this leg, each with the boxes it carries.
+
+    A road leg is a convoy: one truck per 40 ft box, or per two 20s, the
+    count load() gives. Every other mode is one vehicle for all of them. The
+    first is the one the map shows; the rest are seeded apart, so each truck
+    has its own plate and driver, the same on every screen.
+    """
+    lead = vehicle(shipment, leg_index)
+    if lead["mode"] != "road":
+        return [lead | {"containers": [b["container_id"] for b in boxes], "teu": teu_of(boxes)}]
+    loads: list[list[dict]] = []
+    pair: list[dict] = []
+    for box in boxes:
+        if int(box["teu"]) >= 2:
+            loads.append([box])
+            continue
+        pair.append(box)
+        if len(pair) == 2:
+            loads.append(pair)
+            pair = []
+    if pair or not loads:
+        loads.append(pair)
+    start = _run_start(shipment, leg_index)
+    out = []
+    for k, carried in enumerate(loads):
+        truck = lead if k == 0 else _identity(
+            shipment, leg_index, _rng(shipment.shipment_id, "vehicle", start, "truck", k))
+        out.append(truck | {"containers": [b["container_id"] for b in carried], "teu": teu_of(carried)})
+    return out
 
 
 def containers(shipment: Shipment) -> list[dict]:

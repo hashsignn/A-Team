@@ -30,7 +30,6 @@ const GLYPH = {
 };
 const icon = (mode) => `<svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH[mode] || GLYPH.road}</svg>`;
 const STATUS = { ok: 'clear', at_risk: 'at risk', affected: 'hit now' };
-const PHASE = { done: 'done', now: 'now', ahead: 'next' };
 
 function qs(extra = {}) {
   const q = new URLSearchParams();
@@ -64,44 +63,87 @@ function progress(v) {
     <div class="sp-prog-n"><b>${p.percent}%</b> · ${km(p.travelled_km)} done · <b>${km(p.remaining_km)}</b> to go</div>`;
 }
 
-/* One card per vehicle: the truck, the barge, the ship. A run of legs in
- * one mode is one vehicle; its stretches are the pills under it. */
-function vehicles(v) {
-  $('sp-vehs').innerHTML = v.vehicles.map((x) => `
-    <article class="sp-veh sp-veh--${esc(x.status)}${x.phase === 'now' ? ' is-now' : ''}${x.phase === 'done' ? ' is-done' : ''}">
-      <header>
-        <span class="sp-veh-i" title="${esc(STATUS[x.status] || x.status)}">${icon(x.mode)}</span>
-        <span class="sp-veh-n"><b>${esc(x.vehicle)}</b><span class="mono">${esc(x.asset_id)}</span></span>
-        <span class="sp-phase sp-phase--${esc(x.phase)}">${esc(PHASE[x.phase] || x.phase)}</span>
-      </header>
-      <div class="sp-veh-way"><b>${esc(place(x.from))}</b> → <b>${esc(place(x.to))}</b></div>
-      <div class="sp-veh-nums">
-        <span title="Distance">${km(x.km)}</span>
-        <span title="Planned departure → planned arrival">${dayMon(x.departs)} → ${dayMon(x.arrives)}</span>
+/* The journey as stretches (the road to Basel, the Rhine, the sea), each
+ * with every vehicle on it: the four trucks one by one, the barge, the
+ * ship. Grey: the shipment has not reached it yet. A click opens it. */
+const STATE_TONE = { done: 'done', waiting: 'wait' };
+let DATA = null;
+let OPEN = null;
+
+function unitTone(s) { return STATE_TONE[s.state] || s.status; }
+
+function stretches(v) {
+  $('sp-veh-n').textContent = String(v.vehicles);
+  $('sp-strs').innerHTML = v.stretches.map((s, si) => `
+    <div class="sp-str sp-str--${esc(unitTone(s))}">
+      <div class="sp-str-head">
+        <span class="sp-str-way"><b>${esc(place(s.from))}</b> → <b>${esc(place(s.to))}</b></span>
+        <span class="sp-str-n">${km(s.km)} · ${dayMon(s.departs)} → ${dayMon(s.arrives)}</span>
+        <span class="sp-state sp-state--${esc(s.state)}">${esc(s.state_word)}</span>
+        <span class="sp-str-legs">${s.legs.map((l) => `<span class="sleg sleg--${esc(l.status)}"
+          title="${esc(place(l.from))} → ${esc(place(l.to))} · ${km(l.km)} · ${esc(STATUS[l.status] || l.status)}">${esc(place(l.to))}</span>`).join('')}</span>
       </div>
-      <div class="sp-veh-legs">${x.legs.map((l) => `<span class="sleg sleg--${esc(l.status)}"
-          title="${esc(place(l.from))} → ${esc(place(l.to))} · ${km(l.km)} · ${esc(STATUS[l.status] || l.status)}">${esc(place(l.to))}</span>`).join('')}</div>
-      <footer title="${esc(x.carrier || '')}">${esc(x.crew.name)} · ${esc(x.crew.role)}</footer>
-    </article>`).join('');
+      <div class="sp-units">${s.units.map((u, ui) => `
+        <button type="button" class="sp-unit sp-unit--${esc(unitTone(s))}${OPEN === u.asset_id ? ' is-open' : ''}"
+                data-unit="${esc(u.asset_id)}" data-s="${si}" data-u="${ui}" aria-expanded="${OPEN === u.asset_id}"
+                title="${esc(u.name)} · ${esc(s.state_word)}">
+          <span class="sp-unit-i">${icon(u.mode)}</span>
+          <span class="sp-unit-n"><b>${esc(u.name)}</b><span class="mono">${esc(u.asset_id)}</span></span>
+          <span class="sp-unit-teu">${u.ours_teu} TEU</span>
+          ${u.reports.length ? `<span class="sp-unit-rep" title="Field reports from it">${u.reports.length}</span>` : ''}
+        </button>`).join('')}</div>
+    </div>`).join('');
+  document.querySelectorAll('.sp-unit').forEach((btn) => btn.addEventListener('click', () => {
+    OPEN = OPEN === btn.dataset.unit ? null : btn.dataset.unit;
+    stretches(DATA);
+    unitCard(DATA, +btn.dataset.s, +btn.dataset.u);
+  }));
 }
 
-function where(v) {
-  const pos = v.position || {};
-  const c = (p) => (p ? `${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}` : '–');
-  $('sp-where').innerHTML = `planned <b>${esc(c(pos.planned))}</b> · seen <b>${esc(c(pos.seen))}</b>${
-    pos.drift_km != null ? ` · <b class="${pos.drift_km > 50 ? 'drift-bad' : ''}">${pos.drift_km} km</b> off plan` : ''}`;
+/* One vehicle: what it carries, who runs it, where it is, what it said. */
+function unitCard(v, si, ui, scroll = true) {
+  const host = $('sp-unit');
+  if (!OPEN) { host.hidden = true; host.innerHTML = ''; return; }
+  const s = v.stretches[si];
+  const u = s.units[ui];
+  const pos = u.position;
+  const c = (p) => (p ? `${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : '–');
+  const tile = (value, k, why = '') => `<div class="sp-t" title="${esc(why)}"><b>${value}</b><span>${esc(k)}</span></div>`;
+  const report = new URLSearchParams({ shipment: v.shipment_id, vehicle: u.asset_id });
+  host.hidden = false;
+  host.innerHTML = `
+    <header>
+      <span class="sp-unit-i sp-unit--${esc(unitTone(s))}">${icon(u.mode)}</span>
+      <span class="sp-unit-n"><b>${esc(u.name)}</b><span class="mono">${esc(u.asset_id)} · ${esc(u.crew.name)}, ${esc(u.crew.role)}${u.crew.verified ? ' ✓' : ''}</span></span>
+      <span class="sp-state sp-state--${esc(s.state)}">${esc(s.state_word)}</span>
+    </header>
+    <div class="sp-ts">
+      ${tile(`${u.ours_teu} TEU`, 'ours on it')}
+      ${tile(u.mode === 'road' ? `${u.capacity_teu} TEU` : `${u.loaded_teu}/${u.capacity_teu}`, u.mode === 'road' ? 'truck holds' : 'TEU loaded', u.mode === 'road' ? '' : 'Loaded of capacity, with other shippers\' freight')}
+      ${u.usable_teu != null ? tile(`${u.usable_teu} TEU`, 'usable now', 'What the water level lets it carry today') : ''}
+      ${tile(String(u.boxes.length), u.boxes.length === 1 ? 'box' : 'boxes')}
+      ${pos ? tile(pos.drift_km == null ? '–' : `${pos.drift_km} km`, 'off plan', 'Last reported position against the planned one') : tile(dayMon(s.departs), s.state === 'done' ? 'left' : 'leaves')}
+    </div>
+    <div class="sp-bxs">${u.boxes.map((b) => `<span class="sp-bx${b.priority === 'critical' ? ' is-crit' : ''}"
+        title="${esc(b.content)} · ${b.gross_t} t · ${esc(b.priority)} · due ${esc(dayMon(b.deadline))}">${b.priority === 'critical' ? '<i></i>' : ''}<span class="mono">${esc(b.container_id)}</span> ${b.size_ft}' · ${esc(dayMon(b.deadline))}</span>`).join('')}</div>
+    ${pos ? `<p class="sp-pos">planned <b>${esc(c(pos.planned))}</b> · last seen <b>${esc(c(pos.seen))}</b></p>` : ''}
+    <div class="sp-reps">
+      <div class="sp-reps-h"><b>Reports from it</b> <span class="rtab-n">${u.reports.length || ''}</span>
+        <a class="ctl ctl--mini" href="/driver?${report}" target="_blank" rel="noopener">File one from ${esc(u.name)}</a></div>
+      ${u.reports.length ? `<div class="rep-list">${u.reports.map(reportHTML).join('')}</div>` : '<p class="muted sp-none">None yet.</p>'}
+    </div>`;
+  if (scroll) host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-function reports(v) {
-  const n = (v.reports || []).length;
-  $('sp-rep-n').textContent = n ? String(n) : '';
-  $('sp-reports').innerHTML = n ? `<div class="rep-list">${v.reports.map((r) => `
+function reportHTML(r) {
+  return `
     <div class="rep">
       <div class="rep-top">
         <span class="tag ${r.load_state === 'damaged' ? 'tag--warn' : 'tag--ok'}">${esc(r.status)}</span>
         <b>${esc(r.role_label || 'on site')}</b>
         <span class="muted">${esc(String(r.observed_at).slice(0, 16).replace('T', ' '))} UTC</span>
         ${r.first_hand === false ? '<span class="tag tag--off">second hand</span>' : ''}
+        ${r.placed_by_time ? '<span class="tag tag--off" title="The report did not say which vehicle; it is shown on the one carrying the freight then">by time</span>' : ''}
       </div>
       <div class="rep-line"><b>Load:</b> ${esc(r.load_state)}${r.position ? ` · ${esc(r.position)}` : ''}</div>
       ${r.note ? `<div class="rep-note">“${esc(r.note)}”</div>` : ''}
@@ -110,8 +152,7 @@ function reports(v) {
         const o = (typeof ph === 'object' && ph.orientation) || 1;
         return `<a href="/api/v1/photos/${esc(id)}" target="_blank" rel="noopener"><img class="shot-o${o}" src="/api/v1/photos/${esc(id)}" alt="photo from site" loading="lazy"></a>`;
       }).join('')}</div>` : ''}
-    </div>`).join('')}</div>`
-    : '<p class="muted sp-none">None yet. <a href="/driver">File one</a>.</p>';
+    </div>`;
 }
 
 function events(v) {
@@ -146,11 +187,14 @@ async function boot() {
   $('sp-back').href = `/?${qs({ route: v.route_id })}`;
   $('sp-next').href = `/tree?${qs({ route: v.route_id, ship: v.shipment_id })}`;
 
+  DATA = v;
   stats(v);
   progress(v);
-  vehicles(v);
-  where(v);
-  reports(v);
+  // The vehicle it is on now opens first: that is where a question starts.
+  const nowAt = v.stretches.findIndex((s) => !['done', 'waiting'].includes(s.state));
+  if (nowAt >= 0 && v.stretches[nowAt].units.length) OPEN = v.stretches[nowAt].units[0].asset_id;
+  stretches(v);
+  if (OPEN) unitCard(v, nowAt, 0, false);
   events(v);
 
   $('sp-matrix').innerHTML = (v.events || []).length && v.matrix_grid

@@ -357,3 +357,18 @@ def test_the_role_is_visible_to_the_planner():
     assert blob["role"] == "terminal"
     assert blob["role_label"] == "Terminal / depot staff"
     assert blob["first_hand"] is True
+
+
+def test_a_report_can_say_which_vehicle_it_came_from(tmp_path):
+    """A convoy of four trucks is four vehicles: the report keeps which one,
+    through the log and back, and refuses anything that is not a plain id."""
+    now = datetime(2026, 9, 26, 23, 0, tzinfo=UTC)
+    base = {"shipment_id": "SYN-0041", "status": "held", "load_state": "intact"}
+    report = R.validate(base | {"vehicle_id": "TRK-3563"}, now)
+    assert report.vehicle_id == "TRK-3563" and report.as_dict()["vehicle_id"] == "TRK-3563"
+    log = tmp_path / "reports.jsonl"
+    R.append(report, log)
+    assert R.read_all(log)[0].vehicle_id == "TRK-3563"
+    assert R.validate(base, now).vehicle_id is None
+    with pytest.raises(R.ReportError):
+        R.validate(base | {"vehicle_id": "<script>"}, now)

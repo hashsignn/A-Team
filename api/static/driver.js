@@ -24,6 +24,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const params = new URLSearchParams(location.search);
+// The vehicle the report is from (TRK-3863), when the link names one.
+const VEHICLE = (params.get('vehicle') || '').trim().slice(0, 32);
 const QUEUE_KEY = 'scrr.driver.queue';
 const LAST_KEY = 'scrr.driver.shipment';
 
@@ -462,6 +464,9 @@ $('dv-form').addEventListener('submit', (e) => {
     lon: state.fix ? state.fix.lon : null,
     accuracy_m: state.fix ? state.fix.accuracy_m : null,
     photos: state.photos.slice(),
+    // Which vehicle, when the link said: a convoy of four trucks is four
+    // vehicles, and a report is only useful if it says which one.
+    vehicle_id: VEHICLE || null,
     confirms_disruption: $('f-confirm').checked,
     // Stamped NOW, on the device. See the header comment.
     observed_at: observedNow(),
@@ -499,7 +504,7 @@ window.addEventListener('offline', renderNet);
     loadAsk(shipment);
   }
   $('dv-sub').textContent = shipment
-    ? `consignment ${shipment}`
+    ? `consignment ${shipment}${VEHICLE ? ` · vehicle ${VEHICLE}` : ''}`
     : 'enter your consignment number';
   drain();
   // Retry on a slow cadence as well as on the `online` event: a phone can

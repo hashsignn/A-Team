@@ -140,6 +140,12 @@ class FieldReport:
     # to stay readable with `cat` in five years.
     photos: tuple[str, ...] = ()
 
+    # Which vehicle it came from (TRK-3863, BRG-7099): a shipment rides a
+    # convoy of trucks, then a barge, then a ship, and "the truck with box
+    # 2 on it is held" is only useful if it says which truck. Optional:
+    # a report without it is placed by time on the vehicle carrying it then.
+    vehicle_id: str | None = None
+
     def as_dict(self) -> dict:
         return {
             "report_id": self.report_id,
@@ -160,6 +166,7 @@ class FieldReport:
             "lon": self.lon,
             "accuracy_m": self.accuracy_m,
             "photos": list(self.photos),
+            "vehicle_id": self.vehicle_id,
             "role_label": ROLES[self.role]["label"],
             # Derived from the role, never hardcoded: a relayed account is
             # tier 2 however confidently it is worded.
@@ -274,6 +281,9 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
 
     lat, lon = _coords(payload)
     accuracy = _positive(payload.get("accuracy_m"), limit=100_000)
+    vehicle_id = _clean(payload.get("vehicle_id"), 32)
+    if vehicle_id and not _SHIPMENT_RE.match(vehicle_id):
+        raise ReportError("vehicle_id must be a plain identifier, e.g. TRK-3863")
     photos = _photo_ids(payload.get("photos"))
 
     # The moment the driver SAW it, which is not the moment it reached us —
@@ -315,6 +325,7 @@ def validate(payload: dict, received_at: datetime) -> FieldReport:
         lon=lon,
         accuracy_m=accuracy,
         photos=photos,
+        vehicle_id=vehicle_id,
     )
 
 
@@ -366,6 +377,7 @@ def read_all(log: Path | None = None) -> list[FieldReport]:
                 lon=raw.get("lon"),
                 accuracy_m=raw.get("accuracy_m"),
                 photos=tuple(raw.get("photos") or ()),
+                vehicle_id=raw.get("vehicle_id"),
                 driver_key=raw.get("driver_key"),
                 authenticated=bool(raw.get("authenticated")),
                 confirms_disruption=bool(raw.get("confirms_disruption")),

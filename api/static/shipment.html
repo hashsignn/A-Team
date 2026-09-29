@@ -27,25 +27,22 @@
 <main class="rt-main">
   <section class="rt-stats" id="sp-stats"></section>
 
+  <!-- Every vehicle, one by one: the four trucks, the barge, the ship. A
+       click opens it: its load, its boxes, its crew, what it reported. -->
   <section class="rt-block">
     <div class="rt-block-head">
-      <h2>Vehicles</h2>
+      <h2>Vehicles <span class="rtab-n" id="sp-veh-n"></span></h2>
       <div class="rt-key">
         <span><i class="veh-key veh-key--ok"></i> clear</span>
         <span><i class="veh-key veh-key--risk"></i> at risk</span>
         <span><i class="veh-key veh-key--hit"></i> hit now</span>
+        <span><i class="veh-key veh-key--wait"></i> not reached yet</span>
+        <span class="muted">click one</span>
       </div>
     </div>
     <div class="sp-prog" id="sp-prog"></div>
-    <div class="sp-vehs" id="sp-vehs"></div>
-  </section>
-
-  <section class="rt-block">
-    <div class="rt-block-head">
-      <h2>Field reports <span class="rtab-n" id="sp-rep-n"></span></h2>
-      <span class="block-note" id="sp-where"></span>
-    </div>
-    <div id="sp-reports"></div>
+    <div class="sp-strs" id="sp-strs"></div>
+    <div class="sp-unit-card" id="sp-unit" hidden></div>
   </section>
 
   <section class="rt-block" id="sp-events-block" hidden>

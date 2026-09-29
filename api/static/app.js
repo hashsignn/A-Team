@@ -1402,7 +1402,7 @@ function planRecovery(id) {
  * and the icons there are the same freight. A click anywhere on a row opens
  * its card below it (its legs, when it lands, its ways ranked); a second
  * click on the same shipment closes it. The vehicle itself (where it is,
- * what it carries) is the map's Action Hub, opened by "On map", so no fact
+ * what it carries) is the map's Action Hub, which opens with it, so no fact
  * is shown twice. */
 const SHIP_CARDS = new Map();   // `${as_of}|${shipments}|${id}` -> { data } | { error } | { loading }
 const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1501,8 +1501,20 @@ function renderShips(r) {
 /* Open a shipment's card, or close it when it is the one open. */
 function toggleShip(id, { open = null } = {}) {
   const next = open === true ? id : open === false ? null : (state.shipOpen === id ? null : id);
+  const was = state.shipOpen;
   state.shipOpen = next;
   state.shipFocus = next;
+  // The map follows: an open card draws the shipment and its recovery routes
+  // there; closing it clears them. No separate "on map" click.
+  withAgent((agent) => {
+    const sel = agent.getState().selection.id;
+    if (next && sel !== next) {
+      agent.setView('map');
+      agent.selectAsset(next);
+    } else if (!next && was && sel === was) {
+      agent.clearSelection();
+    }
+  });
   const r = state.board && state.board.routes.find((x) => x.route_id === state.selected);
   if (r) renderShips(r);
   const item = next && document.querySelector(`.dship-item[data-item="${CSS.escape(next)}"]`);
@@ -1517,8 +1529,6 @@ function fillShipCard(id) {
   if (!entry || entry.loading) { el.innerHTML = '<p class="scard-wait">Working out its ways…</p>'; return; }
   if (entry.error) { el.innerHTML = `<p class="scard-wait">Could not load: ${esc(entry.error)}</p>`; return; }
   el.innerHTML = shipCardHTML(entry.data);
-  const onMap = el.querySelector('[data-onmap]');
-  if (onMap) onMap.addEventListener('click', () => planRecovery(id));
 }
 
 const LEG_WORD = { ok: 'clear', at_risk: 'at risk', affected: 'hit now' };
@@ -1567,7 +1577,6 @@ function shipCardHTML(d) {
     <div class="scard-acts">
       <a class="ctl ctl--mini ctl--primary" href="${esc(treeLink(d.shipment_id, d.route_id))}" target="_blank" rel="noopener">Decision tree ↗</a>
       <a class="ctl ctl--mini" href="${esc(shipPageLink(d.shipment_id))}" target="_blank" rel="noopener" title="Every vehicle, its reports and its risk">Shipment page ↗</a>
-      ${d.located !== false ? '<button type="button" class="ctl ctl--mini" data-onmap>On map</button>' : ''}
     </div>`;
 }
 

@@ -289,32 +289,92 @@ def shipment_view(board: dict, context: RunContext, shipment_id: str) -> dict | 
     where = assets_mod.locate(context, shipment)
     now = where["leg_index"] if where else None
 
-    # One card per vehicle: a run of same-mode legs is one barge, one ship.
+    # The journey as stretches, one per run of a mode (the road to Basel, the
+    # Rhine to Rotterdam, the sea to Shanghai), each with every vehicle on it.
     worse = {"ok": 0, "at_risk": 1, "affected": 2}
-    vehicles: list[dict] = []
+    touching = [a for a in context.result.assessments
+                if any(r.shipment_id == shipment_id for r in a.shipment_risks)]
+    derate = min((a.event.payload_fraction for a in touching
+                  if getattr(a.event, "payload_fraction", None) is not None), default=None)
+    boxes = manifest.containers(shipment)
+    stretches: list[dict] = []
     for leg in journey["legs"]:
         own = shipment.legs[leg["index"]]
-        veh = manifest.vehicle(shipment, leg["index"])
-        phase = ("now" if leg["index"] == now
-                 else "done" if own.planned_arrive <= as_of else "ahead")
-        stretch = {**leg, "departs": own.planned_depart.isoformat(), "phase": phase}
-        if vehicles and vehicles[-1]["asset_id"] == veh["asset_id"]:
-            v = vehicles[-1]
-            v["legs"].append(stretch)
-            v["to"], v["arrives"] = leg["to"], leg["arrives"]
-            v["km"] = round(v["km"] + leg["km"], 1)
-            if worse[leg["status"]] > worse[v["status"]]:
-                v["status"] = leg["status"]
-            if phase == "now" or (phase == "ahead" and v["phase"] == "done"):
-                v["phase"] = phase
+        if stretches and stretches[-1]["mode"] == leg["mode"]:
+            s = stretches[-1]
+            s["legs"].append(leg)
+            s["to"], s["arrives"], s["last"] = leg["to"], leg["arrives"], leg["index"]
+            s["km"] = round(s["km"] + leg["km"], 1)
+            if worse[leg["status"]] > worse[s["status"]]:
+                s["status"] = leg["status"]
             continue
-        vehicles.append({
-            "vehicle": veh["name"], "asset_id": veh["asset_id"], "mode": veh["mode"],
-            "crew": veh["crew"], "capacity_teu": veh["capacity_teu"], "carrier": veh["carrier"],
-            "from": leg["from"], "to": leg["to"], "km": leg["km"],
-            "departs": own.planned_depart.isoformat(), "arrives": leg["arrives"],
-            "status": leg["status"], "phase": phase, "legs": [stretch],
-        })
+        stretches.append({"mode": leg["mode"], "from": leg["from"], "to": leg["to"], "km": leg["km"],
+                          "departs": own.planned_depart.isoformat(), "arrives": leg["arrives"],
+                          "status": leg["status"], "legs": [leg], "first": leg["index"],
+                          "last": leg["index"]})
+
+    phase_now = where["phase"] if where else None
+    for s in stretches:
+        # Where the shipment is against this stretch: past it, on it, or not
+        # there yet, in which case its vehicles wait (grey on the page).
+        if where is None or s["last"] < now:
+            s["state"], s["state_word"] = "done", "done"
+        elif s["first"] > now:
+            s["state"], s["state_word"] = "waiting", f"waits at {_short_place(s['from'])}"
+        elif phase_now == "in_transit":
+            s["state"], s["state_word"] = "moving", "en route"
+        elif phase_now in ("staging", "booked"):
+            s["state"] = "loading"
+            s["state_word"] = (f"loading at {_short_place(s['from'])}"
+                               if phase_now == "staging" else "booked")
+        else:
+            here = journey["legs"][now]["from"]
+            s["state"], s["state_word"] = "at", f"at {_short_place(here)}"
+        load = manifest.load(shipment, s["first"], boxes,
+                             payload_fraction=derate if s["mode"] == "barge" else None)
+        units = []
+        for unit in manifest.convoy(shipment, s["first"], boxes):
+            carried = [b for b in boxes if b["container_id"] in unit["containers"]]
+            units.append({
+                "asset_id": unit["asset_id"], "name": unit["name"], "mode": unit["mode"],
+                "carrier": unit["carrier"], "crew": dict(unit["crew"]),
+                "capacity_teu": unit["capacity_teu"],
+                # A truck carries only ours; a barge or a ship others' freight too.
+                "loaded_teu": unit["teu"] if unit["mode"] == "road" else load["loaded_teu"],
+                "usable_teu": None if unit["mode"] == "road" else load["usable_teu"],
+                "ours_teu": unit["teu"],
+                "boxes": [{k: b[k] for k in ("container_id", "size_ft", "priority", "deadline",
+                                             "gross_t", "content")} for b in carried],
+                "reports": [], "position": None,
+            })
+        s["units"] = units
+
+    # Each report on the vehicle it names, or else the one carrying the
+    # freight when it was seen.
+    for r in reports:
+        unit = next((u for s in stretches for u in s["units"]
+                     if u["asset_id"] == r.get("vehicle_id")), None)
+        if unit is None:
+            seen_at = r.get("observed_at") or ""
+            stretch = (next((s for s in stretches if s["departs"] <= seen_at <= s["arrives"]), None)
+                       or next((s for s in stretches if s["state"] not in ("done", "waiting")), None)
+                       or (stretches[0] if stretches else None))
+            unit = stretch["units"][0] if stretch else None
+            r = r | {"placed_by_time": True}
+        if unit is not None:
+            unit["reports"].append(r)
+    for s in stretches:
+        for u in s["units"]:
+            u["reports"].sort(key=lambda r: r.get("observed_at") or "", reverse=True)
+            verified = next((r for r in u["reports"]
+                             if r.get("authenticated") and r.get("reported_by")), None)
+            u["crew"]["verified"] = bool(verified)
+            if verified:
+                u["crew"]["name"] = verified["reported_by"]
+            if s["state"] not in ("done", "waiting"):
+                mine = progress_mod.observed(u["reports"])
+                u["position"] = {"planned": moved.get("planned_position"), "seen": mine,
+                                 "drift_km": progress_mod.drift_km(moved.get("planned_position"), mine)}
 
     # This shipment in each event touching it: the event's matrix point for
     # it, as the route page draws them, one dot per event here.
@@ -329,8 +389,6 @@ def shipment_view(board: dict, context: RunContext, shipment_id: str) -> dict | 
             "break_even_probability", "break_even_words", "severity", "starts_at")}
             | {"point": point})
     worst = max(events, key=lambda e: e["point"]["expected_loss_chf"], default=None)
-    touching = [a for a in context.result.assessments
-                if any(r.shipment_id == shipment_id for r in a.shipment_risks)]
     risk = _soonest_risks(context).get(shipment_id) or {}
 
     return {
@@ -354,7 +412,8 @@ def shipment_view(board: dict, context: RunContext, shipment_id: str) -> dict | 
             "events": len(events),
             "reports": len(reports),
         },
-        "vehicles": vehicles,
+        "stretches": stretches,
+        "vehicles": sum(len(s["units"]) for s in stretches),
         "progress": {k: moved.get(k) for k in ("percent", "travelled_km", "remaining_km", "total_km")},
         "position": {
             "planned": moved.get("planned_position"),
@@ -369,6 +428,11 @@ def shipment_view(board: dict, context: RunContext, shipment_id: str) -> dict | 
                                            keep=lambda v: not v.probability_sourceable),
         "matrix_grid": board.get("matrix_grid"),
     }
+
+
+def _short_place(name: str) -> str:
+    """'Kaub (Rhine gauge, governing shallow point)' reads as 'Kaub'."""
+    return name.split(" (")[0]
 
 
 def _tier(customer: str, context: RunContext) -> str:

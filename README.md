@@ -1409,9 +1409,10 @@ glass card below it, and a second click closes it:
   now; one rule, `engine/export/route.leg_status`), the current leg ringed,
   and how far along it is
 - its ways ranked: arrival ✓/✗, +CHF, CO₂e (🌿 lowest on time), days gained
-  against the plan; **Decision tree ↗** and **On map**
+  against the plan; **Decision tree ↗** and **Shipment page ↗**
 
-**On map**, or a click on the vehicle on the map, opens the **Action Hub**:
+The same click draws the shipment and its recovery routes on the map, and
+opens the **Action Hub** there; a click on the vehicle on the map does too:
 the vehicle, not the shipment. Its dates and ranked ways are the card's, so
 the Hub does not repeat them.
 
@@ -1419,10 +1420,18 @@ the Hub does not repeat them.
 `/shipment/{id}`: the route page for that one shipment
 (`engine/export/route.shipment_view`, `GET /api/shipment/{id}`). Five
 numbers (at risk, chance late, the delay it absorbs, promised, field
-reports); a card per **vehicle** it uses, one per run of a mode (the truck
-to Basel, the barge past Kaub to Rotterdam, the ship through Suez to
-Shanghai), with its stretches in the three colours, its dates and crew; its
-field reports and where it is against the plan; the events on it with the
+reports); then **every vehicle it uses, one by one**, by stretch: the four
+trucks to Basel (one per 40 ft box or pair of 20s, each with its own plate,
+driver and boxes), the barge past Kaub to Rotterdam, the ship through Suez to
+Shanghai. Each stretch says where the shipment is against it: done, en
+route, at a transfer, or **waits at Basel**, its vehicles grey because the
+freight has not reached them yet. A click on a vehicle opens it: the TEU
+that are ours, what it holds and carries (and what it can carry at today's
+water level), its boxes and their deadlines, its crew, where it is against
+the plan, and the **field reports from it**, with a *File one from* link
+that opens the driver app for that vehicle (`/driver?shipment=…&vehicle=…`;
+reports carry an optional `vehicle_id`, and one that names none is placed by
+time on the vehicle carrying the freight then). Then the events on it with the
 delay if each hits, the CHF and the chance; its **risk matrix**, one dot per
 event; and **risk in effect**, the two radars cut to the events that touch
 it. The explanations are in the tooltips. The route page stays the whole
