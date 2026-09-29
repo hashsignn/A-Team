@@ -686,10 +686,10 @@ PAGES = (("tree", "/tree"), ("ship_", "/shipment"), ("drv_", "/driver"), ("prof_
 
 
 def build(out: Path, story: dict | None = None) -> Path:
-    manifest = json.loads((out / "manifest.json").read_text())
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     if story is not None:
         manifest["vars"] = story
-    board = json.loads((HERE / "storyboard.json").read_text())
+    board = json.loads((HERE / "storyboard.json").read_text(encoding="utf-8"))
     frames = {}
     for name, f in manifest["frames"].items():
         data = (out / f["file"]).read_bytes()
@@ -706,9 +706,9 @@ def build(out: Path, story: dict | None = None) -> Path:
         frames[name] = {**f, "page": page, "targets": kept,
                         "src": "data:image/webp;base64," + base64.b64encode(data).decode()}
     payload = {"story": board, "frames": frames, "vars": manifest.get("vars", {})}
-    html = (HERE / "player.html").read_text().replace("/*__DEMO__*/null", json.dumps(payload, ensure_ascii=False))
+    html = (HERE / "player.html").read_text(encoding="utf-8").replace("/*__DEMO__*/null", json.dumps(payload, ensure_ascii=False))
     target = out / "demo.html"
-    target.write_text(html)
+    target.write_text(html, encoding="utf-8")
     print(f"  player: {target} ({target.stat().st_size / 1e6:.1f} MB)")
     return target
 
@@ -766,7 +766,7 @@ def video(out: Path, chromium: str | None, fps: int = 25, width: int = 1920, wor
     if not ffmpeg:
         print("  video: no ffmpeg. Install one (free): pip install imageio-ffmpeg")
         return None
-    board = json.loads((HERE / "storyboard.json").read_text())
+    board = json.loads((HERE / "storyboard.json").read_text(encoding="utf-8"))
     n = int(sum(s["dur"] for s in board["segments"]) * fps) + 1
     workers = workers or max(1, min(4, os.cpu_count() or 1))
     cuts = [round(n * k / workers) for k in range(workers + 1)]
@@ -778,7 +778,7 @@ def video(out: Path, chromium: str | None, fps: int = 25, width: int = 1920, wor
     with ProcessPoolExecutor(workers) as pool:
         list(pool.map(_slice, jobs))
     listing = out / ".demo-parts.txt"
-    listing.write_text("".join(f"file '{Path(x).name}'\n" for x in parts))
+    listing.write_text("".join(f"file '{Path(x).name}'\n" for x in parts), encoding="utf-8")
     target = out / "demo.mp4"
     subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
                     "-c", "copy", "-movflags", "+faststart", str(target)], check=True)
@@ -960,7 +960,7 @@ def main() -> None:
     args = ap.parse_args()
     out = Path(args.out)
     if args.script:
-        Path(args.script).write_text(script_md(json.loads((HERE / "storyboard.json").read_text())))
+        Path(args.script).write_text(script_md(json.loads((HERE / "storyboard.json").read_text(encoding="utf-8"))), encoding="utf-8")
         print(f"  script: {args.script}")
         return
     if args.build_only:
@@ -978,7 +978,7 @@ def main() -> None:
     print("Recording frames ...")
     record(api, story, rec, args.chromium)
     public = {k: v for k, v in story.items() if k not in ("fleet", "lane_path")}
-    (out / "manifest.json").write_text(json.dumps({"frames": rec.frames, "vars": public}, indent=1))
+    (out / "manifest.json").write_text(json.dumps({"frames": rec.frames, "vars": public}, indent=1), encoding="utf-8")
     build(out)
     if args.video:
         video(out, args.chromium)

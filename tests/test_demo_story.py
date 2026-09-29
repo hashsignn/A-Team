@@ -13,7 +13,7 @@ DEMO = ROOT / "scripts" / "demo"
 _spec = importlib.util.spec_from_file_location("demo_record", DEMO / "record.py")
 record = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(record)
-BOARD = json.loads((DEMO / "storyboard.json").read_text())
+BOARD = json.loads((DEMO / "storyboard.json").read_text(encoding="utf-8"))
 
 
 def test_it_runs_two_and_a_half_minutes_without_its_pauses():
@@ -38,5 +38,5 @@ def test_every_breakpoint_says_what_to_click():
 
 
 def test_the_written_camera_plan_is_the_storyboard():
-    assert (DEMO / "SCRIPT.md").read_text() == record.script_md(BOARD), \
+    assert (DEMO / "SCRIPT.md").read_text(encoding="utf-8") == record.script_md(BOARD), \
         "regenerate it: python scripts/demo/record.py --script scripts/demo/SCRIPT.md"
